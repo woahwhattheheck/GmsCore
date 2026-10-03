@@ -15,7 +15,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import org.microg.gms.BaseService
 import org.microg.gms.common.GmsService
 import org.microg.gms.common.PackageUtils
@@ -60,8 +59,9 @@ class AsterismApiService : BaseService(TAG, GmsService.ASTERISM) {
 
 class AsterismApiServiceImpl(
     private val context: Context,
-    private val serviceScope: CoroutineScope
+    serviceScope: CoroutineScope
 ) : IAsterismApiService.Stub() {
+    private val requestDispatcher = AsterismRequestDispatcher(serviceScope)
     override fun getAsterismConsent(
         cb: IAsterismCallbacks?,
         request: GetAsterismConsentRequest?,
@@ -69,20 +69,26 @@ class AsterismApiServiceImpl(
         Log.i(TAG, "getAsterismConsent(): $request")
         if (cb == null || request == null) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        serviceScope.launch { handleGetAsterismConsent(context, cb, request) }
+        requestDispatcher.dispatch(cb, "getAsterismConsent") { callbacks ->
+            handleGetAsterismConsent(context, callbacks, request)
+        }
     }
 
     override fun setAsterismConsent(cb: IAsterismCallbacks?, request: SetAsterismConsentRequest?) {
         Log.i(TAG, "setAsterismConsent(): $request")
         if (cb == null || request == null) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        serviceScope.launch { handleSetAsterismConsent(context, cb, request) }
+        requestDispatcher.dispatch(cb, "setAsterismConsent") { callbacks ->
+            handleSetAsterismConsent(context, callbacks, request)
+        }
     }
 
     override fun getIsPnvrConstellationDevice(cb: IAsterismCallbacks?) {
         Log.i(TAG, "getIsPnvrConstellationDevice()")
         if (cb == null) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        serviceScope.launch { handleGetIsPnvrConstellationDevice(context, cb) }
+        requestDispatcher.dispatch(cb, "getIsPnvrConstellationDevice") { callbacks ->
+            handleGetIsPnvrConstellationDevice(context, callbacks)
+        }
     }
 }

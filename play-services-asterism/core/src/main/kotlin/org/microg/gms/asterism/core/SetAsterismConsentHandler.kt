@@ -20,6 +20,7 @@ import com.google.android.gms.asterism.status
 import com.google.android.gms.common.api.Status
 import com.squareup.wire.GrpcException
 import com.squareup.wire.GrpcStatus
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okio.ByteString
@@ -240,6 +241,8 @@ suspend fun handleSetAsterismConsent(
             )
         )
 
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         Log.e(TAG, "setAsterismConsent failed", e)
         callbacks.onConsentRegistered(

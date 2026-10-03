@@ -11,6 +11,7 @@ import com.google.android.gms.asterism.asterismClient
 import com.google.android.gms.asterism.getAsterismConsentResponse
 import com.google.android.gms.asterism.internal.IAsterismCallbacks
 import com.google.android.gms.common.api.Status
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.microg.gms.constellation.core.ConstellationStateStore
@@ -70,6 +71,8 @@ suspend fun handleGetAsterismConsent(
                 consentVersion
             )
         )
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         Log.e(ASTERISM_TAG, "getAsterismConsent failed", e)
         callbacks.onConsentFetched(
@@ -94,6 +97,8 @@ suspend fun handleGetIsPnvrConstellationDevice(
         val isPnvrDevice = consentValue == Consent.CONSENTED || consentValue == Consent.NO_CONSENT
 
         callbacks.onIsPnvrConstellationDevice(Status.SUCCESS, isPnvrDevice)
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         Log.e(PNVR_TAG, "getIsPnvrConstellationDevice failed", e)
         callbacks.onIsPnvrConstellationDevice(Status.INTERNAL_ERROR, false)
