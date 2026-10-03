@@ -7,6 +7,7 @@ on:
 
 jobs:
   build:
+    if: github.ref != 'refs/heads/validation/rcs-2994-constellation-unit-tests-20261003'
     name: "Gradle build ${{ matrix.target }}"
     runs-on: ubuntu-latest
     env:

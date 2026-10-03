@@ -1,0 +1,85 @@
+name: "RCS #2994 Constellation core unit tests"
+
+on:
+  push:
+    branches:
+      - 'validation/rcs-2994-constellation-unit-tests-20261003'
+
+permissions:
+  contents: read
+
+jobs:
+  constellation-core-unit-tests:
+    if: github.ref == 'refs/heads/validation/rcs-2994-constellation-unit-tests-20261003'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
+      VALIDATION_SOURCE_SHA: '1a185280662ebfdcb32a3cf100bb907035089d80'
+    steps:
+      - name: Checkout the pinned source commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.VALIDATION_SOURCE_SHA }}
+          fetch-depth: 1
+
+      - name: Verify the checked-out source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$VALIDATION_SOURCE_SHA"
+          echo "RCS_VALIDATION_SOURCE_SHA=$actual"
+
+      - name: Set up Java
+        uses: actions/setup-java@v5.7.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Run the existing Constellation core unit-test suite
+        shell: bash
+        run: ./gradlew --no-daemon --console=plain :play-services-constellation-core:testDebugUnitTest
+
+      - name: Summarize actual JUnit XML
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+          import xml.etree.ElementTree as ET
+
+          report_dir = Path("play-services-constellation/core/build/test-results/testDebugUnitTest")
+          reports = sorted(report_dir.glob("TEST-*.xml"))
+          summary = {"source_sha": "1a185280662ebfdcb32a3cf100bb907035089d80",
+                     "report_files": len(reports), "tests": 0, "failures": 0,
+                     "errors": 0, "skipped": 0, "files": [p.name for p in reports]}
+          for report in reports:
+              root = ET.parse(report).getroot()
+              for case in root.iter("testcase"):
+                  summary["tests"] += 1
+                  summary["failures"] += len(list(case.findall("failure")))
+                  summary["errors"] += len(list(case.findall("error")))
+                  summary["skipped"] += len(list(case.findall("skipped")))
+          Path("junit-summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+          print("JUnit summary: " + json.dumps(summary, sort_keys=True))
+          if not reports or summary["tests"] == 0:
+              print("No actual Constellation unit-test XML was produced.", file=sys.stderr)
+              sys.exit(1)
+          PY
+
+      - name: Upload the JUnit XML and summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rcs2994-constellation-junit-${{ github.run_id }}
+          path: |
+            play-services-constellation/core/build/test-results/testDebugUnitTest/TEST-*.xml
+            junit-summary.json
+          if-no-files-found: warn
+          retention-days: 30
