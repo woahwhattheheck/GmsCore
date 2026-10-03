@@ -1,0 +1,1916 @@
+diff --git a/play-services-wearable/build.gradle b/play-services-wearable/build.gradle
+index 46d8ed2f73db6fbeeefb9b0ba99af1db998b39c1..f0ab48a7a29dcfed4f6c2f63fd37175f45916d5f 100644
+--- a/play-services-wearable/build.gradle
++++ b/play-services-wearable/build.gradle
+@@ -32,6 +32,21 @@ android {
+     lintOptions {
+         disable 'InvalidPackage'
+     }
++
++    testOptions {
++        unitTests {
++            includeAndroidResources = true
++            all {
++                jvmArgs += [
++                        '--add-opens=java.base/java.lang=ALL-UNNAMED',
++                        '--add-opens=java.base/java.util=ALL-UNNAMED',
++                        '--add-opens=java.base/java.io=ALL-UNNAMED',
++                        '--add-opens=java.base/java.net=ALL-UNNAMED',
++                        '--add-opens=java.base/java.security=ALL-UNNAMED'
++                ]
++            }
++        }
++    }
+ }
+ 
+ wire {
+@@ -47,6 +62,9 @@ description = 'microG implementation of play-services-wearable'
+ dependencies {
+     implementation "com.squareup.wire:wire-runtime:$wireVersion"
+ 
++    testImplementation 'junit:junit:4.13.2'
++    testImplementation 'org.robolectric:robolectric:4.12.2'
++
+     // Dependencies from play-services-wearable:17.1.0
+     api "androidx.core:core:1.0.0"
+     api project(':play-services-base')
+diff --git a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/AssetManager.java b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/AssetManager.java
+index 872f87d93d19085e3de4c3fc6a38653468a85ae6..e53601425937366e9f3406e0538fdfedb348827e 100644
+--- a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/AssetManager.java
++++ b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/AssetManager.java
+@@ -271,6 +271,25 @@ public class AssetManager {
+         return null;
+     }
+ 
++    public File getReadableAssetFile(String digest, AppKey caller) {
++        // Reject malformed paths and unknown callers before touching the asset
++        // store. Binder clients may supply a digest they never received.
++        if (!isValidAssetDigest(digest) || caller == null
++                || caller.packageName == null || caller.signatureDigest == null
++                || resolveAppKeys(getAssetAppKeys(digest), caller.packageName,
++                caller.signatureDigest) == null) return null;
++        File file = getStoredAssetFile(digest);
++        return file != null && file.isFile() ? file : null;
++    }
++
++    List<AppKey> getAssetAppKeys(String digest) {
++        return wearable.getNodeDatabase().getAppKeysForAsset(digest);
++    }
++
++    File getStoredAssetFile(String digest) {
++        return wearable.createAssetFile(digest);
++    }
++
+     static byte[] getFilePieceData(FilePiece filePiece) {
+         if (filePiece == null || !isValidAssetDigest(filePiece.fileName)
+                 || filePiece.finalPiece == null) return null;
+diff --git a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/DataItemRecord.java b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/DataItemRecord.java
+index 0032dc607e7981316dd374d2a67b78b396d57617..8122fe8144f6593c02afa257b985d42720f94490 100644
+--- a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/DataItemRecord.java
++++ b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/DataItemRecord.java
+@@ -130,33 +130,55 @@ public class DataItemRecord {
+ 
+     public static DataItemRecord fromCursor(Cursor cursor) {
+         DataItemRecord record = new DataItemRecord();
+-        record.packageName = cursor.getString(1);
+-        record.signatureDigest = cursor.getString(2);
+-        record.dataItem = new DataItemInternal(cursor.getString(3), cursor.getString(4));
+-        record.seqId = cursor.getLong(5);
+-        record.deleted = cursor.getLong(6) > 0;
+-        record.source = cursor.getString(7);
+-        record.dataItem.data = cursor.getBlob(8);
+-        record.lastModified = cursor.getLong(9);
+-        record.assetsAreReady = cursor.getLong(10) > 0;
+-        if (cursor.getColumnCount() >= 12) {
+-            String assetName = cursor.getString(11);
+-            String assetDigest = cursor.getString(12);
+-            if (assetName != null && !assetName.isEmpty() && assetDigest != null && !assetDigest.isEmpty()) {
+-                record.dataItem.addAsset(assetName, Asset.createFromRef(assetDigest));
+-                while (cursor.moveToNext()) {
+-                    if (cursor.getLong(5) == record.seqId) {
+-                        String an = cursor.getString(11);
+-                        String ad = cursor.getString(12);
+-                        if (an != null && !an.isEmpty() && ad != null && !ad.isEmpty()) {
+-                            record.dataItem.addAsset(an, Asset.createFromRef(ad));
+-                        }
+-                    }
++        int dataItemIdColumn = cursor.getColumnIndex("dataitems_id");
++        if (dataItemIdColumn < 0) dataItemIdColumn = cursor.getColumnIndex("_id");
++
++        record.packageName = cursor.getString(cursor.getColumnIndexOrThrow("packageName"));
++        record.signatureDigest = cursor.getString(cursor.getColumnIndexOrThrow("signatureDigest"));
++        record.dataItem = new DataItemInternal(
++                cursor.getString(cursor.getColumnIndexOrThrow("host")),
++                cursor.getString(cursor.getColumnIndexOrThrow("path")));
++        record.seqId = cursor.getLong(cursor.getColumnIndexOrThrow("seqId"));
++        record.deleted = cursor.getLong(cursor.getColumnIndexOrThrow("deleted")) > 0;
++        record.source = cursor.getString(cursor.getColumnIndexOrThrow("sourceNode"));
++        record.dataItem.data = cursor.getBlob(cursor.getColumnIndexOrThrow("data"));
++        record.lastModified = cursor.getLong(cursor.getColumnIndexOrThrow("timestampMs"));
++        record.assetsAreReady = cursor.getLong(cursor.getColumnIndexOrThrow("assetsPresent")) > 0;
++
++        int v1SeqIdColumn = cursor.getColumnIndex("v1SeqId");
++        record.v1SeqId = v1SeqIdColumn >= 0 ? cursor.getLong(v1SeqIdColumn) : record.seqId;
++
++        int assetNameColumn = cursor.getColumnIndex("assetname");
++        int assetDigestColumn = cursor.getColumnIndex("assets_digest");
++        boolean hasAssetColumns = assetNameColumn >= 0 && assetDigestColumn >= 0;
++        if (!hasAssetColumns && (assetNameColumn >= 0 || assetDigestColumn >= 0)) {
++            Log.w("DataItemRecord", "Cursor missing one of asset columns (assetname, assets_digest)");
++        }
++
++        String dataItemId = dataItemIdColumn >= 0 ? cursor.getString(dataItemIdColumn) : null;
++        if (dataItemIdColumn < 0 && hasAssetColumns) {
++            Log.w("DataItemRecord", "Cursor missing data item identity; reading assets from current row only");
++        }
++
++        while (true) {
++            if (hasAssetColumns) {
++                String assetName = cursor.getString(assetNameColumn);
++                String assetDigest = cursor.getString(assetDigestColumn);
++                if (assetName != null && !assetName.isEmpty()
++                        && assetDigest != null && !assetDigest.isEmpty()) {
++                    record.dataItem.addAsset(assetName, Asset.createFromRef(assetDigest));
+                 }
++            }
++
++            if (dataItemIdColumn < 0 || dataItemId == null || !cursor.moveToNext()) break;
++
++            String nextDataItemId = cursor.getString(dataItemIdColumn);
++            if (!dataItemId.equals(nextDataItemId)) {
++                // Leave the cursor on the last row belonging to this item so the
++                // caller's next moveToNext() starts the next item.
+                 cursor.moveToPrevious();
++                break;
+             }
+-        } else {
+-            Log.w("DataItemRecord", "Cursor missing asset columns (11,12), skipping asset loading");
+         }
+         return record;
+     }
+diff --git a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/MessageHandler.java b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/MessageHandler.java
+index a40b132e70b648448694bcf44888adbd14f0bca6..8f1392efc9e7bf80dfbf6aaf87fd85bdd7648d3e 100644
+--- a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/MessageHandler.java
++++ b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/MessageHandler.java
+@@ -720,13 +720,11 @@ public class MessageHandler extends ServerMessageListener {
+                                 }
+                             }
+ 
+-                            if (allPresent && !record.assetsAreReady) {
++                            if (allPresent && !record.assetsAreReady
++                                    && wearable.getNodeDatabase().updateAssetsReady(record, true) > 0) {
+                                 Log.d(TAG, "All assets now ready for: " + record.dataItem.uri);
+ 
+                                 record.assetsAreReady = true;
+-                                wearable.getNodeDatabase().updateAssetsReady(
+-                                        record.dataItem.uri.toString(), true);
+-
+                                 Intent intent = new Intent("com.google.android.gms.wearable.DATA_CHANGED");
+                                 intent.setPackage(record.packageName);
+                                 intent.setData(record.dataItem.uri);
+diff --git a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/NodeDatabaseHelper.java b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/NodeDatabaseHelper.java
+index 94b091a33687469cf0d1ec32c3815f91e0187196..4a172647405dbd8cb9319929b86a3a5c2cc84d10 100644
+--- a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/NodeDatabaseHelper.java
++++ b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/NodeDatabaseHelper.java
+@@ -718,18 +718,26 @@ public class NodeDatabaseHelper extends SQLiteOpenHelper {
+                 "FROM dataitems d " +
+                 "JOIN appkeys a ON d.appkeys_id = a._id " +
+                 "JOIN assetrefs ar ON d._id = ar.dataitems_id " +
+-                "WHERE d.assetsPresent = 0 " +
+-                "AND ar.assets_digest = ?";
++                "WHERE d.assetsPresent = 0 AND d.deleted = 0 " +
++                "AND EXISTS (SELECT 1 FROM assetrefs requested " +
++                "WHERE requested.dataitems_id = d._id AND requested.assets_digest = ?) " +
++                "ORDER BY d._id, ar.assetname";
+ 
+         return db.rawQuery(query, new String[]{digest});
+     }
+ 
+-    public synchronized void updateAssetsReady(String uri, boolean ready) {
++    public synchronized int updateAssetsReady(DataItemRecord record, boolean ready) {
++        if (record == null || record.dataItem == null || record.packageName == null
++                || record.signatureDigest == null || record.dataItem.host == null
++                || record.dataItem.path == null || record.source == null) return 0;
+         ContentValues cv = new ContentValues();
+         cv.put("assetsPresent", ready ? 1 : 0);
+ 
+-        getWritableDatabase().update("dataitems", cv,
+-                "host || path = ?", new String[]{uri});
++        return getWritableDatabase().update("dataitems", cv,
++                "appkeys_id IN (SELECT _id FROM appkeys WHERE packageName=? AND signatureDigest=?) " +
++                        "AND host=? AND path=? AND seqId=? AND sourceNode=? AND deleted=0",
++                new String[]{record.packageName, record.signatureDigest, record.dataItem.host,
++                        record.dataItem.path, String.valueOf(record.seqId), record.source});
+     }
+ 
+     public synchronized void markAssetAsPresent(String digest) {
+@@ -750,7 +758,7 @@ public class NodeDatabaseHelper extends SQLiteOpenHelper {
+                     "path LIKE ? AND deleted = 0",
+                     new String[]{pathSuffix},
+                     null, null,
+-                    "host, path"
++                    "host, path, dataitems_id"
+                 );
+         }
+ 
+diff --git a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/WearableServiceImpl.java b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/WearableServiceImpl.java
+index c7016b93465a360b7885cb60b4660d55e89a24fb..b36acf4ccc8a663dc68b7efede0751f74d919f06 100644
+--- a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/WearableServiceImpl.java
++++ b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/WearableServiceImpl.java
+@@ -499,15 +499,41 @@ public class WearableServiceImpl extends IWearableService.Stub {
+     public void getFdForAsset(IWearableCallbacks callbacks, final Asset asset) throws RemoteException {
+         Log.d(TAG, "getFdForAsset " + asset);
+         postMain(callbacks, () -> {
+-            // TODO: Access control
+-            try {
+-                callbacks.onGetFdForAssetResponse(new GetFdForAssetResponse(0, ParcelFileDescriptor.open(wearable.createAssetFile(asset.getDigest()), ParcelFileDescriptor.MODE_READ_ONLY)));
+-            } catch (FileNotFoundException e) {
+-                callbacks.onGetFdForAssetResponse(new GetFdForAssetResponse(8, null));
+-            }
++            deliverAssetFdResponse(callbacks, createAssetFdResponse(
++                    wearable.getAssetManager(), asset, getAppKey()));
+         });
+     }
+ 
++    static GetFdForAssetResponse createAssetFdResponse(AssetManager manager, Asset asset,
++                                                       AppKey caller) {
++        String digest = asset != null ? asset.getDigest() : null;
++        File file = manager != null ? manager.getReadableAssetFile(digest, caller) : null;
++        if (file == null) return new GetFdForAssetResponse(WearableStatusCodes.ASSET_UNAVAILABLE, null);
++        try {
++            return new GetFdForAssetResponse(CommonStatusCodes.SUCCESS,
++                    ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY));
++        } catch (FileNotFoundException e) {
++            return new GetFdForAssetResponse(WearableStatusCodes.ASSET_UNAVAILABLE, null);
++        }
++    }
++
++    static void deliverAssetFdResponse(IWearableCallbacks callbacks, GetFdForAssetResponse response)
++            throws RemoteException {
++        try {
++            callbacks.onGetFdForAssetResponse(response);
++        } finally {
++            // The synchronous Binder callback marshals a separate client FD.
++            // Release this service-side descriptor even when delivery fails.
++            if (response.pfd != null) {
++                try {
++                    response.pfd.close();
++                } catch (IOException e) {
++                    Log.w(TAG, "Failed closing local asset descriptor", e);
++                }
++            }
++        }
++    }
++
+     @Override
+     public void optInCloudSync(IWearableCallbacks callbacks, boolean enable) throws RemoteException {
+         Log.d(TAG, "unimplemented Method optInCloudSync");
+diff --git a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BleConnectionManager.java b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BleConnectionManager.java
+index 6233920889e03eea364f31b19c24faa6c689df5f..21ddd807e6790dfcd9c5208af172f65e9a80731c 100644
+--- a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BleConnectionManager.java
++++ b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BleConnectionManager.java
+@@ -181,7 +181,7 @@ public class BleConnectionManager extends BleStateMachine implements BleConnecti
+         addTransition(errorDisconnectedStateLocal, disconnectedStateLocal);
+ 
+         setErrorState(errorDisconnectedStateLocal);
+-        start();
++        start(this.disconnectedState);
+     }
+ 
+     @Override
+@@ -221,16 +221,6 @@ public class BleConnectionManager extends BleStateMachine implements BleConnecti
+         sendMessage(MSG_CONNECTION_CONFIG_UPDATE);
+     }
+ 
+-    @Override
+-    public void quit() {
+-
+-    }
+-
+-    @Override
+-    public void quitSafely() {
+-
+-    }
+-
+     @Override
+     public void onGattConnected() {
+         Log.d(TAG, "onGattConnected");
+@@ -262,14 +252,31 @@ public class BleConnectionManager extends BleStateMachine implements BleConnecti
+         return message.what != MSG_HANDLE_NOTIFICATION;
+     }
+ 
++    @Override
+     protected void onQuitting() {
+         Log.d(TAG, "onQuitting");
+-        stopScan();
+-        doDisconnectGatt();
+-        doDisconnectGatt(); // twice in original GMS
+-        gattHelper.cleanup();
++        try {
++            stopScan();
++        } catch (RuntimeException e) {
++            Log.w(TAG, "Failed to stop BLE scan while quitting", e);
++        }
++        try {
++            doDisconnectGatt();
++            doDisconnectGatt(); // twice in original GMS
++        } catch (RuntimeException e) {
++            Log.w(TAG, "Failed to disconnect GATT while quitting", e);
++        }
++        try {
++            gattHelper.cleanup();
++        } catch (RuntimeException e) {
++            Log.w(TAG, "Failed to clean up GATT services while quitting", e);
++        }
+         if (isReceiverRegistered.compareAndSet(true, false)) {
+-            context.unregisterReceiver(btStateReceiver);
++            try {
++                context.unregisterReceiver(btStateReceiver);
++            } catch (RuntimeException e) {
++                Log.w(TAG, "Failed to unregister Bluetooth state receiver while quitting", e);
++            }
+         }
+     }
+ 
+diff --git a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BleManager.java b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BleManager.java
+index 8c903dcbda25bfe3cfb8a42328eb0c3bfe584f5c..853c77b9eb03109efee4616a3af6d1b301d6986a 100644
+--- a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BleManager.java
++++ b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BleManager.java
+@@ -96,7 +96,7 @@ public class BleManager implements Closeable {
+ 
+     private static void stopEntry(Entry e) {
+         try {
+-            e.mgr.quit();
++            e.mgr.quitSafely();
+         } catch (Exception ex) {
+             Log.w(TAG, "quit error: " + ex);
+         }
+diff --git a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BleStateMachine.java b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BleStateMachine.java
+index 115d16b3e9deacfd291a5598e6ba923430ec3c8a..d99d2d8c57089224ceb4ee7209c530af58eb7f84 100644
+--- a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BleStateMachine.java
++++ b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BleStateMachine.java
+@@ -9,10 +9,13 @@ import java.util.ArrayList;
+ import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.concurrent.atomic.AtomicBoolean;
+ 
+ public abstract class BleStateMachine extends Handler {
+     private final String name;
+     private final Map<BleState, List<BleState>> transitions = new HashMap<>();
++    private final AtomicBoolean started = new AtomicBoolean();
++    private final AtomicBoolean quitting = new AtomicBoolean();
+     private BleState currentState;
+     private BleState errorState;
+ 
+@@ -42,11 +45,31 @@ public abstract class BleStateMachine extends Handler {
+         this.errorState = state;
+     }
+ 
+-    protected void start() {
+-
++    protected final void start(BleState initialState) {
++        if (initialState == null || !transitions.containsKey(initialState)) {
++            throw new IllegalArgumentException("initial state must be registered");
++        }
++        if (!started.compareAndSet(false, true)) {
++            return;
++        }
++        if (!post(() -> {
++            if (!quitting.get()) {
++                transitionTo(initialState);
++            }
++        })) {
++            started.set(false);
++            throw new IllegalStateException("BLE state machine looper is not accepting work");
++        }
+     }
+ 
+     public void transitionTo(BleState next) {
++        if (quitting.get()) {
++            return;
++        }
++        if (Looper.myLooper() != getLooper()) {
++            post(() -> transitionTo(next));
++            return;
++        }
+         if (currentState != null) {
+             currentState.onExit();
+         }
+@@ -76,6 +99,9 @@ public abstract class BleStateMachine extends Handler {
+ 
+     @Override
+     public void handleMessage(Message msg) {
++        if (quitting.get()) {
++            return;
++        }
+         if (currentState != null && !currentState().handleMessage(msg)) {
+             Log.w(name, "Unhandled message " + msg.what + " in state " + currentState.getName());
+         }
+@@ -89,5 +115,36 @@ public abstract class BleStateMachine extends Handler {
+         return true;
+     }
+ 
+-    protected void onQuiting() {}
++    public final void quit() {
++        requestQuit(false);
++    }
++
++    public final void quitSafely() {
++        requestQuit(true);
++    }
++
++    private void requestQuit(boolean safely) {
++        if (!quitting.compareAndSet(false, true)) {
++            return;
++        }
++        Runnable cleanup = () -> {
++            try {
++                onQuitting();
++            } finally {
++                removeCallbacksAndMessages(null);
++                if (safely) {
++                    getLooper().quitSafely();
++                } else {
++                    getLooper().quit();
++                }
++            }
++        };
++        if (Looper.myLooper() == getLooper()) {
++            cleanup.run();
++        } else if (!post(cleanup)) {
++            cleanup.run();
++        }
++    }
++
++    protected void onQuitting() {}
+ }
+diff --git a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BluetoothConnectionThread.java b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BluetoothConnectionThread.java
+index af1fd04468c37db787300487b44da3243c1f375c..9cc0b4f6faea4ec9e1c97c34c3a0b12a52c382a0 100644
+--- a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BluetoothConnectionThread.java
++++ b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BluetoothConnectionThread.java
+@@ -67,8 +67,9 @@ public class BluetoothConnectionThread extends Thread implements Closeable {
+     private volatile long lastActivityTime = 0;
+     private long lastAttemptTime = 0;
+ 
++    private final Object socketLock = new Object();
+     private BluetoothSocket socket;
+-    private WearableConnection wearableConnection;
++    private volatile BluetoothWearableConnection wearableConnection;
+ 
+     private BroadcastReceiver retryReceiver;
+     private boolean receiverRegistered = false;
+@@ -200,20 +201,50 @@ public class BluetoothConnectionThread extends Thread implements Closeable {
+ 
+         Log.d(TAG, "Connecting to " + config.address);
+ 
+-        socket = btDevice.createRfcommSocketToServiceRecord(WEAR_BT_UUID);
++        BluetoothSocket activeSocket = createSocket();
++        if (!trackSocket(activeSocket)) {
++            throw new IOException("Connection thread is closed");
++        }
+ 
+         if (btAdapter.isDiscovering()) {
+             btAdapter.cancelDiscovery();
+         }
+ 
+-        connectSocketWithTimeout(socket);
++        connectSocketWithTimeout(activeSocket);
++
++        if (!running.get()) {
++            throw new IOException("Connection thread is closed");
++        }
+ 
+         Log.d(TAG, "Socket connected to " + config.address);
+ 
+-        isConnected = true;
+         markActivity();
+ 
+-        ConnectHandshake.LocalIdentity local = new ConnectHandshake.LocalIdentity(
++        ConnectHandshake.LocalIdentity local = createLocalIdentity();
++
++        BluetoothWearableConnection btConn;
++        synchronized (socketLock) {
++            if (!running.get() || socket != activeSocket) {
++                throw new IOException("Connection thread is closed");
++            }
++            btConn = new BluetoothWearableConnection(activeSocket, local, WearableConnection.NOOP);
++            wearableConnection = btConn;
++            isConnected = true;
++        }
++
++        if (!btConn.handshake()) {
++            throw new IOException("Bluetooth handshake failed");
++        }
++
++        new TransportConnectionHandler(wearableImpl, config).handle(btConn);
++    }
++
++    BluetoothSocket createSocket() throws IOException {
++        return btDevice.createRfcommSocketToServiceRecord(WEAR_BT_UUID);
++    }
++
++    ConnectHandshake.LocalIdentity createLocalIdentity() {
++        return new ConnectHandshake.LocalIdentity(
+                 wearableImpl.getLocalNodeId(),
+                 Build.MODEL,
+                 getAndroidId(),
+@@ -222,17 +253,6 @@ public class BluetoothConnectionThread extends Thread implements Closeable {
+                 config.migrating,
+                 config.migrating ? wearableImpl.getClockworkNodePreferences().getPeerNodeId() : null
+         );
+-
+-        BluetoothWearableConnection btConn =
+-                new BluetoothWearableConnection(socket, local, WearableConnection.NOOP);
+-
+-        wearableConnection = btConn;
+-
+-        if (!btConn.handshake()) {
+-            throw new IOException("Bluetooth handshake failed");
+-        }
+-
+-        new TransportConnectionHandler(wearableImpl, config).handle(btConn);
+     }
+ 
+     private long getAndroidId() {
+@@ -244,8 +264,19 @@ public class BluetoothConnectionThread extends Thread implements Closeable {
+         }
+     }
+ 
++    private boolean trackSocket(BluetoothSocket candidate) {
++        synchronized (socketLock) {
++            if (running.get() && socket == null) {
++                socket = candidate;
++                return true;
++            }
++        }
++        closeRawSocket(candidate);
++        return false;
++    }
++
+     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+-    private void connectSocketWithTimeout(BluetoothSocket socket) throws IOException, InterruptedException {
++    private void connectSocketWithTimeout(BluetoothSocket connectionSocket) throws IOException, InterruptedException {
+         final AtomicBoolean connected = new AtomicBoolean(false);
+         final AtomicBoolean timedOut = new AtomicBoolean(false);
+         final Object connectLock = new Object();
+@@ -257,15 +288,11 @@ public class BluetoothConnectionThread extends Thread implements Closeable {
+                     if (timedOut.get()) return;
+                 }
+ 
+-                socket.connect();
++                connectionSocket.connect();
+ 
+                 synchronized (connectLock) {
+                     if (!timedOut.get()) {
+                         connected.set(true);
+-                    } else {
+-                        try {
+-                            socket.close();
+-                        } catch (IOException ignored) {}
+                     }
+                 }
+             } catch (IOException e) {
+@@ -306,9 +333,9 @@ public class BluetoothConnectionThread extends Thread implements Closeable {
+                 timedOut.set(true);
+                 Log.e(TAG, "Socket connect timed out after " + SOCKET_CONNECT_TIMEOUT_MS + "ms");
+ 
+-                try {
+-                    socket.close();
+-                } catch (IOException ignored) {}
++                // The timeout path owns closing the socket. If connect returns
++                // late, the connect thread must not close it a second time.
++                closeSocket(connectionSocket);
+ 
+                 connectThread.interrupt();
+                 throw new IOException("Socket connect timed out");
+@@ -457,18 +484,50 @@ public class BluetoothConnectionThread extends Thread implements Closeable {
+     }
+ 
+     private void closeSocket() {
+-        isConnected = false;
++        BluetoothSocket activeSocket;
++        BluetoothWearableConnection activeConnection;
++        synchronized (socketLock) {
++            activeSocket = socket;
++            activeConnection = wearableConnection;
++            socket = null;
++            wearableConnection = null;
++        }
++        closeActiveTransport(activeSocket, activeConnection);
++    }
++
++    private void closeSocket(BluetoothSocket expectedSocket) {
++        BluetoothSocket activeSocket;
++        BluetoothWearableConnection activeConnection;
++        synchronized (socketLock) {
++            if (socket != expectedSocket) return;
++            activeSocket = socket;
++            activeConnection = wearableConnection;
++            socket = null;
++            wearableConnection = null;
++        }
++        closeActiveTransport(activeSocket, activeConnection);
++    }
+ 
+-        if (socket != null) {
++    private void closeActiveTransport(BluetoothSocket activeSocket,
++                                      BluetoothWearableConnection activeConnection) {
++        isConnected = false;
++        if (activeConnection != null) {
+             try {
+-                socket.close();
++                activeConnection.close();
+             } catch (IOException e) {
+-                Log.w(TAG, "Error closing socket", e);
++                Log.w(TAG, "Error closing wearable connection", e);
+             }
+-            socket = null;
++        } else if (activeSocket != null) {
++            closeRawSocket(activeSocket);
+         }
++    }
+ 
+-        wearableConnection = null;
++    private void closeRawSocket(BluetoothSocket socketToClose) {
++        try {
++            socketToClose.close();
++        } catch (IOException e) {
++            Log.w(TAG, "Error closing socket", e);
++        }
+     }
+ 
+     @RequiresPermission(Manifest.permission.BLUETOOTH_SCAN)
+@@ -497,5 +556,6 @@ public class BluetoothConnectionThread extends Thread implements Closeable {
+         running.set(false);
+         signalRetry();
+         interrupt();
++        closeSocket();
+     }
+ }
+diff --git a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BluetoothWearableConnection.java b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BluetoothWearableConnection.java
+index 33e2f50860f059af1fa66e8f5b046f8b83f50001..61310979d814772204f1d0e4d57e8fd16e61f38c 100644
+--- a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BluetoothWearableConnection.java
++++ b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BluetoothWearableConnection.java
+@@ -33,13 +33,14 @@ public class BluetoothWearableConnection extends WearableConnection {
+     private final Listener listener;
+     private final String localNodeId;
+     private final AtomicBoolean isClosed = new AtomicBoolean(false);
++    private final AtomicBoolean cleanupStarted = new AtomicBoolean(false);
+     private final HandlerThread watchdogThread;
+     private final Handler watchdogHandler;
+     private final Runnable writeStuckRunnable;
+     private final long androidId;
+     private final ConnectHandshake.LocalIdentity localIdentity;
+     private String peerNodeId;
+-    private boolean handshakeComplete = false;
++    private volatile boolean handshakeComplete = false;
+     private volatile Thread readerThread;
+ 
+     public BluetoothWearableConnection(BluetoothSocket socket, ConnectHandshake.LocalIdentity localIdentity, Listener listener) throws IOException {
+@@ -57,17 +58,12 @@ public class BluetoothWearableConnection extends WearableConnection {
+         this.watchdogHandler = new Handler(watchdogThread.getLooper());
+ 
+         this.writeStuckRunnable = () -> {
+-            if (isClosed.get())
++            if (cleanupStarted.get())
+                 return;
+ 
+             Log.e(TAG, "Write stuck for more than " + WRITE_STUCK_TIMEOUT_MS
+                     + "ms - closing socket");
+-            isClosed.set(true);
+-            try {
+-                socket.close();
+-            } catch (IOException e) {
+-                Log.w(TAG, "Error closing socket on write-stuck", e);
+-            }
++            closeFromWatchdog("write-stuck");
+         };
+     }
+ 
+@@ -80,11 +76,7 @@ public class BluetoothWearableConnection extends WearableConnection {
+             if (!handshakeComplete) {
+                 Log.e(TAG, "Handshake timeout after " + HANDSHAKE_TIMEOUT_MS + "ms - forcing close");
+                 timedOut.set(true);
+-                try {
+-                    socket.close();
+-                } catch (IOException e) {
+-                    Log.w(TAG, "Error closing socket on timeout", e);
+-                }
++                closeFromWatchdog("handshake-timeout");
+             }
+         };
+ 
+@@ -125,6 +117,14 @@ public class BluetoothWearableConnection extends WearableConnection {
+         return handshakeComplete;
+     }
+ 
++    private void closeFromWatchdog(String reason) {
++        try {
++            close();
++        } catch (IOException e) {
++            Log.w(TAG, "Error closing socket after " + reason, e);
++        }
++    }
++
+     protected void writeMessagePiece(MessagePiece piece) throws IOException {
+         byte[] bytes = MessagePiece.ADAPTER.encode(piece);
+ 
+@@ -210,7 +210,8 @@ public class BluetoothWearableConnection extends WearableConnection {
+ 
+     @Override
+     public void close() throws IOException {
+-        if (isClosed.getAndSet(true)) {
++        isClosed.set(true);
++        if (!cleanupStarted.compareAndSet(false, true)) {
+             Log.d(TAG, "Connection already closed");
+             return;
+         }
+@@ -265,4 +266,4 @@ public class BluetoothWearableConnection extends WearableConnection {
+     public String getRemoteAddress() {
+         return socket.getRemoteDevice().getAddress();
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/network/NetworkConnectionManager.java b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/network/NetworkConnectionManager.java
+index da4f861ddb616a78d8d3d338236d489ab58ab876..179b36ebba91f21aac3bcdbc298ebc5586a9ee8f 100644
+--- a/play-services-wearable/core/src/main/java/org/microg/gms/wearable/network/NetworkConnectionManager.java
++++ b/play-services-wearable/core/src/main/java/org/microg/gms/wearable/network/NetworkConnectionManager.java
+@@ -34,10 +34,17 @@ public class NetworkConnectionManager implements Cloneable {
+         this.context = context;
+         this.wearable = wearable;
+ 
+-        connectivityReceiver = new BroadcastReceiver() {
++        connectivityReceiver = registerConnectivityReceiver(context, this::onNetworkAvailable);
++
++        Log.d(TAG, "initialised");
++    }
++
++    static BroadcastReceiver registerConnectivityReceiver(
++            Context context, Runnable onNetworkAvailable) {
++        BroadcastReceiver receiver = new BroadcastReceiver() {
+             @Override
+             public void onReceive(Context context, Intent intent) {
+-                if (!ConnectivityManager.EXTRA_NO_CONNECTIVITY.equals(intent.getAction())) {
++                if (!ConnectivityManager.CONNECTIVITY_ACTION.equals(intent.getAction())) {
+                     return;
+                 }
+ 
+@@ -45,16 +52,13 @@ public class NetworkConnectionManager implements Cloneable {
+                     return;
+                 }
+ 
+-                onNetworkAvailable();
++                onNetworkAvailable.run();
+             }
+         };
+ 
+         context.registerReceiver(
+-                connectivityReceiver,
+-                new IntentFilter(ConnectivityManager.EXTRA_NO_CONNECTIVITY)
+-        );
+-
+-        Log.d(TAG, "initialised");
++                receiver, new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
++        return receiver;
+     }
+ 
+     public synchronized void addConfig(ConnectionConfiguration config) {
+diff --git a/play-services-wearable/core/src/test/java/org/microg/gms/wearable/AssetFdAccessTest.java b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/AssetFdAccessTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..de2dc3b374cf8f9d50870a47fd90882b2d19bc3e
+--- /dev/null
++++ b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/AssetFdAccessTest.java
+@@ -0,0 +1,151 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++package org.microg.gms.wearable;
++
++import com.google.android.gms.common.api.CommonStatusCodes;
++import com.google.android.gms.wearable.Asset;
++import com.google.android.gms.wearable.WearableStatusCodes;
++import com.google.android.gms.wearable.internal.GetFdForAssetResponse;
++import org.junit.Rule;
++import org.junit.Test;
++import org.junit.rules.TemporaryFolder;
++import org.junit.runner.RunWith;
++import org.microg.gms.wearable.BaseWearableCallbacks;
++import org.microg.gms.wearable.proto.AppKey;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.annotation.Config;
++
++import android.os.ParcelFileDescriptor;
++import android.os.RemoteException;
++import java.io.File;
++import java.io.FileOutputStream;
++import java.util.Arrays;
++import java.util.Collections;
++import java.util.List;
++
++import static org.junit.Assert.assertArrayEquals;
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertNotNull;
++import static org.junit.Assert.assertNull;
++import static org.junit.Assert.assertSame;
++import static org.junit.Assert.assertThrows;
++import static org.junit.Assert.assertTrue;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(sdk = 29)
++public class AssetFdAccessTest {
++    private static final String DIGEST = "AAAAAAAAAAAAAAAAAAAAAAAAAAA";
++    private static final AppKey CALLER = new AppKey("app.one", "signature.one");
++    @Rule public final TemporaryFolder temporary = new TemporaryFolder();
++
++    @Test public void authorizedCallerReceivesTheActualStoredBytes() throws Exception {
++        byte[] payload = {1, 2, 3, 4};
++        File file = temporary.newFile("asset");
++        try (FileOutputStream out = new FileOutputStream(file)) { out.write(payload); }
++        Store manager = new Store(file, Collections.singletonList(CALLER));
++        GetFdForAssetResponse response = WearableServiceImpl.createAssetFdResponse(
++                manager, Asset.createFromRef(DIGEST), CALLER);
++        assertEquals(CommonStatusCodes.SUCCESS, response.statusCode);
++        assertNotNull(response.pfd);
++        try (ParcelFileDescriptor.AutoCloseInputStream input =
++                     new ParcelFileDescriptor.AutoCloseInputStream(response.pfd)) {
++            byte[] received = new byte[payload.length];
++            assertEquals(payload.length, input.read(received));
++            assertArrayEquals(payload, received);
++        }
++        assertEquals(1, manager.fileLookups);
++    }
++
++    @Test public void foreignPackageAndSignatureCannotOpenAKnownDigest() throws Exception {
++        File file = temporary.newFile("private-asset");
++        for (AppKey owner : Arrays.asList(new AppKey("app.other", "signature.one"),
++                new AppKey("app.one", "signature.other"))) {
++            Store manager = new Store(file, Collections.singletonList(owner));
++            unavailable(WearableServiceImpl.createAssetFdResponse(
++                    manager, Asset.createFromRef(DIGEST), CALLER));
++            assertEquals("Denied callers must not resolve a file path", 0, manager.fileLookups);
++        }
++    }
++
++    @Test public void malformedAndAbsentRequestsNeverReachTheAssetStore() throws Exception {
++        Store manager = new Store(temporary.newFile("asset"), Collections.singletonList(CALLER));
++        unavailable(WearableServiceImpl.createAssetFdResponse(manager, null, CALLER));
++        for (String digest : Arrays.asList("", "../private-file", "short", "AAAAAAAAAAAAAAAAAAAAAAAAAA/")) {
++            unavailable(WearableServiceImpl.createAssetFdResponse(
++                    manager, Asset.createFromRef(digest), CALLER));
++        }
++        unavailable(WearableServiceImpl.createAssetFdResponse(manager, Asset.createFromRef(DIGEST), null));
++        unavailable(WearableServiceImpl.createAssetFdResponse(manager, Asset.createFromRef(DIGEST),
++                new AppKey("app.one", null)));
++        assertEquals(0, manager.aclLookups);
++        assertEquals(0, manager.fileLookups);
++    }
++
++    @Test public void missingAuthorizationOrStoredFileReturnsUnavailable() throws Exception {
++        Store noPermission = new Store(temporary.newFile("asset"), Collections.emptyList());
++        unavailable(WearableServiceImpl.createAssetFdResponse(
++                noPermission, Asset.createFromRef(DIGEST), CALLER));
++        assertEquals(0, noPermission.fileLookups);
++        Store missing = new Store(new File(temporary.getRoot(), "missing"), Collections.singletonList(CALLER));
++        unavailable(WearableServiceImpl.createAssetFdResponse(
++                missing, Asset.createFromRef(DIGEST), CALLER));
++    }
++
++    @Test public void disappearingFileReturnsUnavailableAtOpen() {
++        File vanished = new File(temporary.getRoot(), "vanished") {
++            @Override public boolean isFile() { return true; }
++        };
++        Store manager = new Store(vanished, Collections.singletonList(CALLER));
++        unavailable(WearableServiceImpl.createAssetFdResponse(
++                manager, Asset.createFromRef(DIGEST), CALLER));
++        assertEquals(1, manager.fileLookups);
++    }
++
++    @Test public void callbackDeliveryClosesTheLocalDescriptor() throws Exception {
++        GetFdForAssetResponse response = readableResponse();
++        WearableServiceImpl.deliverAssetFdResponse(new BaseWearableCallbacks() {
++            @Override public void onGetFdForAssetResponse(GetFdForAssetResponse delivered) {
++                assertSame(response, delivered);
++                assertTrue("Descriptor stays open during delivery", delivered.pfd.getFileDescriptor().valid());
++            }
++        }, response);
++        assertThrows(IllegalStateException.class, response.pfd::getFd);
++    }
++
++    @Test public void callbackFailureClosesTheDescriptorAndPreservesTheFailure() throws Exception {
++        GetFdForAssetResponse response = readableResponse();
++        RemoteException failure = new RemoteException("callback unavailable");
++        RemoteException thrown = assertThrows(RemoteException.class,
++                () -> WearableServiceImpl.deliverAssetFdResponse(new BaseWearableCallbacks() {
++                    @Override public void onGetFdForAssetResponse(GetFdForAssetResponse delivered)
++                            throws RemoteException {
++                        throw failure;
++                    }
++                }, response));
++        assertSame(failure, thrown);
++        assertThrows(IllegalStateException.class, response.pfd::getFd);
++    }
++
++    private GetFdForAssetResponse readableResponse() throws Exception {
++        Store manager = new Store(temporary.newFile(), Collections.singletonList(CALLER));
++        GetFdForAssetResponse response = WearableServiceImpl.createAssetFdResponse(
++                manager, Asset.createFromRef(DIGEST), CALLER);
++        assertEquals(CommonStatusCodes.SUCCESS, response.statusCode);
++        assertNotNull(response.pfd);
++        return response;
++    }
++
++    private static void unavailable(GetFdForAssetResponse response) {
++        assertEquals(WearableStatusCodes.ASSET_UNAVAILABLE, response.statusCode);
++        assertNull(response.pfd);
++    }
++
++    private static final class Store extends AssetManager {
++        final File file;
++        final List<AppKey> owners;
++        int aclLookups;
++        int fileLookups;
++        Store(File file, List<AppKey> owners) { super(null); this.file = file; this.owners = owners; }
++        @Override List<AppKey> getAssetAppKeys(String digest) { aclLookups++; return owners; }
++        @Override File getStoredAssetFile(String digest) { fileLookups++; return file; }
++    }
++}
+diff --git a/play-services-wearable/core/src/test/java/org/microg/gms/wearable/AssetReadinessDatabaseTest.java b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/AssetReadinessDatabaseTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..9d018725cf3279877d2f6f7a321395ec6d5ab087
+--- /dev/null
++++ b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/AssetReadinessDatabaseTest.java
+@@ -0,0 +1,144 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++package org.microg.gms.wearable;
++
++import android.content.Context;
++import android.database.Cursor;
++import com.google.android.gms.wearable.Asset;
++import org.junit.After;
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.RuntimeEnvironment;
++import org.robolectric.annotation.Config;
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.HashSet;
++import java.util.List;
++import java.util.Set;
++import java.util.UUID;
++import static org.junit.Assert.*;
++
++/** Exercises production readiness queries and updates against the actual SQLite schema. */
++@RunWith(RobolectricTestRunner.class)
++@Config(sdk = 29)
++public class AssetReadinessDatabaseTest {
++    private static final String ARRIVING = "AAAAAAAAAAAAAAAAAAAAAAAAAAA";
++    private static final String MISSING = "BBBBBBBBBBBBBBBBBBBBBBBBBBB";
++    private Context context;
++    private NodeDatabaseHelper database;
++
++    @Before public void createDatabase() {
++        context = RuntimeEnvironment.getApplication();
++        context.deleteDatabase("node.db");
++        database = new NodeDatabaseHelper(context);
++        // Seed asset identities before adding references, including on databases
++        // that enforce the production schema's foreign keys.
++        database.getWritableDatabase().execSQL(
++                "INSERT INTO assets(digest,dataPresent,timestampMs) VALUES(?,0,0)",
++                new Object[]{ARRIVING});
++        database.getWritableDatabase().execSQL(
++                "INSERT INTO assets(digest,dataPresent,timestampMs) VALUES(?,0,0)",
++                new Object[]{MISSING});
++    }
++
++    @After public void closeDatabase() {
++        if (database != null) database.close();
++        if (context != null) context.deleteDatabase("node.db");
++    }
++
++    @Test public void readinessUsesExactAppCertificateHostAndPath() {
++        DataItemRecord owner = put("app.one", "sig.one", "peer", "/literal_%", 7, ARRIVING);
++        DataItemRecord otherApp = put("app.two", "sig.one", "peer", "/literal_%", 7, ARRIVING);
++        DataItemRecord otherCertificate = put("app.one", "sig.two", "peer", "/literal_%", 7, ARRIVING);
++        DataItemRecord otherHost = put("app.one", "sig.one", "other-peer", "/literal_%", 7, ARRIVING);
++        DataItemRecord otherPath = put("app.one", "sig.one", "peer", "/literalXvalue", 7, ARRIVING);
++        assertFalse(ready(owner));
++        assertEquals("wear://peer/literal_%25", owner.dataItem.uri.toString());
++
++        DataItemRecord mismatchedApp = record("app.two", "sig.one", "peer", "/literal_%", 7, ARRIVING);
++        mismatchedApp.source = owner.source;
++        assertEquals(0, database.updateAssetsReady(mismatchedApp, true));
++        assertFalse(ready(owner));
++        DataItemRecord mismatchedCertificate = record("app.one", "sig.two", "peer", "/literal_%", 7, ARRIVING);
++        mismatchedCertificate.source = owner.source;
++        assertEquals(0, database.updateAssetsReady(mismatchedCertificate, true));
++        assertFalse(ready(owner));
++
++        assertEquals(1, database.updateAssetsReady(owner, true));
++        assertTrue(ready(owner));
++        for (DataItemRecord denied : Arrays.asList(otherApp, otherCertificate, otherHost, otherPath)) {
++            assertFalse("A different item must retain its readiness", ready(denied));
++        }
++    }
++
++    @Test public void waitingItemsIncludeAllAssetsAndRemainSeparateAtEqualSequenceIds() {
++        put("app.one", "sig.one", "peer", "/shared", 11, ARRIVING, MISSING);
++        put("app.two", "sig.two", "peer", "/shared", 11, ARRIVING, MISSING);
++        put("app.unrelated", "sig.three", "peer", "/shared", 11, MISSING);
++        List<DataItemRecord> waiting = new ArrayList<>();
++        try (Cursor cursor = database.getDataItemsWaitingForAsset(ARRIVING)) {
++            while (cursor.moveToNext()) waiting.add(DataItemRecord.fromCursor(cursor));
++        }
++        assertEquals(2, waiting.size());
++        Set<String> packages = new HashSet<>();
++        for (DataItemRecord record : waiting) {
++            packages.add(record.packageName);
++            assertFalse(record.assetsAreReady);
++            assertEquals(2, record.dataItem.getAssets().size());
++            Set<String> digests = new HashSet<>();
++            for (Asset asset : record.dataItem.getAssets().values()) digests.add(asset.getDigest());
++            assertEquals(new HashSet<>(Arrays.asList(ARRIVING, MISSING)), digests);
++        }
++        assertEquals(new HashSet<>(Arrays.asList("app.one", "app.two")), packages);
++    }
++
++    @Test public void staleCompletionCannotMarkANewerOrDeletedRecordReady() {
++        DataItemRecord current = put("app.one", "sig.one", "peer", "/current", 19, ARRIVING);
++        DataItemRecord stale = record("app.one", "sig.one", "peer", "/current", 18, ARRIVING);
++        stale.source = current.source;
++        assertEquals(0, database.updateAssetsReady(stale, true));
++        assertFalse(ready(current));
++        DataItemRecord deleted = record("app.one", "sig.one", "peer", "/deleted", 19, ARRIVING);
++        deleted.deleted = true;
++        database.putRecord(deleted);
++        assertEquals(0, database.updateAssetsReady(deleted, true));
++        assertFalse(ready(deleted));
++    }
++
++    private DataItemRecord put(String app, String signature, String host, String path,
++                               long seqId, String... digests) {
++        DataItemRecord record = record(app, signature, host, path, seqId, digests);
++        database.putRecord(record);
++        assertFalse("Fixture with assets must be persisted as pending", ready(record));
++        return record;
++    }
++
++    private static DataItemRecord record(String app, String signature, String host,
++                                          String path, long seqId, String... digests) {
++        DataItemRecord record = new DataItemRecord();
++        record.packageName = app;
++        record.signatureDigest = signature;
++        // Distinct origins can have equal sequence IDs. Respect the production
++        // unique index on sourceNode/deleted/seqId while testing those collisions.
++        record.source = UUID.randomUUID().toString();
++        record.seqId = seqId;
++        record.v1SeqId = seqId;
++        record.dataItem = new DataItemInternal(host, path);
++        for (int i = 0; i < digests.length; i++) {
++            record.dataItem.addAsset("asset" + i, Asset.createFromRef(digests[i]));
++        }
++        return record;
++    }
++
++    private boolean ready(DataItemRecord record) {
++        try (Cursor cursor = database.getReadableDatabase().rawQuery(
++                "SELECT assetsPresent FROM appKeyDataItems " +
++                        "WHERE packageName=? AND signatureDigest=? AND host=? AND path=? AND seqId=?",
++                new String[]{record.packageName, record.signatureDigest, record.dataItem.host,
++                        record.dataItem.path, String.valueOf(record.seqId)})) {
++            assertTrue("Fixture must have a persisted item", cursor.moveToFirst());
++            return cursor.getInt(0) != 0;
++        }
++    }
++}
+diff --git a/play-services-wearable/core/src/test/java/org/microg/gms/wearable/DataItemRecordCursorTest.java b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/DataItemRecordCursorTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..9b3806caf1023b33339c143c5013495fc6eb59aa
+--- /dev/null
++++ b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/DataItemRecordCursorTest.java
+@@ -0,0 +1,109 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.microg.gms.wearable;
++
++import android.database.MatrixCursor;
++
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.annotation.Config;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(sdk = 29)
++public class DataItemRecordCursorTest {
++    private static final String[] DATA_ITEM_ASSET_COLUMNS = {
++            "dataitems_id", "packageName", "signatureDigest", "host", "path", "seqId",
++            "deleted", "sourceNode", "data", "timestampMs", "assetsPresent", "assetname",
++            "assets_digest", "v1SourceNode", "v1SeqId"
++    };
++
++    @Test
++    public void materializesContiguousAssetRowsByDataItemIdAndPreservesOuterIteration() {
++        MatrixCursor cursor = new MatrixCursor(DATA_ITEM_ASSET_COLUMNS);
++        cursor.addRow(row(101, "example.app", "sig-a", "node-a", "/shared", 7,
++                "source-a", "asset-one", "digest-one", 70));
++        cursor.addRow(row(101, "example.app", "sig-a", "node-a", "/shared", 7,
++                "source-a", "asset-two", "digest-two", 70));
++        // Sequence IDs belong to a source node and can coincide across sources.
++        // This row is a different database item and must remain for the outer loop.
++        cursor.addRow(row(102, "example.app", "sig-a", "node-b", "/shared", 7,
++                "source-b", "other-item-asset", "digest-other", 71));
++        cursor.addRow(row(103, "example.app", "sig-a", "node-c", "/next", 8,
++                "source-c", "last-item-asset", "digest-last", 80));
++
++        assertTrue(cursor.moveToFirst());
++
++        DataItemRecord first = DataItemRecord.fromCursor(cursor);
++        assertEquals("example.app", first.packageName);
++        assertEquals("sig-a", first.signatureDigest);
++        assertEquals("node-a", first.dataItem.host);
++        assertEquals("/shared", first.dataItem.path);
++        assertEquals(7L, first.seqId);
++        assertEquals(70L, first.v1SeqId);
++        assertEquals("source-a", first.source);
++        assertEquals(2, first.dataItem.getAssets().size());
++        assertEquals("digest-one", first.dataItem.getAssets().get("asset-one").getDigest());
++        assertEquals("digest-two", first.dataItem.getAssets().get("asset-two").getDigest());
++        assertEquals("materializer should leave the cursor on the final row for this item",
++                101L, cursor.getLong(cursor.getColumnIndexOrThrow("dataitems_id")));
++
++        assertTrue(cursor.moveToNext());
++        DataItemRecord second = DataItemRecord.fromCursor(cursor);
++        assertEquals("node-b", second.dataItem.host);
++        assertEquals(1, second.dataItem.getAssets().size());
++        assertEquals("digest-other", second.dataItem.getAssets().get("other-item-asset").getDigest());
++
++        assertTrue(cursor.moveToNext());
++        DataItemRecord third = DataItemRecord.fromCursor(cursor);
++        assertEquals("/next", third.dataItem.path);
++        assertEquals("digest-last", third.dataItem.getAssets().get("last-item-asset").getDigest());
++        assertFalse(cursor.moveToNext());
++    }
++
++    @Test
++    public void missingOrPartialAssetColumnsDoNotBreakBaseRecordMaterialization() {
++        String[] baseColumns = {
++                "dataitems_id", "packageName", "signatureDigest", "host", "path", "seqId",
++                "deleted", "sourceNode", "data", "timestampMs", "assetsPresent"
++        };
++        MatrixCursor noAssetColumns = new MatrixCursor(baseColumns);
++        noAssetColumns.addRow(new Object[]{201L, "example.app", "sig", "node", "/no-assets",
++                9L, 0, "source", new byte[]{1, 2}, 123L, 1});
++        assertTrue(noAssetColumns.moveToFirst());
++
++        DataItemRecord withoutAssets = DataItemRecord.fromCursor(noAssetColumns);
++        assertEquals("/no-assets", withoutAssets.dataItem.path);
++        assertEquals(9L, withoutAssets.seqId);
++        assertEquals(9L, withoutAssets.v1SeqId);
++        assertTrue(withoutAssets.dataItem.getAssets().isEmpty());
++
++        // Twelve columns used to pass the old getColumnCount() >= 12 check even
++        // though the code then read index 12. A lone assetname is not an asset pair.
++        MatrixCursor partialAssetColumns = new MatrixCursor(
++                new String[]{"dataitems_id", "packageName", "signatureDigest", "host", "path",
++                        "seqId", "deleted", "sourceNode", "data", "timestampMs", "assetsPresent",
++                        "assetname"});
++        partialAssetColumns.addRow(new Object[]{202L, "example.app", "sig", "node", "/partial",
++                10L, 0, "source", null, 124L, 0, "orphan-key"});
++        assertTrue(partialAssetColumns.moveToFirst());
++
++        DataItemRecord partial = DataItemRecord.fromCursor(partialAssetColumns);
++        assertEquals("/partial", partial.dataItem.path);
++        assertEquals(10L, partial.seqId);
++        assertTrue(partial.dataItem.getAssets().isEmpty());
++    }
++
++    private static Object[] row(long id, String packageName, String signatureDigest, String host,
++                                String path, long seqId, String source, String assetName,
++                                String assetDigest, long v1SeqId) {
++        return new Object[]{id, packageName, signatureDigest, host, path, seqId, 0, source,
++                new byte[]{1}, 123L, 0, assetName, assetDigest, source, v1SeqId};
++    }
++}
+diff --git a/play-services-wearable/core/src/test/java/org/microg/gms/wearable/bluetooth/BleLifecycleTest.java b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/bluetooth/BleLifecycleTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..0e3022328b50589e0799415b0fca38d92c55323d
+--- /dev/null
++++ b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/bluetooth/BleLifecycleTest.java
+@@ -0,0 +1,201 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.microg.gms.wearable.bluetooth;
++
++import android.bluetooth.BluetoothDevice;
++import android.bluetooth.BluetoothGatt;
++import android.content.Context;
++import android.os.HandlerThread;
++
++import com.google.android.gms.wearable.ConnectionConfiguration;
++
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.RuntimeEnvironment;
++import org.robolectric.annotation.Config;
++
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicBoolean;
++import java.util.concurrent.atomic.AtomicInteger;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(sdk = 29)
++public class BleLifecycleTest {
++    private static final long TIMEOUT_SECONDS = 2;
++
++    @Test
++    public void managerStartsInServiceStateAndProcessesInitialDisabledConfig() throws Exception {
++        TestRig rig = new TestRig();
++        try {
++            assertTrue("startup state was not processed", rig.awaitState("ServiceOffState"));
++            assertFalse(rig.manager.isReceiverRegistered.get());
++            assertTrue(rig.gattHelper.listenerRegistered);
++        } finally {
++            rig.shutdown();
++        }
++    }
++
++    @Test
++    public void quitSafelyRunsBleCleanupBeforeStoppingHandlerThread() throws Exception {
++        TestRig rig = new TestRig();
++        try {
++            assertTrue("startup state was not processed", rig.awaitState("ServiceOffState"));
++
++            CountDownLatch resourcesPrepared = new CountDownLatch(1);
++            rig.manager.post(() -> {
++                rig.manager.config.set(configuration(true));
++                rig.manager.syncReceiverRegistration();
++                rig.scanner.scanning.set(true);
++                rig.gattHelper.connected.set(true);
++                resourcesPrepared.countDown();
++            });
++            assertTrue("BLE resources were not prepared", resourcesPrepared.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
++            assertTrue(rig.manager.isReceiverRegistered.get());
++
++            rig.manager.quitSafely();
++
++            assertTrue("service cleanup did not run", rig.servicesHandler.cleaned.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
++            rig.thread.join(TimeUnit.SECONDS.toMillis(TIMEOUT_SECONDS));
++
++            assertFalse("handler thread remained alive after safe quit", rig.thread.isAlive());
++            assertEquals(1, rig.scanner.stopCalls.get());
++            assertEquals(1, rig.gattHelper.disconnectCalls.get());
++            assertEquals(1, rig.servicesHandler.cleanupCalls.get());
++            assertFalse(rig.manager.isReceiverRegistered.get());
++        } finally {
++            rig.shutdown();
++        }
++    }
++
++    private static boolean isState(BleConnectionManager manager, String expected) {
++        BleState current = manager.currentState();
++        return current != null && expected.equals(current.getName());
++    }
++
++    private static ConnectionConfiguration configuration(boolean enabled) {
++        return new ConnectionConfiguration("watch", "00:11:22:33:44:55", 1, 1, enabled);
++    }
++
++    private static final class TestRig {
++        final HandlerThread thread = new HandlerThread("BleLifecycleTest");
++        final TestScanner scanner = new TestScanner();
++        final TestGattHelper gattHelper = new TestGattHelper();
++        final TestServicesHandler servicesHandler = new TestServicesHandler();
++        final BleConnectionManager manager;
++
++        TestRig() {
++            thread.start();
++            Context context = RuntimeEnvironment.getApplication();
++            manager = new BleConnectionManager(context, null, scanner, gattHelper,
++                    servicesHandler, thread.getLooper(), configuration(false));
++        }
++
++        boolean awaitState(String expected) throws InterruptedException {
++            CountDownLatch stateReached = new CountDownLatch(1);
++            Runnable[] poll = new Runnable[1];
++            poll[0] = () -> {
++                if (isState(manager, expected)) {
++                    stateReached.countDown();
++                } else {
++                    manager.postDelayed(poll[0], 5);
++                }
++            };
++            manager.post(poll[0]);
++            return stateReached.await(TIMEOUT_SECONDS, TimeUnit.SECONDS);
++        }
++
++        void shutdown() throws InterruptedException {
++            manager.quitSafely();
++            thread.quitSafely();
++            thread.join(TimeUnit.SECONDS.toMillis(TIMEOUT_SECONDS));
++        }
++    }
++
++    private static final class TestScanner implements BleScanner {
++        final AtomicBoolean scanning = new AtomicBoolean();
++        final AtomicInteger stopCalls = new AtomicInteger();
++
++        @Override
++        public boolean isScanning() {
++            return scanning.get();
++        }
++
++        @Override
++        public void stopScan() {
++            scanning.set(false);
++            stopCalls.incrementAndGet();
++        }
++
++        @Override
++        public void startScan(String address, ScanListener listener) {
++            scanning.set(true);
++        }
++    }
++
++    private static final class TestGattHelper implements BluetoothGattHelper {
++        final AtomicBoolean connected = new AtomicBoolean();
++        final AtomicInteger disconnectCalls = new AtomicInteger();
++        volatile boolean listenerRegistered;
++
++        @Override
++        public boolean isConnected() {
++            return connected.get();
++        }
++
++        @Override
++        public void connect(BluetoothDevice device) {
++        }
++
++        @Override
++        public void disconnect() {
++            disconnectCalls.incrementAndGet();
++            connected.set(false);
++        }
++
++        @Override
++        public void discoverServices() {
++        }
++
++        @Override
++        public void refreshGatt() {
++        }
++
++        @Override
++        public void setGattEventListener(GattEventListener listener) {
++            listenerRegistered = listener != null;
++        }
++
++        @Override
++        public BluetoothGatt getGatt() {
++            return null;
++        }
++
++        @Override
++        public void close() {
++        }
++    }
++
++    private static final class TestServicesHandler implements BleServicesHandler {
++        final AtomicInteger cleanupCalls = new AtomicInteger();
++        final CountDownLatch cleaned = new CountDownLatch(1);
++
++        @Override
++        public void cleanup() {
++            cleanupCalls.incrementAndGet();
++            cleaned.countDown();
++        }
++
++        @Override
++        public void updateCurrentTime() {
++            throw new UnsupportedOperationException("not used in this test");
++        }
++    }
++}
+diff --git a/play-services-wearable/core/src/test/java/org/microg/gms/wearable/bluetooth/BluetoothConnectionThreadShutdownTest.java b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/bluetooth/BluetoothConnectionThreadShutdownTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..60eea5135dae55e6c0aebc3f5157d9e2dacd63dc
+--- /dev/null
++++ b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/bluetooth/BluetoothConnectionThreadShutdownTest.java
+@@ -0,0 +1,189 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++package org.microg.gms.wearable.bluetooth;
++
++import android.bluetooth.BluetoothAdapter;
++import android.bluetooth.BluetoothSocket;
++import android.content.Context;
++
++import com.google.android.gms.wearable.ConnectionConfiguration;
++
++import org.junit.After;
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.microg.gms.wearable.ConnectHandshake;
++import org.robolectric.RuntimeEnvironment;
++import org.robolectric.Shadows;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.annotation.Config;
++import org.robolectric.annotation.Implementation;
++import org.robolectric.annotation.Implements;
++import org.robolectric.shadows.ShadowBluetoothAdapter;
++
++import java.io.IOException;
++import java.io.InputStream;
++import java.io.OutputStream;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.Executors;
++import java.util.concurrent.ScheduledExecutorService;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicInteger;
++import java.util.concurrent.atomic.AtomicReference;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertNotNull;
++import static org.junit.Assert.assertTrue;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(sdk = 29, shadows = BluetoothConnectionThreadShutdownTest.BlockingBluetoothSocketShadow.class)
++public class BluetoothConnectionThreadShutdownTest {
++    private static final String ADDRESS = "02:00:00:00:00:01";
++
++    private ScheduledExecutorService executor;
++    private BluetoothAdapter adapter;
++    private TestConnectionThread thread;
++
++    @Before public void setUp() {
++        BlockingBluetoothSocketShadow.reset();
++        ShadowBluetoothAdapter.setIsBluetoothSupported(true);
++        adapter = BluetoothAdapter.getDefaultAdapter();
++        assertNotNull(adapter);
++        Shadows.shadowOf(adapter).setEnabled(true);
++        executor = Executors.newSingleThreadScheduledExecutor();
++    }
++
++    @After public void tearDown() throws Exception {
++        if (thread != null && thread.isAlive()) {
++            thread.close();
++            BluetoothSocket socket = thread.createdSocket.get();
++            if (socket != null) socket.close();
++            thread.join(TimeUnit.SECONDS.toMillis(2));
++        }
++        if (executor != null) executor.shutdownNow();
++        BlockingBluetoothSocketShadow.releaseBlockedRead();
++    }
++
++    @Test public void closeCancelsAThreadBlockedInTheActiveSocketRead() throws Exception {
++        thread = new TestConnectionThread(RuntimeEnvironment.getApplication(), adapter, executor, false);
++        thread.start();
++
++        assertTrue("handshake should reach the blocking socket read",
++                BlockingBluetoothSocketShadow.readStarted.await(3, TimeUnit.SECONDS));
++        BluetoothSocket activeSocket = thread.createdSocket.get();
++        assertNotNull(activeSocket);
++
++        thread.close();
++
++        assertTrue("close should close the active socket", BlockingBluetoothSocketShadow.closed.await(
++                2, TimeUnit.SECONDS));
++        thread.join(TimeUnit.SECONDS.toMillis(2));
++        assertFalse("connection thread should leave its blocking read", thread.isAlive());
++        assertEquals("the active socket should be closed once", 1,
++                BlockingBluetoothSocketShadow.closeCalls.get());
++    }
++
++    @Test public void socketReturnedAfterCloseIsClosedWithoutStartingAnAttempt() throws Exception {
++        thread = new TestConnectionThread(RuntimeEnvironment.getApplication(), adapter, executor, true);
++        thread.start();
++
++        assertTrue("socket factory should be entered", thread.factoryEntered.await(2, TimeUnit.SECONDS));
++        thread.close();
++        thread.allowFactoryReturn.countDown();
++
++        thread.join(TimeUnit.SECONDS.toMillis(2));
++        assertFalse("closed thread should not begin a late attempt", thread.isAlive());
++        assertNotNull(thread.createdSocket.get());
++        assertEquals("late socket should be closed exactly once", 1,
++                BlockingBluetoothSocketShadow.closeCalls.get());
++        assertEquals("close must not trigger a retry", 1, thread.socketFactoryCalls.get());
++    }
++
++    private static final class TestConnectionThread extends BluetoothConnectionThread {
++        final CountDownLatch factoryEntered = new CountDownLatch(1);
++        final CountDownLatch allowFactoryReturn = new CountDownLatch(1);
++        final AtomicReference<BluetoothSocket> createdSocket = new AtomicReference<>();
++        final AtomicInteger socketFactoryCalls = new AtomicInteger();
++        final boolean blockFactory;
++
++        TestConnectionThread(Context context, BluetoothAdapter adapter,
++                             ScheduledExecutorService executor, boolean blockFactory) {
++            super(context, new ConnectionConfiguration("shutdown-test", ADDRESS, 1, 1, true),
++                    adapter, null, executor, null);
++            this.blockFactory = blockFactory;
++        }
++
++        @Override protected BluetoothSocket createSocket() throws IOException {
++            socketFactoryCalls.incrementAndGet();
++            factoryEntered.countDown();
++            if (blockFactory) awaitUninterruptibly(allowFactoryReturn);
++            BluetoothSocket socket = super.createSocket();
++            createdSocket.set(socket);
++            return socket;
++        }
++
++        @Override protected ConnectHandshake.LocalIdentity createLocalIdentity() {
++            return new ConnectHandshake.LocalIdentity(
++                    "local-node", "local", 1L, null, null, false, null);
++        }
++    }
++
++    private static void awaitUninterruptibly(CountDownLatch latch) {
++        boolean interrupted = false;
++        while (true) {
++            try {
++                latch.await();
++                break;
++            } catch (InterruptedException e) {
++                interrupted = true;
++            }
++        }
++        if (interrupted) Thread.currentThread().interrupt();
++    }
++
++    @Implements(value = BluetoothSocket.class, isInAndroidSdk = true)
++    public static class BlockingBluetoothSocketShadow {
++        static volatile CountDownLatch readStarted = new CountDownLatch(1);
++        static volatile CountDownLatch closed = new CountDownLatch(1);
++        static final AtomicInteger closeCalls = new AtomicInteger();
++
++        static void reset() {
++            readStarted = new CountDownLatch(1);
++            closed = new CountDownLatch(1);
++            closeCalls.set(0);
++        }
++
++        static void releaseBlockedRead() {
++            closed.countDown();
++        }
++
++        @Implementation protected void connect() {}
++
++        @Implementation protected boolean isConnected() { return true; }
++
++        @Implementation protected InputStream getInputStream() {
++            return new InputStream() {
++                @Override public int read() {
++                    readStarted.countDown();
++                    awaitUninterruptibly(closed);
++                    return -1;
++                }
++
++                @Override public void close() {
++                    // The simulated Bluetooth read exits only when the socket closes.
++                }
++            };
++        }
++
++        @Implementation protected OutputStream getOutputStream() {
++            return new OutputStream() {
++                @Override public void write(int value) {}
++            };
++        }
++
++        @Implementation protected void close() {
++            closeCalls.incrementAndGet();
++            closed.countDown();
++        }
++    }
++}
+diff --git a/play-services-wearable/core/src/test/java/org/microg/gms/wearable/bluetooth/BluetoothWearableConnectionCleanupTest.java b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/bluetooth/BluetoothWearableConnectionCleanupTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..dfadae1edfba4a64b770df6dfbd93022655f3558
+--- /dev/null
++++ b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/bluetooth/BluetoothWearableConnectionCleanupTest.java
+@@ -0,0 +1,118 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++package org.microg.gms.wearable.bluetooth;
++
++import android.bluetooth.BluetoothAdapter;
++import android.bluetooth.BluetoothDevice;
++import android.bluetooth.BluetoothSocket;
++import android.os.HandlerThread;
++
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.microg.gms.wearable.ConnectHandshake;
++import org.microg.gms.wearable.WearableConnection;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.Shadows;
++import org.robolectric.annotation.Config;
++import org.robolectric.annotation.Implementation;
++import org.robolectric.annotation.Implements;
++import org.robolectric.shadows.ShadowBluetoothAdapter;
++import org.robolectric.util.ReflectionHelpers;
++
++import java.io.IOException;
++import java.io.InputStream;
++import java.io.OutputStream;
++import java.util.UUID;
++import java.util.concurrent.atomic.AtomicInteger;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertNotNull;
++import static org.junit.Assert.assertThrows;
++import static org.junit.Assert.assertTrue;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(sdk = 29, shadows = BluetoothWearableConnectionCleanupTest.FaultingBluetoothSocketShadow.class)
++public class BluetoothWearableConnectionCleanupTest {
++    private static final String ADDRESS = "02:00:00:00:00:02";
++    private static final UUID SERVICE_UUID = UUID.fromString("5e8945b0-9525-11e3-a5e2-0800200c9a66");
++
++    @Before public void setUp() {
++        FaultingBluetoothSocketShadow.reset();
++        ShadowBluetoothAdapter.setIsBluetoothSupported(true);
++        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
++        assertNotNull(adapter);
++        Shadows.shadowOf(adapter).setEnabled(true);
++    }
++
++    @Test public void ioMarkedClosedConnectionStillCleansResourcesOnce() throws Exception {
++        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
++        BluetoothDevice device = adapter.getRemoteDevice(ADDRESS);
++        BluetoothSocket socket = device.createRfcommSocketToServiceRecord(SERVICE_UUID);
++        BluetoothWearableConnection connection = new BluetoothWearableConnection(socket,
++                new ConnectHandshake.LocalIdentity("local-node", "local", 1L,
++                        null, null, false, null), WearableConnection.NOOP);
++        HandlerThread watchdog = ReflectionHelpers.getField(connection, "watchdogThread");
++
++        try {
++            assertThrows(IOException.class, connection::readMessagePiece);
++            assertTrue("read failure marks the transport closed", connection.isClosed());
++            assertEquals(0, FaultingBluetoothSocketShadow.inputCloseCalls.get());
++            assertEquals(0, FaultingBluetoothSocketShadow.outputCloseCalls.get());
++            assertEquals(0, FaultingBluetoothSocketShadow.socketCloseCalls.get());
++
++            connection.close();
++            connection.close();
++            watchdog.join(2_000);
++
++            assertEquals("input stream closes exactly once", 1,
++                    FaultingBluetoothSocketShadow.inputCloseCalls.get());
++            assertEquals("output stream closes exactly once", 1,
++                    FaultingBluetoothSocketShadow.outputCloseCalls.get());
++            assertEquals("socket closes exactly once", 1,
++                    FaultingBluetoothSocketShadow.socketCloseCalls.get());
++            assertFalse("watchdog thread terminates", watchdog.isAlive());
++        } finally {
++            connection.close();
++        }
++    }
++
++    @Implements(value = BluetoothSocket.class, isInAndroidSdk = true)
++    public static class FaultingBluetoothSocketShadow {
++        static final AtomicInteger inputCloseCalls = new AtomicInteger();
++        static final AtomicInteger outputCloseCalls = new AtomicInteger();
++        static final AtomicInteger socketCloseCalls = new AtomicInteger();
++
++        static void reset() {
++            inputCloseCalls.set(0);
++            outputCloseCalls.set(0);
++            socketCloseCalls.set(0);
++        }
++
++        @Implementation protected InputStream getInputStream() {
++            return new InputStream() {
++                @Override public int read() throws IOException {
++                    throw new IOException("bt socket closed by peer");
++                }
++
++                @Override public void close() {
++                    inputCloseCalls.incrementAndGet();
++                }
++            };
++        }
++
++        @Implementation protected OutputStream getOutputStream() {
++            return new OutputStream() {
++                @Override public void write(int value) {}
++
++                @Override public void close() {
++                    outputCloseCalls.incrementAndGet();
++                }
++            };
++        }
++
++        @Implementation protected void close() {
++            socketCloseCalls.incrementAndGet();
++        }
++    }
++}
+diff --git a/play-services-wearable/core/src/test/java/org/microg/gms/wearable/network/NetworkConnectionManagerTest.java b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/network/NetworkConnectionManagerTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..4cc9daff96985dac0b2e8893c45b48493a9e713d
+--- /dev/null
++++ b/play-services-wearable/core/src/test/java/org/microg/gms/wearable/network/NetworkConnectionManagerTest.java
+@@ -0,0 +1,56 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.microg.gms.wearable.network;
++
++import android.content.BroadcastReceiver;
++import android.content.Context;
++import android.content.Intent;
++import android.net.ConnectivityManager;
++import android.os.Looper;
++
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.RuntimeEnvironment;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.Shadows;
++import org.robolectric.annotation.Config;
++
++import java.util.concurrent.atomic.AtomicInteger;
++
++import static org.junit.Assert.assertEquals;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(sdk = 29)
++public class NetworkConnectionManagerTest {
++    @Test
++    public void receiverRoutesConnectivityActionAndIgnoresExtraKeyAsAction() {
++        Context context = RuntimeEnvironment.getApplication();
++        AtomicInteger networkAvailableCalls = new AtomicInteger();
++        BroadcastReceiver receiver = NetworkConnectionManager.registerConnectivityReceiver(
++                context, networkAvailableCalls::incrementAndGet);
++
++        try {
++            context.sendBroadcast(new Intent(ConnectivityManager.EXTRA_NO_CONNECTIVITY)
++                    .putExtra(ConnectivityManager.EXTRA_NO_CONNECTIVITY, false));
++            Shadows.shadowOf(Looper.getMainLooper()).idle();
++            assertEquals("extra key is not a broadcast action", 0,
++                    networkAvailableCalls.get());
++
++            context.sendBroadcast(new Intent(ConnectivityManager.CONNECTIVITY_ACTION)
++                    .putExtra(ConnectivityManager.EXTRA_NO_CONNECTIVITY, true));
++            Shadows.shadowOf(Looper.getMainLooper()).idle();
++            assertEquals("loss of all connectivity must not start connections", 0,
++                    networkAvailableCalls.get());
++
++            context.sendBroadcast(new Intent(ConnectivityManager.CONNECTIVITY_ACTION)
++                    .putExtra(ConnectivityManager.EXTRA_NO_CONNECTIVITY, false));
++            Shadows.shadowOf(Looper.getMainLooper()).idle();
++            assertEquals("connectivity return must restart deferred/retrying configs", 1,
++                    networkAvailableCalls.get());
++        } finally {
++            context.unregisterReceiver(receiver);
++        }
++    }
++}
+diff --git a/play-services-wearable/src/main/java/com/google/android/gms/wearable/internal/AcceptTermsRequest.java b/play-services-wearable/src/main/java/com/google/android/gms/wearable/internal/AcceptTermsRequest.java
+index e04bd608341edb194eff5f94a87c9719b30ea2b2..5e765d13cb1936d422a114b015b34f8594351697 100644
+--- a/play-services-wearable/src/main/java/com/google/android/gms/wearable/internal/AcceptTermsRequest.java
++++ b/play-services-wearable/src/main/java/com/google/android/gms/wearable/internal/AcceptTermsRequest.java
+@@ -39,6 +39,10 @@ public class AcceptTermsRequest extends AutoSafeParcelable {
+     @SafeParceled(8)
+     public final boolean unk8;
+ 
++    private AcceptTermsRequest() {
++        this(0, null, null, null, null, null, null, false);
++    }
++
+     public AcceptTermsRequest(int statusCode, List unk2, String unk3, String unk4, String unk5, String unk6, List unk7, boolean unk8) {
+         this.statusCode = statusCode;
+         this.unk2 = unk2;
+diff --git a/play-services-wearable/src/main/java/com/google/android/gms/wearable/internal/ConsentStatusRequest.java b/play-services-wearable/src/main/java/com/google/android/gms/wearable/internal/ConsentStatusRequest.java
+index 02e7eaa0283a2dc4668b5829e7975a2b98e08e00..68905422e4f822594156348db23e3e21acda9b02 100644
+--- a/play-services-wearable/src/main/java/com/google/android/gms/wearable/internal/ConsentStatusRequest.java
++++ b/play-services-wearable/src/main/java/com/google/android/gms/wearable/internal/ConsentStatusRequest.java
+@@ -23,6 +23,9 @@ public class ConsentStatusRequest extends AutoSafeParcelable {
+     @SafeParceled(1)
+     public String status;
+ 
++    private ConsentStatusRequest() {
++    }
++
+     public ConsentStatusRequest(String status) {
+         this.status = status;
+     }
+diff --git a/play-services-wearable/src/main/java/com/google/android/gms/wearable/internal/RecordTermConsentRequest.java b/play-services-wearable/src/main/java/com/google/android/gms/wearable/internal/RecordTermConsentRequest.java
+index 111b94d5c6b7862fd85a236410dfa2b2633f4b47..9ff90d5b59f4bec218453793452d8a36b4df89a3 100644
+--- a/play-services-wearable/src/main/java/com/google/android/gms/wearable/internal/RecordTermConsentRequest.java
++++ b/play-services-wearable/src/main/java/com/google/android/gms/wearable/internal/RecordTermConsentRequest.java
+@@ -33,6 +33,10 @@ public class RecordTermConsentRequest extends AutoSafeParcelable {
+     @SafeParceled(6)
+     public final String unk6;
+ 
++    private RecordTermConsentRequest() {
++        this(0, 0, false, null, null, null);
++    }
++
+     public RecordTermConsentRequest(int unk1, int unk2, boolean unk3, String unk4, String unk5, String unk6) {
+         this.unk1 = unk1;
+         this.unk2 = unk2;
+diff --git a/play-services-wearable/src/test/java/com/google/android/gms/wearable/internal/RequestParcelableRoundTripTest.java b/play-services-wearable/src/test/java/com/google/android/gms/wearable/internal/RequestParcelableRoundTripTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..534fd6893b09e7ab706e2a9ab3b7c67dafc4fc08
+--- /dev/null
++++ b/play-services-wearable/src/test/java/com/google/android/gms/wearable/internal/RequestParcelableRoundTripTest.java
+@@ -0,0 +1,77 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.google.android.gms.wearable.internal;
++
++import android.os.Parcel;
++import android.os.Parcelable;
++
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.annotation.Config;
++
++import java.util.Arrays;
++import java.util.List;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(sdk = 29)
++public class RequestParcelableRoundTripTest {
++    @Test
++    public void acceptTermsRequestRoundTripsAllFields() {
++        List<String> firstList = Arrays.asList("consent-one", "consent-two");
++        List<String> secondList = Arrays.asList("region-a", "region-b");
++        AcceptTermsRequest request = new AcceptTermsRequest(
++                37, firstList, "terms-version", "account-name", "node-id", "source", secondList, true);
++
++        AcceptTermsRequest result = roundTrip(request, AcceptTermsRequest.CREATOR);
++
++        assertEquals(37, result.statusCode);
++        assertEquals(firstList, result.unk2);
++        assertEquals("terms-version", result.unk3);
++        assertEquals("account-name", result.unk4);
++        assertEquals("node-id", result.unk5);
++        assertEquals("source", result.unk6);
++        assertEquals(secondList, result.unk7);
++        assertTrue(result.unk8);
++    }
++
++    @Test
++    public void recordTermConsentRequestRoundTripsAllFields() {
++        RecordTermConsentRequest request = new RecordTermConsentRequest(
++                19, 23, true, "consent-token", "node-id", "source");
++
++        RecordTermConsentRequest result = roundTrip(request, RecordTermConsentRequest.CREATOR);
++
++        assertEquals(19, result.unk1);
++        assertEquals(23, result.unk2);
++        assertTrue(result.unk3);
++        assertEquals("consent-token", result.unk4);
++        assertEquals("node-id", result.unk5);
++        assertEquals("source", result.unk6);
++    }
++
++    @Test
++    public void consentStatusRequestRoundTripsStatus() {
++        ConsentStatusRequest request = new ConsentStatusRequest("requested-status");
++
++        ConsentStatusRequest result = roundTrip(request, ConsentStatusRequest.CREATOR);
++
++        assertEquals("requested-status", result.status);
++    }
++
++    private static <T extends Parcelable> T roundTrip(T value, Parcelable.Creator<T> creator) {
++        Parcel parcel = Parcel.obtain();
++        try {
++            value.writeToParcel(parcel, 0);
++            parcel.setDataPosition(0);
++            return creator.createFromParcel(parcel);
++        } finally {
++            parcel.recycle();
++        }
++    }
++}

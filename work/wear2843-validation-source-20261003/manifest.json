@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "purpose": "Immutable packet delivery for the existing 61-test wearable source validation",
+  "issue_url": "https://github.com/microg/GmsCore/issues/2843",
+  "artifact_branch": "bounty/wear2843-validation-source-20261003",
+  "base_commit": "32bc8954ff872d0e1a05ddfae81561b6dbecef69",
+  "base_tree": "3554e25654f76574eb26c6c5ce32c85fcf49d19f",
+  "original_integration_commit": "e6582576386a2ab93df538f4914a0473e659a612",
+  "target_source_tree": "fc70e055d9120e6962ef97652a9d8715e916a0db",
+  "packets": [
+    {
+      "order": 1,
+      "file": "WEAR2843_OWNER_TREE_FROM_MASTER_20261001.patch",
+      "utf8_bytes": 955273,
+      "sha256": "d21ccf2390342d36cd8d24fcef641c0afb23d570a430e699725f8392af530400",
+      "git_blob_sha": "ed14297dbd0cbf2941471574ce6febcd5dc2d5d1",
+      "resulting_source_tree": "8fdf4c0efc0b4be907957ab0be9b552bce5c20b8"
+    },
+    {
+      "order": 2,
+      "file": "WEAR2843_CURRENT_FIX_DELTA.patch",
+      "utf8_bytes": 87317,
+      "sha256": "0595ce41a7cff13f2ee7308b5ab468395c3afe30efa4ae38f20e417ace43bcc9",
+      "git_blob_sha": "35bb98daead093c37fa929b0765af4fe1772bd2a",
+      "resulting_source_tree": "fc70e055d9120e6962ef97652a9d8715e916a0db"
+    }
+  ],
+  "baseline_build_inputs": [
+    {
+      "path": "build.gradle",
+      "git_blob_sha": "a42ad581950ee347fe962e9110c18e1d59ebd880"
+    },
+    {
+      "path": "gradle/wrapper/gradle-wrapper.properties",
+      "git_blob_sha": "70fbe7a4b353e9766b999c45c3c2f773d08b244a"
+    },
+    {
+      "path": "gradle.properties",
+      "git_blob_sha": "1c50760c87616e8470c0dc25707c2613c639c478"
+    },
+    {
+      "path": ".github/workflows/build.yml",
+      "git_blob_sha": "0342ca0e2c65843a8051ddbaaa11337459e7a2c6"
+    }
+  ],
+  "configured_toolchain": {
+    "gradle": "8.13",
+    "android_gradle_plugin": "8.13.2",
+    "kotlin_plugin": "1.9.22",
+    "android_compile_sdk": 35,
+    "android_build_tools": "35.0.0",
+    "min_sdk": 19,
+    "target_sdk": 29,
+    "baseline_ci_jdk": "Temurin 17"
+  },
+  "validation_tasks": [
+    ":play-services-wearable-core:testDebugUnitTest",
+    ":play-services-wearable:testDebugUnitTest",
+    ":play-services-wearable-core:compileDebugAndroidTestJavaWithJavac"
+  ],
+  "expected_source_test_methods": {
+    "core": 58,
+    "api": 3,
+    "total": 61
+  },
+  "test_status": "NOT RUN by this source delivery",
+  "excluded_successor": {
+    "commit": "cc0fdd0a2c4612626d00fbda530ebdfb05f15c45",
+    "tree": "24af669342627fba128f27e1c7ff062a57bd1d10",
+    "expected_test_methods": 62
+  },
+  "artifact_semantics": "This branch retains the entire base tree and adds packet files only. Its branch commit is not the reconstructed validation source tree.",
+  "source_changes": "None; packet bodies are byte-for-byte copies of the frozen source patches.",
+  "validation_ownership": "Existing validation assignment is retained; this delivery performs no Gradle run and no issue-level submission."
+}
