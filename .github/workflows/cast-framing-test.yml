@@ -1,0 +1,40 @@
+name: Cast 580 framing unit tests
+
+on:
+  push:
+    branches:
+      - codex/cast-580-framing-validation
+
+permissions:
+  contents: read
+
+jobs:
+  framing-tests:
+    name: Cast channel framing tests
+    if: github.repository == 'woahwhattheheck/GmsCore'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Verify the focused Cast unit tests
+        run: ./gradlew :play-services-cast-core:testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Upload JUnit XML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cast-580-test-results
+          path: play-services-cast/core/build/test-results/testDebugUnitTest/*.xml
+          if-no-files-found: error
