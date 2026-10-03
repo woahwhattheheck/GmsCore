@@ -7,6 +7,7 @@ import com.google.android.gms.common.api.Status
 import com.google.android.gms.constellation.GetIidTokenRequest
 import com.google.android.gms.constellation.GetIidTokenResponse
 import com.google.android.gms.constellation.internal.IConstellationCallbacks
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -56,6 +57,9 @@ internal suspend fun handleGetIidToken(
             GetIidTokenResponse(iidToken, fid, signature, timestamp),
             ApiMetadata.DEFAULT
         )
+    } catch (e: CancellationException) {
+        // Cancelled (e.g. caller process died): do not deliver a result to a dead caller.
+        throw e
     } catch (e: Exception) {
         Log.e(TAG, "getIidToken failed", e)
         callbacks.onIidTokenGenerated(Status.INTERNAL_ERROR, null, ApiMetadata.DEFAULT)

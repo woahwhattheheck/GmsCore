@@ -10,6 +10,7 @@ import com.google.android.gms.constellation.GetPnvCapabilitiesResponse
 import com.google.android.gms.constellation.PhoneNumberInfo
 import com.google.android.gms.constellation.VerifyPhoneNumberResponse
 import com.google.android.gms.constellation.internal.IConstellationCallbacks
+import kotlin.coroutines.cancellation.CancellationException
 
 class ConstellationCallbacksWrapper(
     private val cb: IConstellationCallbacks
@@ -52,8 +53,17 @@ class ConstellationCallbacksWrapper(
     private inline fun runRemote(methodName: String, block: () -> Unit) {
         try {
             block()
+        } catch (e: CancellationException) {
+            // Never swallow cooperative cancellation of the surrounding request.
+            throw e
         } catch (e: RemoteException) {
             Log.w(TAG, "RemoteException in $methodName", e)
+        } catch (e: RuntimeException) {
+            // A caller's binder proxy can surface more than RemoteException when the client is dead
+            // or misbehaving (e.g. DeadObjectException is a RemoteException, but marshalling and
+            // already-dead paths can throw other RuntimeExceptions). Contain them so delivering a
+            // result to a broken caller cannot crash the request coroutine.
+            Log.w(TAG, "RuntimeException delivering $methodName to caller", e)
         }
     }
 

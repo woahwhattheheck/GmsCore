@@ -18,7 +18,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import org.microg.gms.BaseService
 import org.microg.gms.common.GmsService
 import org.microg.gms.common.PackageUtils
@@ -63,8 +62,10 @@ class ConstellationApiService : BaseService(TAG, GmsService.CONSTELLATION) {
 class ConstellationApiServiceImpl(
     private val context: Context,
     private val packageName: String?,
-    private val serviceScope: CoroutineScope
+    serviceScope: CoroutineScope
 ) : IConstellationApiService.Stub() {
+    private val dispatcher = ConstellationRequestDispatcher(serviceScope)
+
     override fun verifyPhoneNumberV1(
         cb: IConstellationCallbacks?,
         bundle: Bundle?,
@@ -78,13 +79,8 @@ class ConstellationApiServiceImpl(
         )
         if (cb == null || bundle == null) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        serviceScope.launch {
-            handleVerifyPhoneNumberV1(
-                context,
-                ConstellationCallbacksWrapper(cb),
-                bundle,
-                packageName
-            )
+        dispatcher.dispatch(cb, "verifyPhoneNumberV1") { callbacks ->
+            handleVerifyPhoneNumberV1(context, callbacks, bundle, packageName)
         }
     }
 
@@ -96,13 +92,8 @@ class ConstellationApiServiceImpl(
         Log.i(TAG, "verifyPhoneNumberSingleUse()")
         if (cb == null || bundle == null) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        serviceScope.launch {
-            handleVerifyPhoneNumberSingleUse(
-                context,
-                ConstellationCallbacksWrapper(cb),
-                bundle,
-                packageName
-            )
+        dispatcher.dispatch(cb, "verifyPhoneNumberSingleUse") { callbacks ->
+            handleVerifyPhoneNumberSingleUse(context, callbacks, bundle, packageName)
         }
     }
 
@@ -117,13 +108,8 @@ class ConstellationApiServiceImpl(
         )
         if (cb == null || request == null) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        serviceScope.launch {
-            handleVerifyPhoneNumberRequest(
-                context,
-                ConstellationCallbacksWrapper(cb),
-                request,
-                packageName
-            )
+        dispatcher.dispatch(cb, "verifyPhoneNumber") { callbacks ->
+            handleVerifyPhoneNumberRequest(context, callbacks, request, packageName)
         }
     }
 
@@ -134,12 +120,8 @@ class ConstellationApiServiceImpl(
     ) {
         Log.i(TAG, "getIidToken(): $request")
         if (cb == null || request == null) return
-        serviceScope.launch {
-            handleGetIidToken(
-                context,
-                ConstellationCallbacksWrapper(cb),
-                request
-            )
+        dispatcher.dispatch(cb, "getIidToken") { callbacks ->
+            handleGetIidToken(context, callbacks, request)
         }
     }
 
@@ -151,12 +133,8 @@ class ConstellationApiServiceImpl(
         Log.i(TAG, "getPnvCapabilities(): $request")
         if (cb == null || request == null) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) return
-        serviceScope.launch {
-            handleGetPnvCapabilities(
-                context,
-                ConstellationCallbacksWrapper(cb),
-                request
-            )
+        dispatcher.dispatch(cb, "getPnvCapabilities") { callbacks ->
+            handleGetPnvCapabilities(context, callbacks, request)
         }
     }
 }

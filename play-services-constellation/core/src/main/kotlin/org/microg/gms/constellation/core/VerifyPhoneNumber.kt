@@ -18,6 +18,7 @@ import com.google.android.gms.constellation.VerifyPhoneNumberResponse.PhoneNumbe
 import com.google.android.gms.constellation.internal.IConstellationCallbacks
 import com.squareup.wire.GrpcException
 import com.squareup.wire.GrpcStatus
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.microg.gms.common.Constants
@@ -211,6 +212,11 @@ private suspend fun handleVerifyPhoneNumberRequest(
                 Status.SUCCESS
             }
         }
+    } catch (e: CancellationException) {
+        // The request's coroutine was cancelled (e.g. the caller process died). A cancelled request
+        // must not be turned into a recorded verification outcome or a callback delivery, and the
+        // cancellation must reach the dispatcher. Never let the broad catch below swallow it.
+        throw e
     } catch (e: Exception) {
         Log.e(TAG, "verifyPhoneNumber failed", e)
         when {
@@ -314,6 +320,9 @@ private suspend fun runVerificationFlow(
             try {
                 RpcClient.phoneDeviceVerificationClient.SetConsent().execute(setRequest)
                 Log.i(TAG, "Auto-consented for $asterismClient")
+            } catch (e: CancellationException) {
+                // Don't continue the verification flow for a request that was cancelled mid-consent.
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Auto-consent failed", e)
             }

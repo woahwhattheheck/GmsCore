@@ -17,6 +17,7 @@ import com.google.android.gms.constellation.GetPnvCapabilitiesResponse.SimCapabi
 import com.google.android.gms.constellation.VerificationStatus
 import com.google.android.gms.constellation.internal.IConstellationCallbacks
 import com.google.android.gms.constellation.verificationCapability
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
@@ -96,6 +97,9 @@ suspend fun handleGetPnvCapabilities(
             GetPnvCapabilitiesResponse(simCapabilities),
             ApiMetadata.DEFAULT
         )
+    } catch (e: CancellationException) {
+        // Cancelled (e.g. caller process died): do not deliver a result to a dead caller.
+        throw e
     } catch (e: SecurityException) {
         Log.e(TAG, "getPnvCapabilities missing permission", e)
         callbacks.onGetPnvCapabilitiesCompleted(

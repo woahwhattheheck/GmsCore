@@ -8,15 +8,18 @@ import android.provider.Telephony
 import android.telephony.SmsMessage
 import android.util.Log
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import org.microg.gms.constellation.core.proto.ChallengeResponse
 import org.microg.gms.constellation.core.proto.MTChallenge
 import org.microg.gms.constellation.core.proto.MTChallengeResponseData
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.coroutineContext
 
 private const val TAG = "MtSmsVerifier"
 
@@ -47,29 +50,90 @@ suspend fun MTChallenge.verify(
     )
 }
 
+/**
+ * Handle to a per-request MT SMS inbox. Extracted as an interface so the request-scoping logic in
+ * [MtSmsInboxScope] can be unit tested without registering a real [BroadcastReceiver].
+ */
+internal interface MtSmsInboxHandle {
+    suspend fun awaitMatch(expectedBody: String): ReceivedSms?
+    fun dispose()
+}
+
+/**
+ * Per-request registry for [MtSmsInbox] instances.
+ *
+ * The inboxes are owned by an [MtSmsInboxScope] carried in the request's coroutine context, which
+ * the Constellation service installs when it dispatches a request. Because every request has its
+ * own scope, [dispose] only tears down the inboxes of the request that calls it. That is what makes
+ * the cleanup safe under concurrency: a slow or cancelled request running its `finally { dispose() }`
+ * can never unregister the SMS receivers of a newer request that started in the meantime.
+ */
 internal object MtSmsInboxRegistry {
-    private val inboxes = ConcurrentHashMap<Int, MtSmsInbox>()
-
-    fun prepare(context: Context, subIds: Iterable<Int>) {
-        dispose()
-
-        val effectiveSubIds = subIds.distinct().ifEmpty { listOf(-1) }
-        for (subId in effectiveSubIds) {
-            inboxes[subId] = MtSmsInbox(context.applicationContext, subId)
-        }
+    suspend fun prepare(context: Context, subIds: Iterable<Int>) {
+        currentScope().prepare(context, subIds)
     }
 
-    fun get(subId: Int): MtSmsInbox {
-        return inboxes[subId]
-            ?: error("MT SMS inbox for subId=$subId was not initialized")
+    suspend fun get(subId: Int): MtSmsInboxHandle = currentScope().get(subId)
+
+    suspend fun dispose() {
+        // Null-safe so it is a harmless no-op (never throws) when called from a finally block,
+        // including during cancellation unwinding.
+        coroutineContext[MtSmsInboxScope]?.dispose()
+    }
+
+    private suspend fun currentScope(): MtSmsInboxScope =
+        coroutineContext[MtSmsInboxScope] ?: error(
+            "No MtSmsInboxScope in the current coroutine context. Constellation requests must be " +
+                "dispatched through ConstellationRequestDispatcher so MT SMS inboxes are scoped per request."
+        )
+}
+
+/**
+ * Coroutine-context element that owns the MT SMS inboxes of a single Constellation request.
+ *
+ * Each dispatched request carries its own instance, so the registry operations above resolve to the
+ * inboxes of the calling request only. [inboxFactory] is overridable for tests; production uses the
+ * real [MtSmsInbox].
+ */
+internal class MtSmsInboxScope(
+    private val inboxFactory: (Context, Int) -> MtSmsInboxHandle = { context, subId ->
+        MtSmsInbox(context, subId)
+    }
+) : AbstractCoroutineContextElement(MtSmsInboxScope) {
+    companion object Key : CoroutineContext.Key<MtSmsInboxScope>
+
+    private val lock = Any()
+    private val inboxes = HashMap<Int, MtSmsInboxHandle>()
+    private var disposed = false
+
+    fun prepare(context: Context, subIds: Iterable<Int>) {
+        val effectiveSubIds = subIds.distinct().ifEmpty { listOf(-1) }
+        val replaced: List<MtSmsInboxHandle>
+        synchronized(lock) {
+            check(!disposed) { "MtSmsInboxScope already disposed" }
+            // Only ever touches THIS request's own inboxes.
+            replaced = inboxes.values.toList()
+            inboxes.clear()
+            for (subId in effectiveSubIds) {
+                inboxes[subId] = inboxFactory(context, subId)
+            }
+        }
+        replaced.forEach { it.dispose() }
+    }
+
+    fun get(subId: Int): MtSmsInboxHandle = synchronized(lock) {
+        inboxes[subId] ?: error("MT SMS inbox for subId=$subId was not initialized")
     }
 
     fun dispose() {
-        val currentInboxes = inboxes.values.toList()
-        inboxes.clear()
-        for (inbox in currentInboxes) {
-            inbox.dispose()
+        val current: List<MtSmsInboxHandle>
+        synchronized(lock) {
+            if (disposed) return
+            disposed = true
+            current = inboxes.values.toList()
+            inboxes.clear()
         }
+        current.forEach { it.dispose() }
     }
 }
 
@@ -83,14 +147,16 @@ private data class PendingMatch(
     val continuation: CancellableContinuation<ReceivedSms?>
 )
 
+@OptIn(InternalCoroutinesApi::class)
 internal class MtSmsInbox(
     context: Context,
     private val subId: Int
-) {
+) : MtSmsInboxHandle {
     private val context = context.applicationContext
     private val lock = Any()
     private val bufferedMessages = mutableListOf<ReceivedSms>()
     private val pendingMatches = mutableListOf<PendingMatch>()
+    private var disposed = false
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -118,11 +184,27 @@ internal class MtSmsInbox(
         )
     }
 
-    suspend fun awaitMatch(expectedBody: String): ReceivedSms? {
+    override suspend fun awaitMatch(expectedBody: String): ReceivedSms? {
         return suspendCancellableCoroutine { continuation ->
             synchronized(lock) {
-                bufferedMessages.firstOrNull { it.body.contains(expectedBody) }?.let {
-                    continuation.resume(it)
+                if (disposed) {
+                    continuation.cancel(CancellationException("MT SMS inbox disposed"))
+                    return@suspendCancellableCoroutine
+                }
+
+                val bufferedIndex = bufferedMessages.indexOfFirst { it.body.contains(expectedBody) }
+                if (bufferedIndex >= 0) {
+                    val match = bufferedMessages[bufferedIndex]
+                    // tryResume is the atomic acceptance point. Keep the buffered SMS if
+                    // cancellation wins before acceptance; restore it if prompt cancellation
+                    // wins after the value was reserved but before the waiter receives it.
+                    val token = continuation.tryResume(match, null) { _ ->
+                        restoreUndelivered(match)
+                    }
+                    if (token != null) {
+                        bufferedMessages.removeAt(bufferedIndex)
+                        continuation.completeResume(token)
+                    }
                     return@suspendCancellableCoroutine
                 }
 
@@ -145,31 +227,64 @@ internal class MtSmsInbox(
                 sender = message.originatingAddress ?: ""
             )
         }
+        onReceivedMessages(receivedMessages)
+    }
+
+    /**
+     * Adds normalized SMS messages to this inbox and resolves at most one pending challenge per
+     * message. Kept internal so the real matching/buffering behavior can be tested without
+     * manufacturing Android PDU bytes.
+     */
+    internal fun onReceivedMessages(receivedMessages: List<ReceivedSms>) {
         if (receivedMessages.isEmpty()) return
 
         synchronized(lock) {
-            bufferedMessages += receivedMessages
+            if (disposed) return
+
             for (receivedMessage in receivedMessages) {
                 val iterator = pendingMatches.iterator()
+                var delivered = false
                 while (iterator.hasNext()) {
                     val pendingMatch = iterator.next()
                     if (!receivedMessage.body.contains(pendingMatch.expectedBody)) continue
 
-                    iterator.remove()
-                    Log.d(TAG, "Matching MT SMS received from ${receivedMessage.sender}")
-                    if (pendingMatch.continuation.isActive) {
-                        pendingMatch.continuation.resume(receivedMessage)
+                    // Do not consume an SMS for a continuation that cancellation already won.
+                    val token = pendingMatch.continuation.tryResume(receivedMessage, null) { _ ->
+                        restoreUndelivered(receivedMessage)
                     }
+                    iterator.remove()
+                    if (token == null) continue
+
+                    pendingMatch.continuation.completeResume(token)
+                    Log.d(TAG, "Matching MT SMS received from ${receivedMessage.sender}")
+                    delivered = true
+                    break
+                }
+                if (!delivered && bufferedMessages.none { it === receivedMessage }) {
+                    bufferedMessages += receivedMessage
                 }
             }
         }
     }
 
-    fun dispose() {
+    private fun restoreUndelivered(message: ReceivedSms) {
         synchronized(lock) {
+            if (!disposed && bufferedMessages.none { it === message }) {
+                bufferedMessages += message
+            }
+        }
+    }
+
+    override fun dispose() {
+        val waiting: List<CancellableContinuation<ReceivedSms?>>
+        synchronized(lock) {
+            if (disposed) return
+            disposed = true
+            waiting = pendingMatches.map { it.continuation }
             pendingMatches.clear()
             bufferedMessages.clear()
         }
+        waiting.forEach { it.cancel(CancellationException("MT SMS inbox disposed")) }
         try {
             context.unregisterReceiver(receiver)
         } catch (_: IllegalArgumentException) {
