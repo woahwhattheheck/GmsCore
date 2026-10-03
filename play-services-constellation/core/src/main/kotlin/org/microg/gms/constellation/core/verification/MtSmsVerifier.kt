@@ -198,7 +198,7 @@ internal class MtSmsInbox(
                     // tryResume is the atomic acceptance point. Keep the buffered SMS if
                     // cancellation wins before acceptance; restore it if prompt cancellation
                     // wins after the value was reserved but before the waiter receives it.
-                    val token = continuation.tryResume(match, null) { _ ->
+                    val token = continuation.tryResume(match, null) { _, _, _ ->
                         restoreUndelivered(match)
                     }
                     if (token != null) {
@@ -249,7 +249,7 @@ internal class MtSmsInbox(
                     if (!receivedMessage.body.contains(pendingMatch.expectedBody)) continue
 
                     // Do not consume an SMS for a continuation that cancellation already won.
-                    val token = pendingMatch.continuation.tryResume(receivedMessage, null) { _ ->
+                    val token = pendingMatch.continuation.tryResume(receivedMessage, null) { _, _, _ ->
                         restoreUndelivered(receivedMessage)
                     }
                     iterator.remove()
