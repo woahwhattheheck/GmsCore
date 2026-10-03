@@ -5,6 +5,9 @@ on:
     branches:
       - codex/cast-580-framing-validation
 
+env:
+  GRADLE_MICROG_VERSION_WITHOUT_GIT: 1
+
 permissions:
   contents: read
 
