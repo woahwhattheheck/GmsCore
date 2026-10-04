@@ -1015,6 +1015,25 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
 
         @Override
         public void onApplicationDisconnected(int statusCode) {
+            List<PendingControl> pending;
+            synchronized (CastMediaRouteController.this) {
+                if (CastMediaRouteController.this.session != session) return;
+                mediaSessionId = 0;
+                remotePlaybackItemId = null;
+                mediaPlaybackState = MediaItemStatus.PLAYBACK_STATE_CANCELED;
+                mediaPositionMs = 0;
+                mediaDurationMs = -1;
+                pending = new ArrayList<PendingControl>(pendingControls.values());
+                pendingControls.clear();
+                for (PendingControl control : pending) {
+                    if (control.timeout != null) controlRequestHandler.removeCallbacks(control.timeout);
+                }
+            }
+            // A new receiver launch can close the previous application before its own reply.
+            // Preserve pending PLAY/START_SESSION and the logical session for that transition.
+            for (PendingControl control : pending) {
+                control.callback.onError("Receiver application disconnected: " + statusCode, null);
+            }
         }
 
         @Override

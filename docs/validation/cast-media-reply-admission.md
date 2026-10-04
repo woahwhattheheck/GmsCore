@@ -26,3 +26,18 @@ The normal maintained-module selector for subsequent integration is:
 ./gradlew :play-services-cast-core:testDebugUnitTest --tests org.microg.gms.cast.RemotePlaybackResponseOwnershipTest
 ```
 That Gradle command was not executed for this receipt.
+
+## Receiver application exit — 2026-10-04
+
+The combined parent `0b54bf4a4b04f24cac9262f6a875e91545155b59` added queue/session support and retained the reply-admission repair above. Its `onApplicationDisconnected` callback was empty: a closed receiver application left its native media identity and already-sent control callbacks alive until a later reply or timeout.
+
+The callback now clears the ended native item and snapshots/removes pending controls before completing each with an error. Their scheduled timeouts are cancelled. The logical remote session, selected device connection and pending PLAY/START_SESSION are retained: a successful replacement launch can close the previous application before its own reply arrives. A callback belonging to a replaced device connection changes nothing. Removing controls before invoking callbacks also preserves new requests submitted reentrantly by a callback.
+
+| Exact source | Controller blob | Same maintained test class |
+| --- | --- | --- |
+| Combined parent | `95f7d43739c914f4640afa038243cf4f8e2a96f2` | 17 passed, 2 failed |
+| Application-exit repair | `69ec0bec35db65bb2bcf02bd7ac8832cd142f19b` | 19 passed, 0 failures |
+
+Both complete controller versions compiled and ran with test blob `1af6e7b5374bf319ffe3ae3f44108a7d2b17275e` through the same retained Java/AndroidX/Robolectric API 28 runner described above. The three additional methods cover immediate native-state/control completion, inert old-connection callbacks, and preserved launch/reentrant requests. The earlier cases remain present; these overlapping results are not additive.
+
+This establishes callback completion without waiting for the existing 10-second media-control timer. It does not measure phone/network latency. No new Gradle build, APK or physical receiver acceptance is claimed.

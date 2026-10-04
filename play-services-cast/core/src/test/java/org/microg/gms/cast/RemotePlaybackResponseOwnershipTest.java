@@ -200,6 +200,83 @@ public class RemotePlaybackResponseOwnershipTest {
         assertEquals(1, result.errors);
     }
 
+
+    @Test public void applicationEndClearsNativeItemAndCompletesControlsOnce() throws Exception {
+        CastMediaRouteController controller = currentItem();
+        RecordingCallback result = new RecordingCallback();
+        track(controller, new CastMediaRouteController.PendingControl("new-session", "new-item", true, false, 43, result));
+        CastDeviceSession.Callbacks receiver = callbacks(controller);
+        receiver.onApplicationDisconnected(CastDeviceSession.STATUS_APPLICATION_NOT_RUNNING);
+        assertEquals(0, field("mediaSessionId").getLong(controller));
+        assertNull(field("remotePlaybackItemId").get(controller));
+        assertEquals(MediaItemStatus.PLAYBACK_STATE_CANCELED, field("mediaPlaybackState").getInt(controller));
+        assertEquals(0, field("mediaPositionMs").getLong(controller));
+        assertEquals(-1, field("mediaDurationMs").getLong(controller));
+        assertEquals("new-session", field("remotePlaybackSessionId").get(controller));
+        assertEquals(1, result.errors);
+        assertEquals(0, result.successes);
+        assertTrue(pending(controller).isEmpty());
+        receiver.onApplicationDisconnected(CastDeviceSession.STATUS_APPLICATION_NOT_RUNNING);
+        assertEquals(1, result.errors);
+    }
+
+    @Test public void applicationEndFromReplacedConnectionIsIgnored() throws Exception {
+        CastMediaRouteController controller = currentItem();
+        CastDeviceSession.Callbacks oldReceiver = callbacks(controller);
+        CastDeviceSession replacement = new CastDeviceSession("localhost", 8009, callbacks(controller));
+        field("session").set(controller, replacement);
+        RecordingCallback result = new RecordingCallback();
+        track(controller, new CastMediaRouteController.PendingControl("new-session", "new-item", true, false, 43, result));
+        try {
+            oldReceiver.onApplicationDisconnected(CastDeviceSession.STATUS_APPLICATION_NOT_RUNNING);
+            assertCurrentItem(controller);
+            assertSame(replacement, field("session").get(controller));
+            assertEquals(1, pending(controller).size());
+            assertEquals(0, result.errors);
+        } finally {
+            replacement.disconnect();
+        }
+    }
+
+    @Test public void applicationEndPreservesLaunchesAndReentrantNewRequests() throws Exception {
+        CastMediaRouteController controller = currentItem();
+        RecordingCallback launching = new RecordingCallback();
+        Object play = pendingLaunch("PendingPlay",
+                new Class<?>[] {String.class, String.class, long.class, String.class, MediaRouter.ControlRequestCallback.class},
+                new Object[] {"https://example.com/movie.mp4", "video/mp4", 0L, "new-session", launching});
+        Object start = pendingLaunch("PendingSessionStart",
+                new Class<?>[] {String.class, String.class, MediaRouter.ControlRequestCallback.class},
+                new Object[] {"new-session", "new-app", launching});
+        field("pendingPlay").set(controller, play);
+        field("pendingSessionStart").set(controller, start);
+        RecordingCallback fresh = new RecordingCallback();
+        RecordingCallback old = new RecordingCallback() {
+            @Override public void onError(String error, Bundle data) {
+                super.onError(error, data);
+                try {
+                    track(controller, new CastMediaRouteController.PendingControl("new-session", null, true, false, 0, fresh));
+                } catch (Exception e) {
+                    throw new AssertionError(e);
+                }
+            }
+        };
+        track(controller, new CastMediaRouteController.PendingControl("new-session", "new-item", true, false, 43, old));
+        callbacks(controller).onApplicationDisconnected(CastDeviceSession.STATUS_APPLICATION_NOT_RUNNING);
+        assertSame(play, field("pendingPlay").get(controller));
+        assertSame(start, field("pendingSessionStart").get(controller));
+        assertEquals(0, launching.errors);
+        assertEquals(1, old.errors);
+        assertEquals(1, pending(controller).size());
+        assertEquals(0, fresh.errors);
+    }
+
+    private static Object pendingLaunch(String name, Class<?>[] types, Object[] args) throws Exception {
+        Class<?> type = Class.forName(CastMediaRouteController.class.getName() + "$" + name);
+        Constructor<?> constructor = type.getDeclaredConstructor(types);
+        constructor.setAccessible(true);
+        return constructor.newInstance(args);
+    }
+
     private static CastMediaRouteController currentItem() throws Exception {
         CastMediaRouteController controller = new CastMediaRouteController(null, "route", "localhost", 8009, 0);
         field("mediaSessionId").setLong(controller, 43);
