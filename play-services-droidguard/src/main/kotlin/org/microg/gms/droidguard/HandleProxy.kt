@@ -8,6 +8,7 @@ package org.microg.gms.droidguard
 import android.content.Context
 import android.os.Bundle
 import android.os.Parcelable
+import java.lang.reflect.Method
 
 class HandleProxy(val handle: Any, val vmKey: String, val extra: ByteArray = ByteArray(0)) {
     constructor(clazz: Class<*>, context: Context, vmKey: String, data: Parcelable) : this(
@@ -28,7 +29,8 @@ class HandleProxy(val handle: Any, val vmKey: String, val extra: ByteArray = Byt
 
     fun run(data: Map<Any, Any>): ByteArray {
         try {
-            return handle.javaClass.getDeclaredMethod("run", Map::class.java).invoke(handle, data) as ByteArray
+            val method = findVmMethod(handle.javaClass, "run", 1) ?: throw NoSuchMethodException("run")
+            return method.invoke(handle, data) as ByteArray
         } catch (e: Exception) {
             throw BytesException(extra, e)
         }
@@ -36,7 +38,8 @@ class HandleProxy(val handle: Any, val vmKey: String, val extra: ByteArray = Byt
 
     fun init(): Boolean {
         try {
-            return handle.javaClass.getDeclaredMethod("init").invoke(handle) as Boolean
+            val method = findVmMethod(handle.javaClass, "init", 0) ?: throw NoSuchMethodException("init")
+            return method.invoke(handle) as Boolean
         } catch (e: Exception) {
             throw BytesException(extra, e)
         }
@@ -44,10 +47,20 @@ class HandleProxy(val handle: Any, val vmKey: String, val extra: ByteArray = Byt
 
     fun close() {
         try {
-            handle.javaClass.getDeclaredMethod("close").invoke(handle)
+            val method = findVmMethod(handle.javaClass, "close", 0) ?: throw NoSuchMethodException("close")
+            method.invoke(handle)
         } catch (e: Exception) {
             throw BytesException(extra, e)
         }
     }
 
+    private companion object {
+        fun findVmMethod(clazz: Class<*>, name: String, parameterCount: Int): Method? {
+            val method = (clazz.methods + clazz.declaredMethods).firstOrNull {
+                it.name == name && it.parameterTypes.size == parameterCount
+            } ?: return null
+            method.isAccessible = true
+            return method
+        }
+    }
 }
