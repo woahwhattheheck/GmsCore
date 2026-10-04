@@ -509,6 +509,7 @@ private suspend fun executeSyncFlow(
     val imsiToSlotMap = imsiToInfoMap.mapValues { it.value.simSlotIndex }
     val requestedImsis = request.targetedSims.map { it.imsi }.toSet()
 
+    val refreshedImsis = mutableSetOf<String>()
     val localRecords = mutableListOf<StoredVerifiedNumber>()
     val localStateDeadline = ConstellationStateStore.nextSyncDeadlineMillis(syncResponse.next_sync_time)
 
@@ -533,6 +534,7 @@ private suspend fun executeSyncFlow(
                 "Sync verification failed (${error.code}): ${error.message}"
             }
         }
+        refreshedImsis += verificationImsis.filter { it.isNotEmpty() }
 
         val finalVerification = if (verification.state == Verification.State.PENDING) {
             ChallengeProcessor.process(
@@ -582,7 +584,11 @@ private suspend fun executeSyncFlow(
         finalVerification.toClientVerification(imsiToSlotMap)
     }.toTypedArray()
 
-    ConstellationStateStore.storeVerifiedNumbers(context, localRecords)
+    ConstellationStateStore.storeVerifiedNumbers(
+        context,
+        localRecords,
+        refreshedImsis = refreshedImsis
+    )
 
     if (isPublicKeyAcked) {
         Log.d(TAG, "Server acknowledged client public key")
