@@ -30,6 +30,7 @@ import org.microg.gms.constellation.core.proto.DeviceID
 import org.microg.gms.constellation.core.proto.GetConsentRequest
 import org.microg.gms.constellation.core.proto.GetConsentResponse
 import org.microg.gms.constellation.core.proto.Param
+import org.microg.gms.constellation.core.proto.PhoneDeviceVerificationClient
 import org.microg.gms.constellation.core.proto.RcsConsent
 import org.microg.gms.constellation.core.proto.RequestHeader
 import org.microg.gms.constellation.core.proto.SetConsentRequest
@@ -324,15 +325,7 @@ private suspend fun runVerificationFlow(
                 consent_version = consentType,
                 api_params = Param.getList(request.extras)
             )
-            try {
-                RpcClient.phoneDeviceVerificationClient.SetConsent().execute(setRequest)
-                Log.i(TAG, "Auto-consented for $asterismClient")
-            } catch (e: CancellationException) {
-                // Don't continue the verification flow for a request that was cancelled mid-consent.
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Auto-consent failed", e)
-            }
+            autoSetConsent(context, setRequest)
         }
     }
 
@@ -364,6 +357,36 @@ private suspend fun runVerificationFlow(
     }
 
     return verifications
+}
+
+internal suspend fun autoSetConsent(
+    context: Context,
+    request: SetConsentRequest,
+    client: PhoneDeviceVerificationClient = RpcClient.phoneDeviceVerificationClient
+) {
+    try {
+        client.SetConsent().execute(request)
+        Log.i(TAG, "Auto-consented for ${request.asterism_client}")
+    } catch (e: CancellationException) {
+        // Don't continue the verification flow for a request that was cancelled mid-consent.
+        throw e
+    } catch (e: GrpcException) {
+        if (e.grpcStatus == GrpcStatus.PERMISSION_DENIED ||
+            e.grpcStatus == GrpcStatus.UNAUTHENTICATED
+        ) {
+            // Match GetConsent and Sync: discard the rejected token before the next request.
+            Log.w(
+                TAG,
+                "Suspicious client status ${e.grpcStatus.name}. Clearing DroidGuard cache..."
+            )
+            ConstellationStateStore.clearDroidGuardToken(context)
+            throw e
+        }
+        // Automatic consent remains best effort for other service/transport failures.
+        Log.w(TAG, "Auto-consent failed", e)
+    } catch (e: Exception) {
+        Log.w(TAG, "Auto-consent failed", e)
+    }
 }
 
 private fun parseConsentVersion(extras: Bundle): ConsentVersion {
