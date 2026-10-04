@@ -202,7 +202,9 @@ private suspend fun handleVerifyPhoneNumberRequest(
                 } else {
                     Log.d(TAG, "Using typed read-only mode")
                 }
-                verifications = fetchVerifiedPhoneNumbers(context, request.extras, callingPackage)
+                verifications = fetchVerifiedPhoneNumbers(
+                    context, request.extras, callingPackage, idTokenRequest = request.idTokenRequest
+                )
                     .map { it.toPhoneNumberVerification() }
                     .toTypedArray()
                 Status.SUCCESS
@@ -418,12 +420,23 @@ private suspend fun executeSyncFlow(
     val verifications = syncResponse.responses.mapNotNull { result ->
         val verification = result.verification ?: Verification()
         val verificationImsis = verification.association?.sim?.sim_info?.imsi.orEmpty()
-        if (requestedImsis.isNotEmpty() && verificationImsis.none { it in requestedImsis }) {
+        // Error-only records have no SIM association and must not be silently filtered.
+        // Records for another SIM retain the existing targeted-SIM filtering.
+        val errorOnly = result.verification == null &&
+                result.error?.code?.let { it != 0 } == true
+        if (!errorOnly && requestedImsis.isNotEmpty() &&
+            verificationImsis.none { it in requestedImsis }
+        ) {
             Log.w(
                 TAG,
                 "Skipping verification for IMSIs=$verificationImsis because it does not match requested IMSIs=$requestedImsis"
             )
             return@mapNotNull null
+        }
+        result.error?.let { error ->
+            check(error.code == 0) {
+                "Sync verification failed (${error.code}): ${error.message}"
+            }
         }
 
         val finalVerification = if (verification.state == Verification.State.PENDING) {

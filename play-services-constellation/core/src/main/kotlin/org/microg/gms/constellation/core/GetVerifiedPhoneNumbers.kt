@@ -7,6 +7,7 @@ import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import com.google.android.gms.constellation.PhoneNumberInfo
+import com.google.android.gms.constellation.VerifyPhoneNumberRequest
 import com.google.android.gms.constellation.VerifyPhoneNumberResponse.PhoneNumberVerification
 import com.squareup.wire.Instant
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +28,7 @@ internal suspend fun fetchVerifiedPhoneNumbers(
     context: Context,
     bundle: Bundle,
     callingPackage: String = bundle.getString("calling_package") ?: Constants.GMS_PACKAGE_NAME,
+    idTokenRequest: VerifyPhoneNumberRequest.IdTokenRequest? = null,
     getIidToken: () -> String = {
         context.authManager.getIidToken(IidTokenPhenotypes.READ_ONLY_PROJECT_NUMBER)
     },
@@ -39,8 +41,9 @@ internal suspend fun fetchVerifiedPhoneNumbers(
 ): List<VerifiedPhoneNumber> = withContext(Dispatchers.IO) {
     val sessionId = UUID.randomUUID().toString()
     val selections = extractPhoneNumberSelections(bundle)
-    val certificateHash = bundle.getString("certificate_hash") ?: ""
-    val tokenNonce = bundle.getString("token_nonce") ?: ""
+    // Typed callers carry token options outside the extras bundle, as in the full Sync flow.
+    val certificateHash = idTokenRequest?.idToken ?: bundle.getString("certificate_hash").orEmpty()
+    val tokenNonce = idTokenRequest?.subscriberHash ?: bundle.getString("token_nonce").orEmpty()
 
     val iidToken = getIidToken()
     require(iidToken.isNotEmpty()) { "Instance ID token is empty" }

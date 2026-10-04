@@ -104,15 +104,13 @@ class AuthManager private constructor(context: Context) {
     }
 
     fun sign(content: String): ByteArray {
-        return try {
-            val kp = getOrCreateKeyPair()
-            val signature = Signature.getInstance("SHA256withECDSA")
-            signature.initSign(kp.private)
-            signature.update(content.toByteArray(StandardCharsets.UTF_8))
-            signature.sign()
-        } catch (_: Exception) {
-            ByteArray(0)
-        }
+        val kp = getOrCreateKeyPair()
+        val signature = Signature.getInstance("SHA256withECDSA")
+        signature.initSign(kp.private)
+        signature.update(content.toByteArray(StandardCharsets.UTF_8))
+        // Callers already map signing failures to their normal error path.
+        // An empty signature must never be reported as a successful credential.
+        return signature.sign()
     }
 
     fun getFid(): String = InstanceID.getInstance(context).id
