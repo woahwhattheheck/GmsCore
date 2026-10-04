@@ -223,13 +223,15 @@ public class DataItemUriFilterTest {
         return ReflectionHelpers.getField(responses.get(0), "count");
     }
 
-    private static Set<String> holderKeys(DataHolder holder) {
+    private Set<String> holderKeys(DataHolder holder) {
         assertNotNull(holder);
         try {
             assertEquals(0, holder.getStatusCode());
             Set<String> result = new HashSet<>();
             for (int row = 0; row < holder.getCount(); row++) {
                 int window = holder.getWindowIndex(row);
+                assertEquals(PACKAGE, holder.getString("packageName", row, window));
+                assertEquals(signature, holder.getString("signatureDigest", row, window));
                 result.add(holder.getString("host", row, window) + "|" + holder.getString("path", row, window));
             }
             return result;
