@@ -11,6 +11,7 @@ import com.google.android.gms.tasks.Tasks
 import com.sun.net.httpserver.HttpServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -18,6 +19,8 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 import java.util.Base64
+import java.util.concurrent.Executor
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 
 class RemoteDroidGuardHandleInteropTest {
@@ -82,6 +85,57 @@ class RemoteDroidGuardHandleInteropTest {
             } catch (e: Exception) {
                 assertTrue(e.message.orEmpty().contains("session id") || e.cause?.message.orEmpty().contains("session id"))
             }
+        }
+    }
+
+    @Test
+    fun rejectingExecutorReturnsFailedTasksWithoutOpeningASession() {
+        RemoteDroidGuardSessionServer().use { server ->
+            val rejected = RejectedExecutionException("executor stopped")
+            val executor = Executor { throw rejected }
+            val client = RemoteDroidGuardHandleClient(server.url, "com.example.app", 2_000, executor)
+
+            val tasks = listOf(
+                client.init("play_integrity", null),
+                client.getResults("play_integrity", emptyMap(), null)
+            )
+            for (task in tasks) {
+                assertTrue(task.isComplete)
+                assertFalse(task.isSuccessful)
+                assertSame(rejected, task.exception)
+            }
+            assertTrue(server.actions.isEmpty())
+        }
+    }
+
+    @Test
+    fun getResultsUsesOneAcceptedWorkerAndClosesTheSessionAfterCompletion() {
+        RemoteDroidGuardSessionServer().use { server ->
+            val rejected = RejectedExecutionException("executor stopped after init")
+            var submissions = 0
+            var initialization: Runnable? = null
+            val executor = Executor { work ->
+                submissions += 1
+                if (submissions == 1) initialization = work else throw rejected
+            }
+            val client = RemoteDroidGuardHandleClient(server.url, "com.example.app", 2_000, executor)
+            val result = client.getResults("play_integrity", mapOf("rpc" to "challenge"), null)
+            var closedAtCompletion: Boolean? = null
+            result.addOnCompleteListener(Executor { it.run() }) {
+                closedAtCompletion = server.session("remote/1")?.closed
+            }
+            assertFalse(result.isComplete)
+
+            initialization!!.run()
+
+            assertEquals(1, submissions)
+            assertTrue(result.isComplete)
+            assertTrue(result.isSuccessful)
+            assertEquals("session=remote/1&n=1&rpc=challenge", decode(result.result))
+            assertEquals(false, closedAtCompletion)
+            assertEquals(listOf("begin", "snapshot", "close"), server.actions.toList())
+            assertEquals(listOf("rpc=challenge"), server.snapshotBodies.toList())
+            assertTrue(server.session("remote/1")!!.closed)
         }
     }
 

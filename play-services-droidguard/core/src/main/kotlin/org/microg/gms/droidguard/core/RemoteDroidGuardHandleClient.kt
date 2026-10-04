@@ -14,6 +14,7 @@ import com.google.android.gms.tasks.Task
 import com.google.android.gms.tasks.TaskCompletionSource
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 
 /**
  * Session-transport client that uses the public handle lifecycle.
@@ -31,18 +32,16 @@ class RemoteDroidGuardHandleClient(
     @NonNull
     override fun init(@NonNull flow: String, @Nullable request: DroidGuardResultsRequest?): Task<DroidGuardHandle> {
         val completion = TaskCompletionSource<DroidGuardHandle>()
-        executor.execute {
-            try {
-                val timeout = (request?.timeoutMillis ?: timeoutMillis).coerceAtLeast(1)
-                val session = RemoteDroidGuardSession(
-                    RemoteDroidGuardHttpClient(serverUrl, timeout),
-                    buildRequestParameters(flow, request)
-                )
-                session.begin()
-                completion.setResult(RemoteDroidGuardHandle(session))
-            } catch (e: Exception) {
-                completion.setException(e)
+        try {
+            executor.execute {
+                try {
+                    completion.setResult(openHandle(flow, request))
+                } catch (e: Exception) {
+                    completion.trySetException(e)
+                }
             }
+        } catch (e: RejectedExecutionException) {
+            completion.trySetException(e)
         }
         return completion.task
     }
@@ -54,21 +53,32 @@ class RemoteDroidGuardHandleClient(
         @Nullable request: DroidGuardResultsRequest?
     ): Task<String> {
         val completion = TaskCompletionSource<String>()
-        init(flow, request).addOnCompleteListener(executor) { task ->
-            if (!task.isSuccessful) {
-                completion.setException(task.exception ?: IllegalStateException("Remote DroidGuard init failed"))
-                return@addOnCompleteListener
+        try {
+            executor.execute {
+                var handle: DroidGuardHandle? = null
+                try {
+                    handle = openHandle(flow, request)
+                    completion.setResult(handle.snapshot(data ?: emptyMap()))
+                } catch (e: Exception) {
+                    completion.trySetException(e)
+                } finally {
+                    handle?.close()
+                }
             }
-            val handle = task.result
-            try {
-                completion.setResult(handle.snapshot(data ?: emptyMap()))
-            } catch (e: Exception) {
-                completion.setException(e)
-            } finally {
-                handle.close()
-            }
+        } catch (e: RejectedExecutionException) {
+            completion.trySetException(e)
         }
         return completion.task
+    }
+
+    private fun openHandle(flow: String, request: DroidGuardResultsRequest?): DroidGuardHandle {
+        val timeout = (request?.timeoutMillis ?: timeoutMillis).coerceAtLeast(1)
+        val session = RemoteDroidGuardSession(
+            RemoteDroidGuardHttpClient(serverUrl, timeout),
+            buildRequestParameters(flow, request)
+        )
+        session.begin()
+        return RemoteDroidGuardHandle(session)
     }
 
     private fun buildRequestParameters(flow: String, request: DroidGuardResultsRequest?): Map<String, String> {
