@@ -1,0 +1,9 @@
+{
+  "stage": "current",
+  "source_files": {
+    "/workspace/scratch/1fead46c005a/lifecycle-repro/current-head/SessionManagerImpl.java": "a2008119e54c562b4506bfbd29e3e7033a9821216cebef6fbb912a1d11c57f43",
+    "/workspace/scratch/1fead46c005a/lifecycle-repro/current-head/SessionImpl.java": "280044bc246a0059e430fcea99fba7228e5f2456b5f37a5be9bd3bc88aada150"
+  },
+  "compile_exit": 0,
+  "run_exit": 1
+}

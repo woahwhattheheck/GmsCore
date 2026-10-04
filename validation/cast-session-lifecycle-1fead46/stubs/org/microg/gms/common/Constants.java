@@ -1,0 +1,1 @@
+package org.microg.gms.common; public class Constants { public static final int GMS_VERSION_CODE=1; }

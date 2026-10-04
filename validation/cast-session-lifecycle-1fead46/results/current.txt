@@ -1,0 +1,48 @@
+SCOPE actual SessionManagerImpl.java + SessionImpl.java; handwritten host collaborators; no Android/Binder IPC/receiver runtime
+CASE connected A then B; delayed A termination
+PASS A end requested on replacement
+PASS B persisted before old callback
+PASS late A end preserves B current pointer
+PASS late A end preserves B persisted record
+PASS late A end preserves B selected route
+PASS late A end still emits A listener event
+CASE B starting; A still owns the persisted record
+PASS B is starting before old callback
+PASS unsaved B leaves A record before old callback
+PASS late A end preserves starting B pointer
+FAIL late A end clears A-owned persisted record expected=null|null|null actual=A|session-A|cast-category
+PASS late A end leaves starting B selected
+CASE A1 -> B -> A2; same A route and application session ID
+PASS A1 and A2 are distinct objects
+PASS late A1 end preserves A2 pointer
+PASS late A1 end preserves A2 same-ID persisted record
+FAIL late A1 end does not unselect A2 route expected=A actual=<default>
+FAIL late A1 end makes no default route selection expected=0 actual=1
+CASE off-main A end; A2 starts before queued route cleanup executes
+PASS old cleanup is queued before replacement
+PASS off-main active end releases current pointer
+PASS queued cleanup preserves A2 current pointer
+PASS queued cleanup preserves A2 persisted record
+FAIL queued cleanup does not unselect newer A2 expected=A actual=<default>
+PASS main queue finishes
+CASE persisted resume attempt fails normally
+PASS saved resume selects its available route
+PASS saved session enters real resuming state
+PASS saved session ID reaches provider
+PASS failed active resume clears persisted record
+PASS failed active resume clears current pointer
+PASS failed active resume selects default route
+CASE saved-session recovery explicitly disabled
+FAIL disabled recovery skips preference lookup/read/write expected=1|0|1 actual=2|3|1
+PASS disabled recovery preserves existing saved record
+FAIL disabled recovery skips provider recoverability query expected=0 actual=1
+FAIL disabled recovery skips route lookup expected=0 actual=1
+FAIL disabled recovery never selects even on later route-added callback expected=0 actual=2
+FAIL disabled recovery leaves default route selected expected=<default> actual=A
+CASE normal active session end
+PASS normal end reaches ending state
+PASS normal active end clears persisted record
+PASS normal active end clears current pointer
+PASS normal active end selects default route
+PASS normal active end selects default exactly once
+RESULT checks=39 passed=30 failed=9

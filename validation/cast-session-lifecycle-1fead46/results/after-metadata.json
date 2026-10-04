@@ -1,0 +1,9 @@
+{
+  "stage": "after",
+  "source_files": {
+    "/workspace/scratch/1fead46c005a/cast580/play-services-cast-framework/core/src/main/java/com/google/android/gms/cast/framework/internal/SessionManagerImpl.java": "7667a7890a29f09e6c7d4f3072e8461f3043e04b61e8fa052ffbc917b2a7a03b",
+    "/workspace/scratch/1fead46c005a/cast580/play-services-cast-framework/core/src/main/java/com/google/android/gms/cast/framework/internal/SessionImpl.java": "16898530a869c43a82840cf976f62a5461f5c8b89f5bb2c60510eb67c5c4749a"
+  },
+  "compile_exit": 0,
+  "run_exit": 0
+}

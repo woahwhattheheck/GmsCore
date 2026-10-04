@@ -1,0 +1,9 @@
+{
+  "stage": "before",
+  "source_files": {
+    "/workspace/scratch/1fead46c005a/lifecycle-repro/baseline/SessionManagerImpl.java": "16e94790d99b0e8b153207a13de650df24b322d637abffd9df2017047d9bae08",
+    "/workspace/scratch/1fead46c005a/lifecycle-repro/baseline/SessionImpl.java": "280044bc246a0059e430fcea99fba7228e5f2456b5f37a5be9bd3bc88aada150"
+  },
+  "compile_exit": 0,
+  "run_exit": 1
+}

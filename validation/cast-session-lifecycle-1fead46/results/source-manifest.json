@@ -1,0 +1,26 @@
+{
+  "base_commit": "de7c5de9f2e7c314a7b367bb4d0334672a1d471e",
+  "production_relative_directory": "play-services-cast-framework/core/src/main/java/com/google/android/gms/cast/framework/internal",
+  "files": {
+    "SessionManagerImpl.java": {
+      "baseline_sha256": "16e94790d99b0e8b153207a13de650df24b322d637abffd9df2017047d9bae08",
+      "candidate_sha256": "7667a7890a29f09e6c7d4f3072e8461f3043e04b61e8fa052ffbc917b2a7a03b",
+      "baseline_matches_git_commit": true,
+      "candidate_matches_product_source": true,
+      "current_head_sha256": "a2008119e54c562b4506bfbd29e3e7033a9821216cebef6fbb912a1d11c57f43"
+    },
+    "SessionImpl.java": {
+      "baseline_sha256": "280044bc246a0059e430fcea99fba7228e5f2456b5f37a5be9bd3bc88aada150",
+      "candidate_sha256": "16898530a869c43a82840cf976f62a5461f5c8b89f5bb2c60510eb67c5c4749a",
+      "baseline_matches_git_commit": true,
+      "candidate_matches_product_source": true,
+      "current_head_sha256": "280044bc246a0059e430fcea99fba7228e5f2456b5f37a5be9bd3bc88aada150"
+    }
+  },
+  "published_commit": "1e66e22a4ade4d9e68e703688706bde80fc26933",
+  "published_parent": "11cb6fcef03ac23877a23547224047c5a1ecdf55",
+  "current_head_capture": "13acaa56bc6672e4508e185b82a57d212c2ac2d8",
+  "pr": "https://github.com/microg/GmsCore/pull/3845",
+  "workflow_run": "https://github.com/woahwhattheheck/GmsCore/actions/runs/37184675209",
+  "published_contents_verified": true
+}
