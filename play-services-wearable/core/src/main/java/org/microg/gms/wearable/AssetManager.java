@@ -300,15 +300,21 @@ public class AssetManager {
     }
 
     public void addCompletionListener(Runnable listener) {
-        listeners.add(listener);
+        synchronized (listeners) {
+            listeners.add(listener);
+        }
         checkCompletion();
     }
 
     private void checkCompletion() {
-        if (!entries.isEmpty()) return;
+        final List<Runnable> toFire;
+        synchronized (listeners) {
+            if (!entries.isEmpty()) return;
 
-        List<Runnable> toFire = new ArrayList<>(listeners);
-        listeners.removeAll(toFire);
+            // Claim each registration once before another completion can drain it.
+            toFire = new ArrayList<>(listeners);
+            listeners.clear();
+        }
 
         for (Runnable r : toFire) {
             try {
