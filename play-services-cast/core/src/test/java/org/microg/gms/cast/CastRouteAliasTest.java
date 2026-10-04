@@ -6,7 +6,9 @@
 package org.microg.gms.cast;
 
 import android.net.nsd.NsdServiceInfo;
+import android.os.Looper;
 import androidx.mediarouter.media.MediaRouteDescriptor;
+import androidx.mediarouter.media.MediaRouteProvider.RouteController;
 import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.util.ArrayList;
@@ -19,6 +21,8 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.robolectric.Shadows.shadowOf;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE, sdk = 28)
@@ -63,6 +67,39 @@ public class CastRouteAliasTest {
         assertRoutes("first-id", "second-id");
         lost.invoke(provider, "first-service");
         assertRoutes("second-id");
+    }
+
+    @Test
+    public void replacingTheOnlyServiceRemovesItsPreviousReceiver() throws Exception {
+        discover("single-service", "old-id");
+        discover("single-service", "new-id");
+        assertRoutes("new-id");
+        discover("single-service", "new-id");
+        assertRoutes("new-id");
+        lost.invoke(provider, "single-service");
+        assertRoutes();
+    }
+
+    @Test
+    public void replacingOneServiceKeepsItsPreviousReceiverAdvertisedByAnotherService() throws Exception {
+        discover("first-service", "old-id");
+        discover("second-service", "old-id");
+        discover("first-service", "new-id");
+        assertRoutes("old-id", "new-id");
+        lost.invoke(provider, "second-service");
+        assertRoutes("new-id");
+    }
+
+    @Test
+    public void replacingAServiceKeepsItsPreviousReceiverUntilItsControllerIsReleased() throws Exception {
+        discover("single-service", "old-id");
+        RouteController controller = provider.onCreateRouteController("old-id");
+        assertNotNull(controller);
+        discover("single-service", "new-id");
+        assertRoutes("old-id", "new-id");
+        controller.onRelease();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertRoutes("new-id");
     }
 
     private void discover(String name, String id) throws Exception {

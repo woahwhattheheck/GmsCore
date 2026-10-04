@@ -527,7 +527,13 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
         // Always take the latest record: address, port, name and status change over time.
         route.device = castDevice;
         route.group = (txtCapabilities & TXT_CAPABILITY_MULTIZONE_GROUP) != 0;
-        serviceCastIds.put(name, id);
+        String previousId = serviceCastIds.put(name, id);
+        if (previousId != null && !previousId.equals(id)) {
+            CastRoute previousRoute = routes.get(previousId);
+            if (previousRoute != null && !isInUse(previousRoute) && !serviceCastIds.containsValue(previousId)) {
+                routes.remove(previousId);
+            }
+        }
 
         publishRoutes();
     }
