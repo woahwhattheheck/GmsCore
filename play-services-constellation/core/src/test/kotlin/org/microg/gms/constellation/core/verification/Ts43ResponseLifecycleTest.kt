@@ -21,17 +21,23 @@ import okhttp3.mockwebserver.RecordedRequest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 import org.microg.gms.constellation.core.proto.OdsaOperation
 import org.microg.gms.constellation.core.proto.ServiceEntitlementRequest
 import org.microg.gms.constellation.core.proto.Ts43ChallengeResponseError
 import org.microg.gms.constellation.core.verification.ts43.EapAkaService
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.lang.reflect.InvocationTargetException
 import java.net.InetAddress
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 
+// Robolectric supplies a real org.json; the android.jar stubs return null and hide the token
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class Ts43ResponseLifecycleTest {
     private val context = mock(Context::class.java)
     private val telephony = mock(TelephonyManager::class.java)
