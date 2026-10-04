@@ -105,9 +105,7 @@ public class WearableServiceImpl extends IWearableService.Stub {
     }
 
     private ChannelManager getChannelManager() throws RemoteException {
-        ChannelManager cm = wearable.getChannelManager();
-        if (cm == null) throw new RemoteException("ChannelManager not yet initialized");
-        return cm;
+        return wearable.getChannelManager();
     }
 
     private void postMain(IWearableCallbacks callbacks, RemoteExceptionRunnable runnable) {
