@@ -46,7 +46,7 @@ class DroidGuardHandleImplRbTest {
         val reply = service.initWithRequest("test", null)
 
         assertNull(reply.pfd)
-        assertNull(reply.object)
+        assertNull(reply.`object`)
         assertArrayEquals(SNAPSHOT, service.snapshot(mutableMapOf()))
         service.close()
     }
@@ -58,7 +58,7 @@ class DroidGuardHandleImplRbTest {
         val reply = service.initWithRequest("test", null)
 
         assertNull(reply.pfd)
-        assertNull(reply.object)
+        assertNull(reply.`object`)
         assertArrayEquals(SNAPSHOT, service.snapshot(mutableMapOf()))
         service.close()
     }
@@ -70,7 +70,7 @@ class DroidGuardHandleImplRbTest {
         val reply = service.initWithRequest("test", null)
 
         assertNull(reply.pfd)
-        assertNull(reply.object)
+        assertNull(reply.`object`)
         assertTrue(service.snapshot(mutableMapOf()).decodeToString().startsWith("ERROR :"))
         service.close()
     }
@@ -88,7 +88,7 @@ class DroidGuardHandleImplRbTest {
         val reply = service.initWithRequest("test", null)
 
         assertNotNull(reply.pfd)
-        assertSame(value, reply.object)
+        assertSame(value, reply.`object`)
         assertArrayEquals(SNAPSHOT, service.snapshot(mutableMapOf()))
         reply.pfd?.close()
         service.close()
@@ -104,7 +104,7 @@ class DroidGuardHandleImplRbTest {
         val reply = service.initWithRequest("test", null)
 
         assertNull(reply.pfd)
-        assertNull(reply.object)
+        assertNull(reply.`object`)
         assertTrue(service.snapshot(mutableMapOf()).decodeToString().startsWith("ERROR :"))
         service.close()
     }
@@ -116,7 +116,7 @@ class DroidGuardHandleImplRbTest {
         val reply = service.initWithRequest("test", null)
 
         assertNull(reply.pfd)
-        assertNull(reply.object)
+        assertNull(reply.`object`)
         assertTrue(service.snapshot(mutableMapOf()).decodeToString().startsWith("ERROR :"))
         service.close()
     }
