@@ -106,6 +106,7 @@ public class RemotePlaybackSessionQueueTest {
             RecordingCallback result = new RecordingCallback();
             Intent request = new Intent(MediaControlIntent.ACTION_START_SESSION)
                     .addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK)
+                    .putExtra(CastMediaControlIntent.EXTRA_CAST_RELAUNCH_APPLICATION, false)
                     .putExtra(CastMediaControlIntent.EXTRA_CAST_APPLICATION_ID, "CC1AD845");
             assertTrue(controller.onControlRequest(request, result));
             receiver.drain();

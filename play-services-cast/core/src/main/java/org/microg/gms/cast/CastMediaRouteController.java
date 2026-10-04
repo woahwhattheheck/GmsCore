@@ -349,6 +349,8 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
             remotePlaybackSessionId = sessionId;
             remotePlaybackApplicationId = applicationId;
             stopApplicationWhenSessionEnds = stopWhenEnds;
+            // A device transport is not a launched receiver application. Complete this request
+            // only when onApplicationConnected confirms the requested application below.
         }
         CastDeviceSession target = usableSession();
         if (target == null) {
@@ -361,7 +363,7 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
             pendingSessionStart = new PendingSessionStart(sessionId, applicationId, callback);
         }
         if (previous != null) previous.callback.onError("Replaced by a newer start-session request", null);
-        boolean relaunch = intent.getBooleanExtra(CastMediaControlIntent.EXTRA_CAST_RELAUNCH_APPLICATION, false);
+        boolean relaunch = intent.getBooleanExtra(CastMediaControlIntent.EXTRA_CAST_RELAUNCH_APPLICATION, true);
         target.launchApplication(applicationId, relaunch, intent.getStringExtra(CastMediaControlIntent.EXTRA_CAST_LANGUAGE_CODE));
         return true;
     }
@@ -679,11 +681,7 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
         synchronized (this) {
             start = pendingSessionStart;
             if (start == null) return;
-            if (!start.applicationId.equals(application.getAppId())
-                    && !DEFAULT_MEDIA_RECEIVER_APP_ID.equals(application.getAppId())
-                    && !application.getNamespaces().contains(MEDIA_NAMESPACE)) {
-                return;
-            }
+            if (!start.applicationId.equals(application.getAppId())) return;
             pendingSessionStart = null;
             remotePlaybackSessionId = start.sessionId;
         }
