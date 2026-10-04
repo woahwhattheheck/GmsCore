@@ -62,6 +62,27 @@ class RemoteDroidGuardHttpClientTest {
         }
     }
 
+    @Test
+    fun rejectsResponseBodyExceedingLimitAndStillDisconnects() {
+        lateinit var connection: RecordingConnection
+        val client = RemoteDroidGuardHttpClient(
+            "http://example.test",
+            2_000,
+            openConnection = { url ->
+                val oversizeResponse = "a".repeat(256 * 1024 + 1)
+                RecordingConnection(url, 200, oversizeResponse).also { connection = it }
+            }
+        )
+
+        try {
+            client.post("snapshot", emptyMap(), null)
+            throw AssertionError("Expected an IOException for exceeding limit")
+        } catch (e: IOException) {
+            assertTrue(e.message.orEmpty().contains("256 KiB limit", ignoreCase = true))
+            assertTrue(connection.disconnected)
+        }
+    }
+
     private class RecordingConnection(
         url: URL,
         private val responseCodeValue: Int,

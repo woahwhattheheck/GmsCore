@@ -5,6 +5,7 @@
 
 package org.microg.gms.droidguard.core
 
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
@@ -31,7 +32,23 @@ internal class RemoteDroidGuardHttpClient(
             }
             val status = connection.responseCode
             if (status !in 200..299) throw IOException("Remote DroidGuard server returned HTTP $status")
-            return connection.inputStream.use { it.readBytes().toString(StandardCharsets.UTF_8) }
+            return connection.inputStream.use { input ->
+      val out = ByteArrayOutputStream()
+      val buffer = ByteArray(8192)
+      var totalRead = 0
+      val limit = 256 * 1024
+      while (true) {
+          val readLimit = minOf(buffer.size, limit - totalRead + 1)
+          val read = input.read(buffer, 0, readLimit)
+          if (read == -1) break
+          totalRead += read
+          if (totalRead > limit) {
+              throw IOException("Response body exceeds 256 KiB limit")
+          }
+          out.write(buffer, 0, read)
+      }
+      out.toByteArray().toString(StandardCharsets.UTF_8)
+  }
         } finally {
             connection.disconnect()
         }
