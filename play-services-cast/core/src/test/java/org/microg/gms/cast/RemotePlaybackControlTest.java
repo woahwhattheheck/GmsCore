@@ -9,10 +9,18 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import android.os.Bundle;
+
 import androidx.mediarouter.media.MediaItemStatus;
+import androidx.mediarouter.media.MediaRouter;
 
 import org.json.JSONObject;
 import org.junit.Test;
+import org.microg.gms.cast.channel.CastDeviceSession;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.util.Map;
 
 /**
  * Focused checks for the remote playback control surface of {@link CastMediaRouteController}:
@@ -112,4 +120,113 @@ public class RemotePlaybackControlTest {
         assertEquals(0, snapshot.positionMs);
         assertEquals(-1, snapshot.durationMs);
     }
+
+    @Test
+    public void mediaObjectWithoutDurationKeepsDurationUnknown() throws Exception {
+        CastMediaRouteController.MediaStatusSnapshot snapshot = CastMediaRouteController
+                .parseMediaStatus(new JSONObject(
+                        "{\"mediaSessionId\":4,\"playerState\":\"PAUSED\",\"media\":{}}"));
+        assertEquals(-1, snapshot.durationMs);
+    }
+
+    @Test
+    public void transportWriteWaitsForReceiverAndPreservesLoadFailure() throws Exception {
+        CastMediaRouteController controller = new CastMediaRouteController(null, "route", "localhost", 8009, 0);
+        RecordingCallback result = new RecordingCallback();
+        track(controller, 7, new CastMediaRouteController.PendingControl("logical-session", null, true, false, 0, result));
+        CastDeviceSession.Callbacks callbacks = callbacks(controller);
+
+        callbacks.onSendMessageSuccess("urn:x-cast:com.google.cast.media", 7);
+        assertEquals(0, result.successes);
+        assertEquals(0, result.errors);
+
+        callbacks.onTextMessage("urn:x-cast:com.google.cast.media", "{\"type\":\"LOAD_FAILED\",\"requestId\":7}");
+        assertEquals(0, result.successes);
+        assertEquals(1, result.errors);
+        assertEquals("LOAD_FAILED", result.error);
+        callbacks.onTextMessage("urn:x-cast:com.google.cast.media", "{\"type\":\"LOAD_FAILED\",\"requestId\":7}");
+        assertEquals(1, result.errors);
+    }
+
+    @Test
+    public void emptyReceiverStatusCannotCompleteSeekWithCachedState() throws Exception {
+        CastMediaRouteController controller = new CastMediaRouteController(null, "route", "localhost", 8009, 0);
+        field("mediaSessionId").setLong(controller, 42);
+        field("mediaPlaybackState").setInt(controller, MediaItemStatus.PLAYBACK_STATE_PLAYING);
+        RecordingCallback result = new RecordingCallback();
+        track(controller, 8, new CastMediaRouteController.PendingControl("logical-session", "42", true, false, 42, result));
+
+        callbacks(controller).onTextMessage("urn:x-cast:com.google.cast.media",
+                "{\"type\":\"MEDIA_STATUS\",\"requestId\":8,\"status\":[]}");
+
+        assertEquals(0, result.successes);
+        assertEquals(1, result.errors);
+        assertEquals(0, field("mediaSessionId").getLong(controller));
+    }
+
+    @Test
+    public void differentReceiverItemCannotCompleteSeek() throws Exception {
+        CastMediaRouteController controller = new CastMediaRouteController(null, "route", "localhost", 8009, 0);
+        RecordingCallback result = new RecordingCallback();
+        track(controller, 9, new CastMediaRouteController.PendingControl("logical-session", "42", true, false, 42, result));
+
+        callbacks(controller).onTextMessage("urn:x-cast:com.google.cast.media",
+                "{\"type\":\"MEDIA_STATUS\",\"requestId\":9,"
+                        + "\"status\":[{\"mediaSessionId\":43,\"playerState\":\"PLAYING\"}]}");
+
+        assertEquals(0, result.successes);
+        assertEquals(1, result.errors);
+    }
+
+    @Test
+    public void malformedPauseResponseCannotReportSuccess() throws Exception {
+        CastMediaRouteController controller = new CastMediaRouteController(null, "route", "localhost", 8009, 0);
+        field("mediaSessionId").setLong(controller, 42);
+        RecordingCallback result = new RecordingCallback();
+        track(controller, 10, new CastMediaRouteController.PendingControl("logical-session", null, false, false, 42, result));
+
+        callbacks(controller).onTextMessage("urn:x-cast:com.google.cast.media",
+                "{\"type\":\"MEDIA_STATUS\",\"requestId\":10}");
+
+        assertEquals(0, result.successes);
+        assertEquals(1, result.errors);
+    }
+
+    private static class RecordingCallback extends MediaRouter.ControlRequestCallback {
+        int successes;
+        int errors;
+        String error;
+
+        @Override
+        public void onResult(Bundle data) {
+            successes++;
+        }
+
+        @Override
+        public void onError(String error, Bundle data) {
+            errors++;
+            this.error = error;
+        }
+    }
+
+    private static Field field(String name) throws Exception {
+        Field field = CastMediaRouteController.class.getDeclaredField(name);
+        field.setAccessible(true);
+        return field;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void track(CastMediaRouteController controller, long requestId,
+            CastMediaRouteController.PendingControl pending) throws Exception {
+        ((Map<Long, CastMediaRouteController.PendingControl>) field("pendingControls").get(controller))
+                .put(requestId, pending);
+    }
+
+    private static CastDeviceSession.Callbacks callbacks(CastMediaRouteController controller) throws Exception {
+        Class<?> type = Class.forName(CastMediaRouteController.class.getName() + "$SessionCallbacks");
+        Constructor<?> constructor = type.getDeclaredConstructor(CastMediaRouteController.class);
+        constructor.setAccessible(true);
+        return (CastDeviceSession.Callbacks) constructor.newInstance(controller);
+    }
+
 }
