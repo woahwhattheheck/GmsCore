@@ -18,59 +18,94 @@ private const val DEFAULT_TIMEOUT_MILLIS = 60000
 class RemoteHandleImpl(private val context: Context, private val packageName: String) : IDroidGuardHandle.Stub() {
     private var flow: String? = null
     private var request: DroidGuardResultsRequest? = null
-    private var remoteSession: RemoteDroidGuardSession? = null
+    // init is oneway, so a synchronous snapshot can arrive before init even starts.
+    private var initialization = RemoteDroidGuardInitialization()
+    private var closed = false
 
     private val url: String
         get() = DroidGuardPreferences.getNetworkServerUrl(context) ?: throw IllegalStateException("Network URL required")
 
     override fun init(flow: String?) {
         Log.d(TAG, "init()")
-        closeRemoteSession()
-        this.flow = flow
-        startRemoteSession()
+        var previous: RemoteDroidGuardInitialization? = null
+        val state = synchronized(this) {
+            check(!closed) { "Remote DroidGuard handle is closed" }
+            if (!initialization.start()) {
+                previous = initialization
+                initialization = RemoteDroidGuardInitialization().also { it.start() }
+            }
+            this.flow = flow
+            Triple(initialization, flow, request)
+        }
+        previous?.let { closeRemoteSession(it, state.third) }
+        startRemoteSession(state.first, state.second, state.third)
     }
 
     override fun snapshot(map: Map<Any?, Any?>?): ByteArray {
         Log.d(TAG, "snapshot(fields=${map?.size ?: 0})")
-        val response = remoteSession?.snapshot(map) ?: doSnapshot(flow, request, map.orEmpty())
+        val state = synchronized(this) {
+            check(!closed) { "Remote DroidGuard handle is closed" }
+            initialization to (request?.timeoutMillis ?: DEFAULT_TIMEOUT_MILLIS)
+        }
+        val session = state.first.await(state.second)
+        val parameters = synchronized(this) {
+            check(!closed) { "Remote DroidGuard handle is closed" }
+            check(initialization === state.first) { "Remote DroidGuard handle was reinitialized" }
+            flow to request
+        }
+        val response = session?.snapshot(map) ?: doSnapshot(parameters.first, parameters.second, map.orEmpty())
         return Base64.decode(response.trim(), Base64.URL_SAFE + Base64.NO_WRAP + Base64.NO_PADDING)
     }
 
     override fun close() {
         Log.d(TAG, "close()")
-        closeRemoteSession()
-        request = null
-        flow = null
+        val state = synchronized(this) {
+            if (closed) return
+            closed = true
+            val state = initialization to request
+            request = null
+            flow = null
+            state
+        }
+        closeRemoteSession(state.first, state.second)
     }
 
     override fun initWithRequest(flow: String?, request: DroidGuardResultsRequest?): DroidGuardInitReply? {
         Log.d(TAG, "initWithRequest(requestFields=${request?.bundle?.size() ?: 0})")
-        closeRemoteSession()
-        this.flow = flow
-        this.request = request
+        val previous = synchronized(this) {
+            check(!closed) { "Remote DroidGuard handle is closed" }
+            val previous = initialization to this.request
+            initialization = RemoteDroidGuardInitialization()
+            this.flow = flow
+            this.request = request
+            previous
+        }
+        closeRemoteSession(previous.first, previous.second)
         return null
     }
 
-    private fun startRemoteSession() {
+    private fun startRemoteSession(initialization: RemoteDroidGuardInitialization, flow: String?, request: DroidGuardResultsRequest?) {
         val timeoutMillis = (request?.timeoutMillis ?: DEFAULT_TIMEOUT_MILLIS).coerceAtLeast(1)
+        var session: RemoteDroidGuardSession? = null
         try {
-            val session = RemoteDroidGuardSession(
+            session = RemoteDroidGuardSession(
                 RemoteDroidGuardHttpClient(url, timeoutMillis),
                 buildRequestParameters(flow, request)
-            )
-            session.begin()
-            remoteSession = session
+            ).also { it.begin() }
         } catch (e: Exception) {
             Log.w(TAG, "Remote server does not provide session setup; using single-request mode", e)
-            remoteSession = null
+        } finally {
+            try {
+                initialization.complete(session)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to close cancelled remote DroidGuard session", e)
+            }
         }
     }
 
-    private fun closeRemoteSession() {
-        val session = remoteSession ?: return
-        remoteSession = null
+    private fun closeRemoteSession(initialization: RemoteDroidGuardInitialization, request: DroidGuardResultsRequest?) {
         try {
-            session.close()
+            initialization.close(request?.timeoutMillis ?: DEFAULT_TIMEOUT_MILLIS)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to close remote DroidGuard session", e)
         }
