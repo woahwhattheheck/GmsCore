@@ -27,7 +27,7 @@ import org.microg.safeparcel.AutoSafeParcelable;
 import org.microg.safeparcel.SafeParceled;
 
 import java.net.InetAddress;
-import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -49,7 +49,13 @@ public class CastDevice extends AutoSafeParcelable {
         this.friendlyName = friendlyName;
         this.icons = new ArrayList<WebImage>();
         if (iconPath != null) {
-            this.icons.add(new WebImage(Uri.parse(String.format("http://%s:8008%s", this.address, iconPath))));
+            String iconHost = host instanceof Inet6Address
+                    ? "[" + Uri.encode(this.address, ":") + "]" : this.address;
+            Uri iconOrigin = new Uri.Builder()
+                    .scheme("http")
+                    .encodedAuthority(iconHost + ":8008")
+                    .build();
+            this.icons.add(new WebImage(Uri.parse(iconOrigin.toString() + iconPath)));
         }
         this.modelName = modelName;
         this.capabilities = capabilities;
