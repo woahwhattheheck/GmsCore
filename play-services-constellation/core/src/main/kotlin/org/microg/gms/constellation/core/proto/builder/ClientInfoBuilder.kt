@@ -78,7 +78,7 @@ operator fun DeviceID.Companion.invoke(context: Context, iidToken: String): Devi
             val androidIdStr =
                 android.provider.Settings.Secure.getString(context.contentResolver, "android_id")
             gmsAndroidId =
-                androidIdStr?.toLongOrNull(16) ?: (Build.ID.hashCode()
+                androidIdStr?.toULongOrNull(16)?.toLong() ?: (Build.ID.hashCode()
                     .toLong() and 0x7FFFFFFFFFFFFFFFL)
         }
         prefs.edit { putLong("gms_android_id", gmsAndroidId) }
