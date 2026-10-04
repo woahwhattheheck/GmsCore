@@ -40,7 +40,9 @@ const val BROADCAST_ID = "*"
 /** Largest serialized CastMessage body a receiver accepts, excluding the 4-byte length prefix. */
 const val MAX_PAYLOAD_SIZE = 64 * 1024
 
-class MessageTooLargeException(size: Int) : IOException("Cast message payload of $size bytes exceeds $MAX_PAYLOAD_SIZE")
+class MessageTooLargeException(size: Int, serializedBody: Boolean) : IOException(
+    "Cast message ${if (serializedBody) "serialized body" else "raw payload"} of $size bytes exceeds $MAX_PAYLOAD_SIZE"
+)
 
 class DeviceAuthException(message: String) : IOException(message)
 
@@ -157,13 +159,13 @@ class CastChannel(
     @Throws(IOException::class)
     fun send(destinationId: String, namespace: String, payload: String) {
         val size = payload.toByteArray(Charsets.UTF_8).size
-        if (size > MAX_PAYLOAD_SIZE) throw MessageTooLargeException(size)
+        if (size > MAX_PAYLOAD_SIZE) throw MessageTooLargeException(size, serializedBody = false)
         synchronized(lock) { writeLocked(destinationId, namespace, payload) }
     }
 
     @Throws(IOException::class)
     fun send(destinationId: String, namespace: String, payload: ByteArray) {
-        if (payload.size > MAX_PAYLOAD_SIZE) throw MessageTooLargeException(payload.size)
+        if (payload.size > MAX_PAYLOAD_SIZE) throw MessageTooLargeException(payload.size, serializedBody = false)
         synchronized(lock) { writeLocked(destinationId, namespace, payload.toByteString()) }
     }
 
@@ -178,9 +180,10 @@ class CastChannel(
     private fun writeLocked(message: CastMessage) {
         val out = output ?: throw IOException("Cast channel to $host is not connected")
         if (closed) throw IOException("Cast channel to $host is closed")
+        val bodySize = CastMessage.ADAPTER.encodedSize(message)
+        if (bodySize > MAX_PAYLOAD_SIZE) throw MessageTooLargeException(bodySize, serializedBody = true)
         val bytes = message.encode()
-        if (bytes.size > MAX_PAYLOAD_SIZE) throw MessageTooLargeException(bytes.size)
-        out.writeInt(bytes.size)
+        out.writeInt(bodySize)
         out.write(bytes)
         out.flush()
     }
