@@ -744,6 +744,12 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
         JSONArray statuses = json.optJSONArray("status");
         JSONObject status = statuses != null ? statuses.optJSONObject(0) : null;
         MediaStatusSnapshot snapshot = status != null ? parseMediaStatus(status) : null;
+        // A matching request ID must not let another item's status replace current playback.
+        if (pending != null && pending.receiverMediaSessionId > 0 && snapshot != null
+                && snapshot.mediaSessionId > 0 && pending.receiverMediaSessionId != snapshot.mediaSessionId) {
+            pending.callback.onError("Receiver returned no matching media item", null);
+            return;
+        }
         if (snapshot != null && snapshot.mediaSessionId > 0) {
             synchronized (this) {
                 if (mediaSessionId != snapshot.mediaSessionId) {
@@ -766,9 +772,7 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
         }
         if (pending == null) return;
         if (statuses == null || (statuses.length() == 0 ? !pending.stopsPlayback
-                : snapshot == null || snapshot.mediaSessionId <= 0
-                || (pending.receiverMediaSessionId > 0
-                && pending.receiverMediaSessionId != snapshot.mediaSessionId))) {
+                : snapshot == null || snapshot.mediaSessionId <= 0)) {
             pending.callback.onError("Receiver returned no matching media item", null);
             return;
         }
