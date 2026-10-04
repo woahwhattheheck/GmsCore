@@ -1166,6 +1166,8 @@ public class WearableServiceImpl extends IWearableService.Stub {
                 } finally {
                     dataHolder.close();
                 }
+                callbacks.onGetAllCapabilitiesResponse(
+                        new GetAllCapabilitiesResponse(0, new ArrayList<>(capabilitiesMap.values())));
             } catch (Exception e) {
                 Log.e(TAG, "getAllCapabilities failed", e);
                 callbacks.onGetAllCapabilitiesResponse(new GetAllCapabilitiesResponse(13, new ArrayList<>()));
@@ -1188,6 +1190,7 @@ public class WearableServiceImpl extends IWearableService.Stub {
                         }
                     }
                 }
+                return false;
             default:
                 Log.w(TAG, "Unknown node filter: " + nodeFilter + ", including all nodes");
                 return true;
@@ -1833,6 +1836,8 @@ public class WearableServiceImpl extends IWearableService.Stub {
             ConnectionConfiguration[] configurations = wearable.getConfigurations();
             if (configurations.length > 0) {
                 enableConfig(callbacks, configurations[0].name);
+            } else {
+                callbacks.onStatus(new Status(CommonStatusCodes.ERROR));
             }
         });
     }
@@ -1845,6 +1850,8 @@ public class WearableServiceImpl extends IWearableService.Stub {
             ConnectionConfiguration[] configurations = wearable.getConfigurations();
             if (configurations.length > 0) {
                 disableConfig(callbacks, configurations[0].name);
+            } else {
+                callbacks.onStatus(new Status(CommonStatusCodes.ERROR));
             }
         });
     }
