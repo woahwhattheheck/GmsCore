@@ -7,6 +7,8 @@ package org.microg.gms.cast.channel
 
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
+import org.json.JSONException
+import org.json.JSONObject
 import org.microg.gms.cast.proto.AuthChallenge
 import org.microg.gms.cast.proto.CastMessage
 import org.microg.gms.cast.proto.DeviceAuthMessage
@@ -188,17 +190,27 @@ class CastChannel(
         return CastMessage.ADAPTER.decode(bytes)
     }
 
+    private fun controlMessageType(message: CastMessage): String? {
+        if (message.payload_type != CastMessage.PayloadType.STRING) return null
+        val payload = message.payload_utf8 ?: return null
+        return try {
+            JSONObject(payload).opt("type") as? String
+        } catch (_: JSONException) {
+            null
+        }
+    }
+
     private fun readLoop(input: DataInputStream) {
         try {
             while (!closed) {
                 val message = readMessage(input)
                 lastReceivedNanos = System.nanoTime()
                 when (message.namespace) {
-                    NAMESPACE_HEARTBEAT -> if (message.payload_utf8?.contains("\"PING\"") == true) {
+                    NAMESPACE_HEARTBEAT -> if (controlMessageType(message) == "PING") {
                         synchronized(lock) { writeLocked(message.source_id, NAMESPACE_HEARTBEAT, PONG_PAYLOAD) }
                     }
 
-                    NAMESPACE_CONNECTION -> if (message.payload_utf8?.contains("\"CLOSE\"") == true) {
+                    NAMESPACE_CONNECTION -> if (controlMessageType(message) == "CLOSE") {
                         val removed = synchronized(lock) { connectedTransports.remove(message.source_id) }
                         if (message.source_id == RECEIVER_ID) throw EOFException("Receiver closed the connection")
                         if (removed) listener.onTransportClosed(message.source_id)

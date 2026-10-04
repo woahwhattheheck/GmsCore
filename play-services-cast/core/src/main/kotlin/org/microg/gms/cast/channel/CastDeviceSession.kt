@@ -215,7 +215,15 @@ class CastDeviceSession(
             stoppingSessionId = null
             when (reply?.optString("type")) {
                 null -> callbacks.onStopApplicationResult(STATUS_TIMEOUT)
-                "RECEIVER_STATUS" -> callbacks.onStopApplicationResult(STATUS_SUCCESS)
+                "RECEIVER_STATUS" -> {
+                    val status = reply.optJSONObject("status")
+                    val result = when {
+                        status == null -> STATUS_INVALID_REQUEST
+                        parseReceiverStatus(status).applications.any { it.sessionId == target } -> STATUS_FAILED
+                        else -> STATUS_SUCCESS
+                    }
+                    callbacks.onStopApplicationResult(result)
+                }
                 else -> callbacks.onStopApplicationResult(STATUS_INVALID_REQUEST)
             }
         }
