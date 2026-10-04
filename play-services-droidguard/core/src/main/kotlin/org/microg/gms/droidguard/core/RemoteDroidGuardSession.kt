@@ -11,6 +11,8 @@ internal class RemoteDroidGuardSession(
 ) {
     private var remoteSessionId: String? = null
 
+    // One remote session is stateful: complete each request before the next starts.
+    @Synchronized
     fun begin() {
         check(remoteSessionId == null) { "Remote DroidGuard session is already open" }
         val response = client.post(null, requestParameters + ("action" to "begin"), null)
@@ -18,12 +20,14 @@ internal class RemoteDroidGuardSession(
             ?: throw IllegalStateException("Remote DroidGuard server did not return a session id")
     }
 
+    @Synchronized
     fun snapshot(data: Map<Any?, Any?>?): String {
         val sessionId = checkNotNull(remoteSessionId) { "Remote DroidGuard session is not open" }
         val parameters = requestParameters + mapOf("action" to "snapshot", "sessionId" to sessionId)
         return client.post(null, parameters, RemoteDroidGuardHttpClient.encodeForm(data))
     }
 
+    @Synchronized
     fun close() {
         val sessionId = remoteSessionId ?: return
         try {
