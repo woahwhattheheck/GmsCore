@@ -1,0 +1,24 @@
+{
+  "id": "BH-WEAR-CAPABILITY-COMPLETION-267D",
+  "base_packet_commit": "a41939952297727a43b2ff3404eca73c94a0042b",
+  "base_source_tree": "fc70e055d9120e6962ef97652a9d8715e916a0db",
+  "result_source_tree": "47f914257cac8f6ed8cc52d615c0861068540121",
+  "patch_file": "BH-WEAR-CAPABILITY-COMPLETION-267D.patch",
+  "patch_bytes": 8342,
+  "patch_sha256": "19eb6a54cb9017d7e817a39e2d4c501becaa7d78cb24cc36fa79dda243f4780f",
+  "files": [
+    {
+      "path": "play-services-wearable/core/src/main/java/org/microg/gms/wearable/WearableServiceImpl.java",
+      "git_blob": "fbfdfc1e408ae819fa5908cc105f0babd8734d44",
+      "sha256": "ca1f0e0b705b8da97f02af46a09b2dd4febda416c557d87eb1010952f710ba9b"
+    },
+    {
+      "path": "play-services-wearable/core/src/test/java/org/microg/gms/wearable/CapabilityServiceTest.java",
+      "git_blob": "0277c37a94f4db0220a689619ab734a00361d5ed",
+      "sha256": "aa09ab2b463b83d8d3de8878f060fcf7481fe0a46cb70c949cd0633b93816487"
+    }
+  ],
+  "tests": "3 focused Robolectric service regressions prepared; execution pending existing cloud runner",
+  "validation": "git diff --check and git apply --check --cached pass against exact frozen61 index",
+  "scope": "Complete successful getAllCapabilities callback; make reachable filter reject nodes without a connected matching config"
+}
