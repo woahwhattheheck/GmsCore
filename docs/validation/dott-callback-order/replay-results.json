@@ -1,0 +1,35 @@
+{
+  "base": "7a648d5fe5f073c61ef7b202aef4c74dd329f4be",
+  "service_blob": "e8336a1fb3a613a03d214fd50255b84cb2c5a364",
+  "boundary": "Exact full production service and RemoteHandle/initialization/session/HTTP/fallback Kotlin; real local HTTP. Disposable Android/AIDL/context/preference stubs, Network mode only. Not Android, Binder, a production server, or physical Dott acceptance.",
+  "source_sha256": {
+    "original": {
+      "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/DroidGuardServiceImpl.kt": "f0a28c5fc6467ca8684872ba642f91bee9df6bacf86e828a6840828faae3287f",
+      "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/FallbackCreator.kt": "5a7ff629781a19520d359bd6b045364cb753748ac422bb1707b86cd1359fe696",
+      "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardHttpClient.kt": "7f0886399fd34e9d870c295b0d026ffcf6c187b163bd2540b933ff0bd32e8fcd",
+      "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardInitialization.kt": "2c7d51a9ebe4aa3d45ae52bfb2971cd23f8d5fb79249e020d9e6a0c460c44ba8",
+      "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardSession.kt": "33470e5986bb6f475efb9fe4bda13ff9c965b8bcea615c1d1299f2d2ced48dbe",
+      "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/RemoteHandleImpl.kt": "79124c49a408b83d7d0d2e985159be675241dcf6bf36c8997a5d8da21ced30b1"
+    },
+    "candidate": {
+      "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/DroidGuardServiceImpl.kt": "ecacb741a3a7b7651cf52a6981fe34b4a2b0740b00a9aa708792768da87dafe4",
+      "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/FallbackCreator.kt": "5a7ff629781a19520d359bd6b045364cb753748ac422bb1707b86cd1359fe696",
+      "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardHttpClient.kt": "7f0886399fd34e9d870c295b0d026ffcf6c187b163bd2540b933ff0bd32e8fcd",
+      "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardInitialization.kt": "2c7d51a9ebe4aa3d45ae52bfb2971cd23f8d5fb79249e020d9e6a0c460c44ba8",
+      "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardSession.kt": "33470e5986bb6f475efb9fe4bda13ff9c965b8bcea615c1d1299f2d2ced48dbe",
+      "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/RemoteHandleImpl.kt": "79124c49a408b83d7d0d2e985159be675241dcf6bf36c8997a5d8da21ced30b1"
+    }
+  },
+  "results": {
+    "original": {
+      "exit_code": 1,
+      "summary": "SUMMARY passed=2 total=4",
+      "controlled_300ms_cleanup_median_ms": 391.153
+    },
+    "candidate": {
+      "exit_code": 0,
+      "summary": "SUMMARY passed=4 total=4",
+      "controlled_300ms_cleanup_median_ms": 42.407
+    }
+  }
+}
