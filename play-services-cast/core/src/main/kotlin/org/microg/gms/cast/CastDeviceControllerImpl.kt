@@ -119,7 +119,13 @@ class CastDeviceControllerImpl(
             session = newSession()
             true
         }
-        if (reopened) onReopen(this)
+        if (reopened) {
+            onReopen(this)
+            if (!synchronized(this) { setListener(listener) }) {
+                disconnect()
+                return
+            }
+        }
         connectRequested = true
         session.connect()
     }
