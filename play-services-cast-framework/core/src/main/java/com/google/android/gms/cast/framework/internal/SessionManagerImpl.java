@@ -395,8 +395,10 @@ public class SessionManagerImpl extends ISessionManager.Stub {
     }
 
     public void onSessionEnded(SessionImpl session, int error) {
-        if (this.currentSession == session) this.currentSession = null;
-        clearSavedSession();
+        if (this.currentSession == session) {
+            this.currentSession = null;
+            clearSavedSession();
+        }
         this.updateCastState();
         for (ISessionManagerListener listener : new ArrayList<>(this.sessionManagerListeners.values())) {
             try {
@@ -419,8 +421,10 @@ public class SessionManagerImpl extends ISessionManager.Stub {
     }
 
     public void onSessionResumeFailed(SessionImpl session, int error) {
-        if (this.currentSession == session) this.currentSession = null;
-        clearSavedSession();
+        if (this.currentSession == session) {
+            this.currentSession = null;
+            clearSavedSession();
+        }
         this.updateCastState();
         for (ISessionManagerListener listener : new ArrayList<>(this.sessionManagerListeners.values())) {
             try {
