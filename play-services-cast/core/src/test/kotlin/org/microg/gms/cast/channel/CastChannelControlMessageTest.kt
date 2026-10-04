@@ -96,6 +96,48 @@ class CastChannelControlMessageTest {
         assertEquals("Receiver closed the connection", result.closeError?.message)
     }
 
+    @Test
+    fun closeForAnotherSenderDoesNotCloseOurTransportOrReceiver() {
+        val applicationMessage = control("urn:x-cast:example", "still connected", APPLICATION_ID)
+        for (source in listOf(APPLICATION_ID, RECEIVER_ID)) {
+            val result = readFrames(
+                control(NAMESPACE_CONNECTION, """{"type":"CLOSE"}""", source).copy(destination_id = "sender-other"),
+                applicationMessage,
+            )
+
+            assertTrue("Another sender's CLOSE must not remove our transport", result.closedTransports.isEmpty())
+            assertEquals("Another sender's CLOSE must not stop our reader", listOf(applicationMessage), result.received)
+        }
+
+        val broadcastApplication = readFrames(
+            control(NAMESPACE_CONNECTION, """{"type":"CLOSE"}""", APPLICATION_ID).copy(destination_id = BROADCAST_ID),
+        )
+        assertEquals(listOf(APPLICATION_ID), broadcastApplication.closedTransports)
+
+        val broadcastReceiver = readFrames(
+            control(NAMESPACE_CONNECTION, """{"type":"CLOSE"}""").copy(destination_id = BROADCAST_ID),
+            applicationMessage,
+        )
+        assertTrue(broadcastReceiver.received.isEmpty())
+        assertEquals("Receiver closed the connection", broadcastReceiver.closeError?.message)
+    }
+
+    @Test
+    fun heartbeatOnlyAnswersMessagesForThisSenderOrBroadcast() {
+        val result = readFrames(
+            control(NAMESPACE_HEARTBEAT, """{"type":"PING"}""").copy(destination_id = "sender-other"),
+            control(NAMESPACE_HEARTBEAT, """{"type":"PING"}"""),
+            control(NAMESPACE_HEARTBEAT, """{"type":"PING"}""").copy(destination_id = BROADCAST_ID),
+        )
+
+        assertEquals("Only addressed and broadcast PINGs receive replies", 2, result.sent.size)
+        for (message in result.sent) {
+            assertEquals(NAMESPACE_HEARTBEAT, message.namespace)
+            assertEquals(RECEIVER_ID, message.destination_id)
+            assertEquals("""{"type":"PONG"}""", message.payload_utf8)
+        }
+    }
+
     private class ReadResult {
         val sent = ArrayList<CastMessage>()
         val received = ArrayList<CastMessage>()

@@ -204,6 +204,8 @@ class CastChannel(
         try {
             while (!closed) {
                 val message = readMessage(input)
+                // Control frames must address this sender or all senders before they affect the channel.
+                if (message.destination_id != senderId && message.destination_id != BROADCAST_ID) continue
                 lastReceivedNanos = System.nanoTime()
                 when (message.namespace) {
                     NAMESPACE_HEARTBEAT -> if (controlMessageType(message) == "PING") {
