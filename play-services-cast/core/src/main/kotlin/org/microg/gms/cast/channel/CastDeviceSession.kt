@@ -91,7 +91,7 @@ class CastDeviceSession(
     private var disconnectRequested = false
     private var stoppingSessionId: String? = null
 
-    fun connect() = post {
+    fun connect() = post(onRejected = { callbacks.onConnectionFailed(STATUS_NETWORK_ERROR) }) {
         if (disconnectRequested) {
             // Queued before disconnect() shut the session down; a channel opened now would never be closed
             callbacks.onConnectionFailed(STATUS_NETWORK_ERROR)
@@ -135,7 +135,7 @@ class CastDeviceSession(
         androidReceiverCompatible: Boolean = false,
         credentials: String? = null,
         credentialsType: String? = null,
-    ) = post {
+    ) = post(onRejected = { callbacks.onApplicationConnectionFailed(STATUS_APPLICATION_NOT_RUNNING) }) {
         if (relaunchIfRunning) {
             sendLaunch(appId, language, androidReceiverCompatible, credentials, credentialsType)
             return@post
@@ -194,7 +194,9 @@ class CastDeviceSession(
 
     /** Attach to a running application. A null [appId] or [sessionId] matches any. */
     @JvmOverloads
-    fun joinApplication(appId: String?, sessionId: String?, connectionType: Int = 0) = post {
+    fun joinApplication(appId: String?, sessionId: String?, connectionType: Int = 0) = post(onRejected = {
+        callbacks.onApplicationConnectionFailed(STATUS_APPLICATION_NOT_RUNNING)
+    }) {
         requestReceiver(JSONObject().put("type", "GET_STATUS")) { reply ->
             if (reply == null) {
                 callbacks.onApplicationConnectionFailed(STATUS_TIMEOUT)
@@ -213,7 +215,7 @@ class CastDeviceSession(
         }
     }
 
-    fun leaveApplication() = post {
+    fun leaveApplication() = post(onRejected = { callbacks.onLeaveApplicationResult(STATUS_APPLICATION_NOT_RUNNING) }) {
         val app = application
         if (app == null) {
             callbacks.onLeaveApplicationResult(STATUS_INVALID_REQUEST)
@@ -228,7 +230,7 @@ class CastDeviceSession(
         }
     }
 
-    fun stopApplication(sessionId: String?) = post {
+    fun stopApplication(sessionId: String?) = post(onRejected = { callbacks.onStopApplicationResult(STATUS_APPLICATION_NOT_RUNNING) }) {
         val target = sessionId?.takeIf { it.isNotEmpty() } ?: application?.sessionId
         if (target == null) {
             callbacks.onStopApplicationResult(STATUS_INVALID_REQUEST)
