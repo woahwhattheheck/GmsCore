@@ -6,6 +6,7 @@
 package org.microg.gms.cast.channel
 
 import android.os.Build
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import org.microg.gms.cast.proto.CastMessage
@@ -126,9 +127,17 @@ class CastDeviceSession(
         requestReceiver(JSONObject().put("type", "GET_STATUS")) { }
     }
 
-    fun launchApplication(appId: String, relaunchIfRunning: Boolean, language: String?) = post {
+    @JvmOverloads
+    fun launchApplication(
+        appId: String,
+        relaunchIfRunning: Boolean,
+        language: String?,
+        androidReceiverCompatible: Boolean = false,
+        credentials: String? = null,
+        credentialsType: String? = null,
+    ) = post {
         if (relaunchIfRunning) {
-            sendLaunch(appId, language)
+            sendLaunch(appId, language, androidReceiverCompatible, credentials, credentialsType)
             return@post
         }
         // Decide on the current status: the one requested on connect may not have arrived yet
@@ -144,13 +153,26 @@ class CastDeviceSession(
             }
             val running = receiverStatus?.applications?.firstOrNull { it.appId == appId }
             if (running != null) attachApplication(running, false)
-            else sendLaunch(appId, language)
+            else sendLaunch(appId, language, androidReceiverCompatible, credentials, credentialsType)
         }
     }
 
-    private fun sendLaunch(appId: String, language: String?) {
+    private fun sendLaunch(
+        appId: String,
+        language: String?,
+        androidReceiverCompatible: Boolean,
+        credentials: String?,
+        credentialsType: String?,
+    ) {
         val request = JSONObject().put("type", "LAUNCH").put("appId", appId)
         if (!language.isNullOrEmpty()) request.put("language", language)
+        val appTypes = JSONArray().put("WEB")
+        if (androidReceiverCompatible) appTypes.put("ANDROID_TV")
+        request.put("supportedAppTypes", appTypes)
+        if (credentials != null || credentialsType != null) {
+            val credentialsData = JSONObject().put("credentials", credentials).put("credentialsType", credentialsType)
+            request.put("appParams", JSONObject().put("launchCheckerParams", JSONObject().put("credentialsData", credentialsData)))
+        }
         requestReceiver(request, LAUNCH_TIMEOUT_MILLIS) { reply ->
             when (reply?.optString("type")) {
                 null -> callbacks.onApplicationConnectionFailed(STATUS_TIMEOUT)

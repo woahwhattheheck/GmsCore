@@ -197,7 +197,14 @@ class CastDeviceControllerImpl(
     override fun unregisterNamespace(namespace: String) = session.unregisterNamespace(namespace)
 
     override fun launchApplication(applicationId: String, launchOptions: LaunchOptions?) =
-        session.launchApplication(applicationId, launchOptions?.relaunchIfRunning ?: false, launchOptions?.language)
+        session.launchApplication(
+            applicationId,
+            launchOptions?.relaunchIfRunning ?: false,
+            launchOptions?.language,
+            launchOptions?.androidReceiverCompatible ?: false,
+            launchOptions?.credentialsData?.credentials,
+            launchOptions?.credentialsData?.credentialsType,
+        )
 
     override fun joinApplication(applicationId: String?, sessionId: String?, joinOptions: JoinOptions?) =
         session.joinApplication(applicationId, sessionId)
