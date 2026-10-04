@@ -259,6 +259,47 @@ public class NodeDatabaseHelper extends SQLiteOpenHelper {
                     "AND d.host LIKE ? AND d.path LIKE ?";
         }
 
+        return getDataItemsForDataHolderBySelection(db, selection, params);
+    }
+
+    public synchronized Cursor getDataItemsForDataHolderByHostAndPath(String packageName, String signatureDigest,
+                                                                       String host, String path, int filterType) {
+        List<String> params = new ArrayList<>();
+        params.add(packageName);
+        params.add(signatureDigest);
+        String selection = "a.packageName = ? AND a.signatureDigest = ?"
+                + dataItemUriSelection("d.", host, path, filterType, params);
+        return getDataItemsForDataHolderBySelection(getReadableDatabase(), selection, params.toArray(new String[0]));
+    }
+
+    static void checkDataItemFilter(String path, int filterType) {
+        if (TextUtils.isEmpty(path)) {
+            throw new IllegalArgumentException("Data item URI must contain a path");
+        }
+        if (filterType != 0 && filterType != 1) {
+            throw new IllegalArgumentException("Unknown data item filter: " + filterType);
+        }
+    }
+
+    private static String dataItemUriSelection(String prefix, String host, String path,
+                                               int filterType, List<String> params) {
+        checkDataItemFilter(path, filterType);
+        String selection = "";
+        // Only the complete host wildcard denotes every node. Path metacharacters
+        // remain literal for both DataApi FILTER_LITERAL (0) and FILTER_PREFIX (1).
+        if (!TextUtils.isEmpty(host) && !"*".equals(host)) {
+            selection += " AND " + prefix + "host = ?";
+            params.add(host);
+        }
+        // LIKE is case-insensitive on SQLite and treats '%' and '_' as patterns.
+        selection += filterType == 0 ? " AND " + prefix + "path = ?"
+                : " AND substr(" + prefix + "path, 1, length(?)) = ?";
+        if (filterType == 1) params.add(path);
+        params.add(path);
+        return selection;
+    }
+
+    private static Cursor getDataItemsForDataHolderBySelection(SQLiteDatabase db, String selection, String[] params) {
         selection += " AND d.deleted = 0 AND d.assetsPresent != 0";
 
         String query =
@@ -517,6 +558,17 @@ public class NodeDatabaseHelper extends SQLiteOpenHelper {
                 null, null, "packageName, signatureDigest, host, path");
     }
 
+    private static Cursor getDataItemsByHostAndPath(SQLiteDatabase db, String packageName,
+                                                    String signatureDigest, String host, String path, int filterType) {
+        List<String> params = new ArrayList<>();
+        params.add(packageName);
+        params.add(signatureDigest);
+        String selection = "packageName = ? AND signatureDigest = ? AND deleted = 0"
+                + dataItemUriSelection("", host, path, filterType, params);
+        return db.query("dataItemsAndAssets", GDIBHAP_FIELDS, selection, params.toArray(new String[0]),
+                null, null, "packageName, signatureDigest, host, path");
+    }
+
     public Cursor getModifiedDataItems(final String nodeId, final long seqId, final boolean excludeDeleted) {
         SQLiteDatabase db = getReadableDatabase();
 
@@ -552,22 +604,40 @@ public class NodeDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public synchronized List<DataItemRecord> deleteDataItems(String packageName, String signatureDigest, String host, String path) {
+        return deleteDataItems(packageName, signatureDigest, host, path, null);
+    }
+
+    public synchronized List<DataItemRecord> deleteDataItems(String packageName, String signatureDigest,
+                                                             String host, String path, int filterType) {
+        checkDataItemFilter(path, filterType);
+        return deleteDataItems(packageName, signatureDigest, host, path, Integer.valueOf(filterType));
+    }
+
+    private List<DataItemRecord> deleteDataItems(String packageName, String signatureDigest,
+                                                String host, String path, Integer filterType) {
         List<DataItemRecord> updated = new ArrayList<DataItemRecord>();
         SQLiteDatabase db = getWritableDatabase();
         db.beginTransaction();
-        Cursor cursor = getDataItemsByHostAndPath(db, packageName, signatureDigest, host, path);
-        while (cursor.moveToNext()) {
-            DataItemRecord record = DataItemRecord.fromCursor(cursor);
-            record.deleted = true;
-            record.assetsAreReady = true;
-            record.dataItem.data = null;
-            record.seqId = clockworkNodePreferences.getNextSeqId();
-            record.v1SeqId = record.seqId;
-            updateRecord(db, cursor.getString(0), record);
-            updated.add(record);
+        try (Cursor cursor = filterType == null
+                ? getDataItemsByHostAndPath(db, packageName, signatureDigest, host, path)
+                : getDataItemsByHostAndPath(db, packageName, signatureDigest, host, path, filterType)) {
+            while (cursor.moveToNext()) {
+                // fromCursor consumes the item's asset rows, including the final
+                // cursor row, so retain the identity before advancing it.
+                String dataItemId = cursor.getString(0);
+                DataItemRecord record = DataItemRecord.fromCursor(cursor);
+                record.deleted = true;
+                record.assetsAreReady = true;
+                record.dataItem.data = null;
+                record.seqId = clockworkNodePreferences.getNextSeqId();
+                record.v1SeqId = record.seqId;
+                updateRecord(db, dataItemId, record);
+                updated.add(record);
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
         }
-        db.setTransactionSuccessful();
-        db.endTransaction();
         return updated;
     }
 
