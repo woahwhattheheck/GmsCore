@@ -876,8 +876,8 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
     @Override
     public void onSetVolume(int volume) {
         int newVolume = Math.max(0, Math.min(CastMediaRouteProvider.VOLUME_MAX, volume));
-        this.volume = volume;
-        requestedVolume = volume;
+        this.volume = newVolume;
+        requestedVolume = newVolume;
         requestedVolumeAt = SystemClock.elapsedRealtime();
         provider.onRouteStateChanged(CastMediaRouteController.this, routeId, -1, newVolume);
 
