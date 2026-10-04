@@ -45,7 +45,8 @@ data class ReceiverStatus(
  * Sender-side state for one receiver: the control channel, the receiver namespace (status, launch, join, stop, volume)
  * and the virtual connection to the application the client is attached to.
  *
- * All methods return immediately; work and [Callbacks] run on one session thread, in call order.
+ * Methods return without waiting for queued work. Accepted work and [Callbacks] run on one session thread, in call order.
+ * If a send cannot be queued because the session is disconnected, its failure callback runs on the calling thread.
  */
 class CastDeviceSession(
     private val host: String,
@@ -241,11 +242,15 @@ class CastDeviceSession(
 
     fun unregisterNamespace(namespace: String) = post { namespaces.remove(namespace) }
 
-    fun sendMessage(namespace: String, message: String, requestId: Long) = post {
+    fun sendMessage(namespace: String, message: String, requestId: Long) = post(onRejected = {
+        callbacks.onSendMessageFailure(namespace, requestId, STATUS_APPLICATION_NOT_RUNNING)
+    }) {
         sendToApplication(namespace, requestId) { channel, transportId -> channel.send(transportId, namespace, message) }
     }
 
-    fun sendBinaryMessage(namespace: String, data: ByteArray, requestId: Long) = post {
+    fun sendBinaryMessage(namespace: String, data: ByteArray, requestId: Long) = post(onRejected = {
+        callbacks.onSendMessageFailure(namespace, requestId, STATUS_APPLICATION_NOT_RUNNING)
+    }) {
         sendToApplication(namespace, requestId) { channel, transportId -> channel.send(transportId, namespace, data) }
     }
 
@@ -369,8 +374,11 @@ class CastDeviceSession(
         if (!disconnectRequested) callbacks.onDisconnected(if (error == null) STATUS_SUCCESS else STATUS_NETWORK_ERROR)
     }
 
-    private fun post(block: () -> Unit) {
-        if (executor.isShutdown) return
+    private fun post(onRejected: (() -> Unit)? = null, block: () -> Unit) {
+        if (executor.isShutdown) {
+            onRejected?.invoke()
+            return
+        }
         try {
             executor.execute {
                 try {
@@ -380,7 +388,8 @@ class CastDeviceSession(
                 }
             }
         } catch (e: RejectedExecutionException) {
-            // session already disconnected
+            // disconnect() can shut the executor down between the check and execute().
+            onRejected?.invoke()
         }
     }
 
