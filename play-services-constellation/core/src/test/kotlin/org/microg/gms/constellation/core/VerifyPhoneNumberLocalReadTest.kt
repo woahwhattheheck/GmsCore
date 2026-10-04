@@ -257,6 +257,41 @@ class VerifyPhoneNumberLocalReadTest {
     }
 
     @Test
+    fun refreshedSimWithoutCacheableReplacement_isEvicted_withoutTouchingOtherSim() {
+        val refreshedImsi = "001010123456789"
+        val untouchedImsi = "001010999999999"
+        val expirationMillis = System.currentTimeMillis() + 600_000L
+        storeNumber(
+            refreshedImsi,
+            expirationMillis = expirationMillis,
+            phoneNumber = "+15555550123"
+        )
+        storeNumber(
+            untouchedImsi,
+            expirationMillis = expirationMillis,
+            phoneNumber = "+15555550456"
+        )
+
+        ConstellationStateStore.storeVerifiedNumbers(
+            context,
+            emptyList(),
+            refreshedImsis = setOf(refreshedImsi)
+        )
+
+        val remaining = ConstellationStateStore.loadVerifiedNumbers(context)
+            .associateBy { it.imsi }
+        assertNull(
+            "a refreshed SIM without a cacheable replacement must evict stale state",
+            remaining[refreshedImsi]
+        )
+        assertEquals(
+            "an untouched SIM must retain its valid cached number",
+            "+15555550456",
+            remaining[untouchedImsi]?.phoneNumber
+        )
+    }
+
+    @Test
     fun nextSyncDeadlineMillis_appliesServerReportedOffset() {
         // GMS stores the next sync deadline as local wall clock plus the offset between the
         // server-provided deadline and the server-reported current time.
