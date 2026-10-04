@@ -411,6 +411,13 @@ private suspend fun executeSyncFlow(
     val requestedImsis = request.targetedSims.map { it.imsi }.toSet()
 
     val verifications = syncResponse.responses.mapNotNull { result ->
+        // Error-only records have no SIM association. Check before IMSI filtering so they
+        // cannot become an empty successful response to the caller.
+        result.error?.let { error ->
+            check(error.code == 0) {
+                "Sync verification failed (${error.code}): ${error.message}"
+            }
+        }
         val verification = result.verification ?: Verification()
         val verificationImsis = verification.association?.sim?.sim_info?.imsi.orEmpty()
         if (requestedImsis.isNotEmpty() && verificationImsis.none { it in requestedImsis }) {
