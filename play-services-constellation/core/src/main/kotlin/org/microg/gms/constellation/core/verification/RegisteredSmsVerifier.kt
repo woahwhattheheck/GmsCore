@@ -50,6 +50,7 @@ fun RegisteredSmsChallenge.verify(context: Context, subId: Int): ChallengeRespon
     ) / 2).coerceAtLeast(1L)
 
     val responseItems = mutableListOf<RegisteredSmsChallengeResponseItem>()
+    val localNumbersBySubscription = mutableMapOf<Int, List<String>>()
 
     try {
         val cursor = context.contentResolver.query(
@@ -78,7 +79,9 @@ fun RegisteredSmsChallenge.verify(context: Context, subId: Int): ChallengeRespon
                 } else if (messageSubId == -1) {
                     localNumbers
                 } else {
-                    getLocalNumbers(context, messageSubId).ifEmpty { localNumbers }
+                    localNumbersBySubscription.getOrPut(messageSubId) {
+                        getLocalNumbers(context, messageSubId).ifEmpty { localNumbers }
+                    }
                 }
 
                 val bucketStart = date - (date % bucketSizeMillis)
