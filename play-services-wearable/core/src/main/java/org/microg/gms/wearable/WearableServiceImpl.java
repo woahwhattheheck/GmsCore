@@ -62,6 +62,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -652,13 +653,15 @@ public class WearableServiceImpl extends IWearableService.Stub {
     @Override
     public void getTerms(IWearableCallbacks callbacks, int i) throws RemoteException {
         Log.d(TAG, "getTerms: " + i);
-        postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
+        postMain(callbacks, () -> callbacks.onGetTermsResponse(
+                new GetTermsResponse(WEAR_FEATURE_DISABLED, Collections.emptyList())));
     }
 
     @Override
     public void getConsentStatusForRequest(IWearableCallbacks callbacks, ConsentStatusRequest request) throws RemoteException {
         Log.d(TAG, "getConsentStatusForRequest");
-        postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
+        postMain(callbacks, () -> callbacks.onConsentResponse(new ConsentResponse(
+                WEAR_FEATURE_DISABLED, false, false, false, false, null, null, null)));
     }
 
     @Override
@@ -944,15 +947,13 @@ public class WearableServiceImpl extends IWearableService.Stub {
     @Override
     public void getEapId(IWearableCallbacks callbacks, int subscriptionId) throws RemoteException {
         Log.d(TAG, "getEapId: subscriptionId=" + subscriptionId);
-        // TODO
-        postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
+        postMain(callbacks, () -> callbacks.onGetEapIdResponse(new GetEapIdResponse()));
     }
 
     @Override
     public void performEapAka(IWearableCallbacks callbacks, int subscriptionId, String s) throws RemoteException {
         Log.d(TAG, "performEapAka: subscriptionId=" + subscriptionId);
-        // TODO
-        postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
+        postMain(callbacks, () -> callbacks.onPerformEapAkaResponse(new PerformEapAkaResponse()));
     }
 
     @Override
@@ -964,34 +965,32 @@ public class WearableServiceImpl extends IWearableService.Stub {
     @Override
     public void getFastpairAccountKeys(IWearableCallbacks callbacks) throws RemoteException {
         Log.d(TAG, "getFastpairAccountKeys");
-        postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
+        postMain(callbacks, () -> callbacks.onGetFastpairAccountKeysResponse(new GetFastpairAccountKeysResponse()));
     }
 
     @Override
     public void getFastpairAccountKeyByAccount(IWearableCallbacks callbacks, Account account) throws RemoteException {
         Log.d(TAG, "getFastpairAccountKeyByAccount: " + (account == null ? "null" : account.name));
-        postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
+        postMain(callbacks, () -> callbacks.onGetFastpairAccountKeyByAccountResponse(
+                new GetFastpairAccountKeyByAccountResponse()));
     }
 
     @Override
     public void getAppRecommendations(IWearableCallbacks callbacks, AppRecommendationsRequest request) throws RemoteException {
         Log.d(TAG, "getAppRecommendations: " + request);
-        // i think we don't need this
-        postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
+        postMain(callbacks, () -> callbacks.onAppRecommendationsResponse(new AppRecommendationsResponse()));
     }
 
     @Override
     public void setThemeForApp(IWearableCallbacks callbacks, AppTheme theme) throws RemoteException {
         Log.d(TAG, "setThemeForApp: " + theme);
-        // TODO
         postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
     }
 
     @Override
     public void getThemeForApp(IWearableCallbacks callbacks, String packageName) throws RemoteException {
         Log.d(TAG, "getThemeForApp: " + packageName);
-        // TODO
-        postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
+        postMain(callbacks, () -> callbacks.onGetAppThemeResponse(new GetAppThemeResponse()));
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -1510,16 +1509,19 @@ public class WearableServiceImpl extends IWearableService.Stub {
     @Override
     public void injectAncsNotificationForTesting(IWearableCallbacks callbacks, AncsNotificationParcelable notification) throws RemoteException {
         Log.d(TAG, "unimplemented Method: injectAncsNotificationForTesting: " + notification);
+        postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
     }
 
     @Override
     public void doAncsPositiveAction(IWearableCallbacks callbacks, int i) throws RemoteException {
         Log.d(TAG, "unimplemented Method: doAncsPositiveAction: " + i);
+        postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
     }
 
     @Override
     public void doAncsNegativeAction(IWearableCallbacks callbacks, int i) throws RemoteException {
         Log.d(TAG, "unimplemented Method: doAncsNegativeAction: " + i);
+        postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
     }
 
     /*

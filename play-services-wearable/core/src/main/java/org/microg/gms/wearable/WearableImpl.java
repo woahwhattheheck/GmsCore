@@ -1505,6 +1505,10 @@ public class WearableImpl {
     }
 
     private void closeConnection(String nodeId) {
+        if (nodeId == null) {
+            Log.w(TAG, "closeConnection: refusing null node id");
+            return;
+        }
         WearableConnection connection = activeConnections.remove(nodeId);
         nodeRestrictions.remove(nodeId);
         if (connection != null) {

@@ -7,8 +7,11 @@ package org.microg.gms.wearable.channel;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
+import android.os.RemoteException;
 import android.system.ErrnoException;
 import android.system.OsConstants;
+
+import com.google.android.gms.wearable.internal.IChannelStreamCallbacks;
 
 import org.junit.Test;
 import org.junit.Rule;
@@ -32,6 +35,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -322,9 +326,10 @@ public class ChannelBehaviorTest {
                 ChannelAssetApiEnum.ORIGIN_CHANNEL_API, false, true, null,
                 new Handler(Looper.getMainLooper()));
         channel.connectionState = ChannelStateMachine.CONNECTION_STATE_ESTABLISHED;
+        RecordingStreamCallbacks streamCallbacks = new RecordingStreamCallbacks();
         ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();
         try {
-            channel.setOutputStream(pipe[0], null, 0, 0);
+            channel.setOutputStream(pipe[0], streamCallbacks, 0, 0);
             channel.processOutgoingData();
 
             assertEquals(1, manager.sentData.size());
@@ -343,9 +348,53 @@ public class ChannelBehaviorTest {
             assertEquals(ChannelStateMachine.SENDING_STATE_CLOSED, channel.sendingState);
             assertEquals(null, channel.sendPendingOp);
             assertEquals(0L, channel.totalBytesSent);
+            assertEquals(Collections.singletonList(ChannelStatusCodes.CLOSE_REASON_NORMAL),
+                    streamCallbacks.closeReasons);
         } finally {
             if (channel.hasOutputStream()) {
                 channel.onChannelOutputClosed(ChannelStatusCodes.CLOSE_REASON_NORMAL, 0);
+            }
+            pipe[0].close();
+            pipe[1].close();
+        }
+    }
+
+    @Test
+    public void finalIncomingFrameClosesInputAndNotifiesStreamCallback() throws Exception {
+        RecordingManager manager = new RecordingManager();
+        RecordingTransport transport = new RecordingTransport();
+        ChannelStateMachine channel = new ChannelStateMachine(token(true), manager, transport, null,
+                ChannelAssetApiEnum.ORIGIN_CHANNEL_API, false, true, null, null);
+        channel.connectionState = ChannelStateMachine.CONNECTION_STATE_ESTABLISHED;
+        manager.channelTable.put(token(true), channel);
+
+        RecordingStreamCallbacks streamCallbacks = new RecordingStreamCallbacks();
+        ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();
+        try {
+            channel.setInputStream(pipe[1], streamCallbacks);
+            ChannelDataRequest request = new ChannelDataRequest.Builder()
+                    .header(new ChannelDataHeader.Builder()
+                            .channelId(CHANNEL_ID)
+                            .requestId(3L)
+                            .build())
+                    .payload(ByteString.of(new byte[]{9}))
+                    .finalMessage(true)
+                    .build();
+
+            new OnChannelDataTask(manager, PEER, request).execute();
+            channel.processIncomingBuffer();
+
+            assertArrayEquals(new byte[]{9}, transport.lastWrite);
+            assertEquals(1, manager.dataAcks.size());
+            assertTrue(manager.dataAcks.get(0).isFinal);
+            assertEquals(3L, manager.dataAcks.get(0).requestId);
+            assertFalse("the write end must close so the app sees EOF", channel.hasInputStream());
+            assertEquals(ChannelStateMachine.RECEIVING_STATE_CLOSED, channel.receivingState);
+            assertEquals(Collections.singletonList(ChannelStatusCodes.CLOSE_REASON_NORMAL),
+                    streamCallbacks.closeReasons);
+        } finally {
+            if (channel.hasInputStream()) {
+                channel.onChannelInputClosed(ChannelStatusCodes.CLOSE_REASON_NORMAL, 0);
             }
             pipe[0].close();
             pipe[1].close();
@@ -481,6 +530,15 @@ public class ChannelBehaviorTest {
         @Override
         public void onRemoteCloseReceived(int errorCode) {
             remoteCloseErrorCode = errorCode;
+        }
+    }
+
+    private static final class RecordingStreamCallbacks extends IChannelStreamCallbacks.Stub {
+        final List<Integer> closeReasons = new ArrayList<>();
+
+        @Override
+        public void onChannelClosed(int closeReason, int appSpecificErrorCode) throws RemoteException {
+            closeReasons.add(closeReason);
         }
     }
 

@@ -522,6 +522,12 @@ public class ChannelStateMachine {
             channelManager.sendDataAck(this, chunk.ackRequestId, chunk.isFinal);
             Log.d(TAG, "processIncomingBuffer: drained+ack requestId="
                     + chunk.ackRequestId + " isFinal=" + chunk.isFinal);
+            if (chunk.isFinal) {
+                // A final frame is the last payload. Close the write end so the
+                // app sees EOF and file-receive callbacks can complete.
+                onChannelInputClosed(ChannelStatusCodes.CLOSE_REASON_NORMAL, 0);
+                return;
+            }
         }
 
         if (appClosedInput) {
@@ -734,12 +740,10 @@ public class ChannelStateMachine {
 
         if (inputCallbacks != null) {
             unlinkToDeath(inputCallbacks.asBinder());
-            if (closeReason != ChannelStatusCodes.CLOSE_REASON_NORMAL || errorCode != 0) {
-                try {
-                    inputCallbacks.onChannelClosed(closeReason, errorCode);
-                } catch (RemoteException e) {
-                    Log.w(TAG, "Failed to notify InputStream of close", e);
-                }
+            try {
+                inputCallbacks.onChannelClosed(closeReason, errorCode);
+            } catch (RemoteException e) {
+                Log.w(TAG, "Failed to notify InputStream of close", e);
             }
         }
 
@@ -770,12 +774,10 @@ public class ChannelStateMachine {
 
         if (outputCallbacks != null) {
             unlinkToDeath(outputCallbacks.asBinder());
-            if (closeReason != ChannelStatusCodes.CLOSE_REASON_NORMAL) {
-                try {
-                    outputCallbacks.onChannelClosed(closeReason, errorCode);
-                } catch (RemoteException e) {
-                    Log.w(TAG, "Failed to notify OutputStream of close", e);
-                }
+            try {
+                outputCallbacks.onChannelClosed(closeReason, errorCode);
+            } catch (RemoteException e) {
+                Log.w(TAG, "Failed to notify OutputStream of close", e);
             }
         }
 
