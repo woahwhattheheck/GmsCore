@@ -162,6 +162,29 @@ public class RemotePlaybackSessionQueueTest {
     }
 
     @Test
+    public void failedEnqueueWithoutUsableRouteDoesNotPublishSessionState() throws Exception {
+        CastMediaRouteController controller = new CastMediaRouteController(null, "route", "localhost", 8009, 0);
+        RecordingCallback result = new RecordingCallback();
+        Intent request = new Intent(MediaControlIntent.ACTION_ENQUEUE)
+                .addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK)
+                .setDataAndType(Uri.parse("https://example.com/queued.mp4"), "video/mp4")
+                .putExtra(MediaControlIntent.EXTRA_SESSION_ID, "failed-enqueue-session");
+
+        assertTrue(controller.onControlRequest(request, result));
+        assertEquals(1, result.errors);
+        assertEquals(0, result.successes);
+        assertEquals(null, field("remotePlaybackSessionId").get(controller));
+        assertEquals(null, field("pendingPlay").get(controller));
+
+        RecordingCallback lookup = new RecordingCallback();
+        Intent getStatus = new Intent(MediaControlIntent.ACTION_GET_SESSION_STATUS)
+                .addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK)
+                .putExtra(MediaControlIntent.EXTRA_SESSION_ID, "failed-enqueue-session");
+        assertTrue(controller.onControlRequest(getStatus, lookup));
+        assertEquals(1, lookup.errors);
+        assertEquals(0, lookup.successes);
+    }
+    @Test
     public void failedStartWithoutUsableRouteDoesNotPublishSessionState() throws Exception {
         CastMediaRouteController controller = new CastMediaRouteController(null, "route", "localhost", 8009, 0);
         RecordingCallback result = new RecordingCallback();
