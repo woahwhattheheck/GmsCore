@@ -156,21 +156,32 @@ suspend fun handleVerifyPhoneNumberRequest(
     packageName: String?
 ) {
     val callingPackage = packageName ?: Constants.GMS_PACKAGE_NAME
-    request.extras.putString("calling_api", "verifyPhoneNumber")
-    val useReadPath = when (request.apiVersion) {
-        0 -> request.policyId in VerifyPhoneNumberApiPhenotypes.READ_ONLY_POLICY_IDS
+    val normalizedRequest = VerifyPhoneNumberRequest(
+        request.policyId ?: "",
+        request.timeout,
+        request.idTokenRequest,
+        Bundle(request.extras ?: Bundle.EMPTY).apply {
+            putString("calling_api", "verifyPhoneNumber")
+        },
+        request.targetedSims ?: emptyList(),
+        request.includeUnverified,
+        request.apiVersion,
+        request.verificationMethodsValues ?: emptyList()
+    )
+    val useReadPath = when (normalizedRequest.apiVersion) {
+        0 -> normalizedRequest.policyId in VerifyPhoneNumberApiPhenotypes.READ_ONLY_POLICY_IDS
         2 -> VerifyPhoneNumberApiPhenotypes.ENABLE_READ_FLOW
-        3 -> request.policyId in VerifyPhoneNumberApiPhenotypes.POLICY_IDS_ALLOWED_FOR_LOCAL_READ
+        3 -> normalizedRequest.policyId in VerifyPhoneNumberApiPhenotypes.POLICY_IDS_ALLOWED_FOR_LOCAL_READ
         else -> false
     }
 
     handleVerifyPhoneNumberRequest(
         context,
         callbacks,
-        request,
+        normalizedRequest,
         callingPackage,
         if (useReadPath) ReadCallbackMode.TYPED else ReadCallbackMode.NONE,
-        localReadFallback = request.apiVersion == 3 && useReadPath,
+        localReadFallback = normalizedRequest.apiVersion == 3 && useReadPath,
         legacyCallbackOnFullFlow = false
     )
 }
