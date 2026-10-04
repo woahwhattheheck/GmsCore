@@ -6,6 +6,7 @@
 package org.microg.gms.droidguard.core
 
 import android.content.Context
+import android.content.ContextWrapper
 import androidx.test.core.app.ApplicationProvider
 import com.google.android.gms.droidguard.DroidGuardChimeraService
 import com.google.android.gms.droidguard.internal.DroidGuardResultsRequest
@@ -17,7 +18,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.microg.gms.droidguard.GuardCallback
 import org.microg.gms.droidguard.HandleProxy
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.util.concurrent.atomic.AtomicBoolean
@@ -37,11 +37,13 @@ class DroidGuardServiceImplGuardTest {
     }
 
     private fun chimeraWith(factory: NetworkHandleProxyFactory): DroidGuardChimeraService {
-        val service: DroidGuardChimeraService =
-            Robolectric.buildService<DroidGuardChimeraService>(DroidGuardChimeraService::class.java).create().get()
-        // Field `a` is a static Object. Object.isAssignableFrom(factory) is true, so a
-        // first-match on assignability writes the double into `a` and leaves the real
-        // factory in `b` (the field getHandle() actually reads).
+        // Chimera IntentService is not android.app.Service, so Robolectric.buildService
+        // rejects an explicit DroidGuardChimeraService type argument. The factory
+        // constructor writes field b without onCreate, which would replace it.
+        val service = DroidGuardChimeraService(factory, Any(), Any())
+        val attach = ContextWrapper::class.java.getDeclaredMethod("attachBaseContext", Context::class.java)
+        attach.isAccessible = true
+        attach.invoke(service, context)
         val field = DroidGuardChimeraService::class.java.getDeclaredField("b")
         check(NetworkHandleProxyFactory::class.java.isAssignableFrom(field.type)) {
             "DroidGuardChimeraService.b is ${field.type.name}, expected NetworkHandleProxyFactory"
