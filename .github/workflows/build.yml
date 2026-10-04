@@ -1,64 +1,32 @@
-name: "Gradle build"
-permissions: {}
+name: Wear 3852 wake-lock deadline validation
+permissions:
+  contents: read
 on:
-  - push
-  - pull_request
-  - workflow_dispatch
+  push:
+    branches: ["validate/wear3852-wakelock-solhawthorn-20261004"]
 
 jobs:
-  build:
-    name: "Gradle build ${{ matrix.target }}"
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
-      GRADLE_MICROG_VERSION_WITHOUT_GIT: 1
-
-    strategy:
-      matrix:
-        target: [Debug, Release]
-
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
     steps:
-      - name: "Free disk space"
+      - uses: actions/checkout@v7
+        with:
+          ref: 9645019dbd7d92205c6fe42d5f276a15ad5c176f
+          fetch-depth: 1
+      - name: Verify source pin
         run: |
-          # Deleting unneeded software packages
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /opt/hostedtoolcache/go
-
-          # Log available space
-          df -h
-      - name: "Checkout sources"
-        uses: actions/checkout@v7
+          test "$(git rev-parse HEAD)" = "9645019dbd7d92205c6fe42d5f276a15ad5c176f"
+          test -z "$(git status --porcelain --untracked-files=no)"
+      - uses: actions/setup-java@v6
         with:
-          fetch-depth: 0
-      - name: "Setup Java"
-        uses: actions/setup-java@v6
-        with:
-          distribution: "temurin"
+          distribution: temurin
           java-version: "17"
-      - name: "Setup Gradle"
-        uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@v6
         with:
-          cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
-          build-scan-publish: true
-          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
-          build-scan-terms-of-use-agree: "yes"
-      - name: "Setup matchers"
+          cache-read-only: true
+      - name: Run focused WakeLockManager regression
         run: |
-          # Setting up matchers...
-
-          matchers_dir='${{ github.workspace }}/.github/matchers'
-          matcher_list()
-          {
-            echo 'gradle-build-matcher.json'
-            echo 'gradle-build-kotlin-error-matcher.json'
-          }
-
-          matcher_list | while IFS='' read -r NAME; do
-            if test -f "${matchers_dir:?}/${NAME:?}"; then
-              echo "::add-matcher::${matchers_dir:?}/${NAME:?}"
-              echo "Matcher configured: ${NAME:?}"
-            fi
-          done
-      - name: "Execute Gradle assemble"
-        run: "./gradlew assemble${{ matrix.target }}"
-      - name: "Execute Gradle lint"
-        run: "./gradlew lint${{ matrix.target }}"
+          ./gradlew --no-daemon --max-workers=2 --no-configuration-cache :play-services-wearable-core:testDebugUnitTest --tests org.microg.gms.wearable.bluetooth.WakeLockManagerTest
