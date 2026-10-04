@@ -146,6 +146,12 @@ object ChallengeProcessor {
                     subId
                 )
 
+                VerificationMethod.IMSI_LOOKUP -> challenge.verifyImsiLookup(
+                    context,
+                    challengeImsi,
+                    subId
+                )
+
                 else -> {
                     Log.w(TAG, "Unsupported verification method: ${challenge.type}")
                     null
