@@ -54,10 +54,15 @@ class NetworkHandleProxyFactory(private val context: Context) : HandleProxyFacto
         }
     }
 
-    private fun readFromDatabase(flow: String?): Triple<String, ByteArray, ByteArray>? {
+    internal fun databaseId(flow: String?): String {
         ProfileManager.ensureInitialized(context)
-        val id = "$flow/${version.versionString}/${Build.FINGERPRINT}"
-        return dgDb.get(id)
+        return "$flow/${version.versionString}/${Build.FINGERPRINT}"
+    }
+
+    internal fun readFromDatabase(flow: String?): Triple<String, ByteArray, ByteArray>? {
+        // A row whose VM is no longer in the cache (e.g. stored under the old cache layout or a
+        // lowercase key) cannot be loaded; skip it so the caller fetches the VM again.
+        return dgDb.get(databaseId(flow))?.takeIf { (vmKey, _, _) -> isValidCache(vmKey) }
     }
 
     fun createRequest(flow: String?, packageName: String, pingData: PingData? = null, extra: ByteArray? = null): Request {
@@ -156,7 +161,7 @@ class NetworkHandleProxyFactory(private val context: Context) : HandleProxyFacto
                 throw IllegalStateException()
             }
         }
-        val id = "$flow/${version.versionString}/${Build.FINGERPRINT}"
+        val id = databaseId(flow)
         val expiry = (response.expiryTimeSecs ?: 0).toLong()
         val byteCode = response.byteCode?.toByteArray() ?: ByteArray(0)
         val extra = response.extra?.toByteArray() ?: ByteArray(0)

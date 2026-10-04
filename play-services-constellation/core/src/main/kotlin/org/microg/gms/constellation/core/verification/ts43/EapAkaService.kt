@@ -34,7 +34,7 @@ class EapAkaService(private val telephonyManager: TelephonyManager) {
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
-    fun performSimAkaAuth(eapRelayBase64: String, imsi: String, mccMnc: String): String? {
+    fun performSimAkaAuth(eapRelayBase64: String, eapIdentity: String): String? {
         val eapPacket = Base64.decode(eapRelayBase64, Base64.DEFAULT)
         if (eapPacket.size < 12) return null
 
@@ -101,8 +101,8 @@ class EapAkaService(private val telephonyManager: TelephonyManager) {
                 val ck = extractTlv(1 + res.size + 1, iccBytes) ?: return null
                 val ik = extractTlv(1 + res.size + 1 + ck.size + 1, iccBytes) ?: return null
 
-                val identity = buildEapId(mccMnc, imsi)
-                val identityBytes = identity.toByteArray(StandardCharsets.UTF_8)
+                // RFC 4187 7: MK is keyed on the identity the peer announced (the EAP_ID sent to the server)
+                val identityBytes = eapIdentity.toByteArray(StandardCharsets.UTF_8)
                 val keys = Fips186Prf.deriveKeys(identityBytes, ik, ck)
 
                 val kAut = keys["K_aut"] ?: run {

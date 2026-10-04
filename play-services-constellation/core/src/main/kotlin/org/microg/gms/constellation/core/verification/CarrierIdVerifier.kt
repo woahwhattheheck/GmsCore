@@ -40,13 +40,6 @@ fun Challenge.verifyCarrierId(context: Context, subId: Int): ChallengeResponse {
         "No active subscription for carrier auth"
     )
 
-    val telephonyManager = context.getSystemService<TelephonyManager>()
-        ?: return failure(
-            CarrierIdError.CARRIER_ID_ERROR_NOT_SUPPORTED,
-            "TelephonyManager unavailable"
-        )
-    val targetManager =
-        telephonyManager.createForSubscriptionId(subId)
     if (challengeData.startsWith("[ts43]")) {
         // Not supported for now, try to get the server to dispatch something different
         return failure(
@@ -58,6 +51,12 @@ fun Challenge.verifyCarrierId(context: Context, subId: Int): ChallengeResponse {
     val appType = carrierChallenge.app_type.takeIf { it != 0 } ?: TelephonyManager.APPTYPE_USIM
 
     return try {
+        val telephonyManager = context.getSystemService<TelephonyManager>()
+            ?: return failure(
+                CarrierIdError.CARRIER_ID_ERROR_NOT_SUPPORTED,
+                "TelephonyManager unavailable"
+            )
+        val targetManager = telephonyManager.createForSubscriptionId(subId)
         val response =
             targetManager.getIccAuthentication(appType, carrierChallenge.auth_type, challengeData)
         if (response.isNullOrEmpty()) {
