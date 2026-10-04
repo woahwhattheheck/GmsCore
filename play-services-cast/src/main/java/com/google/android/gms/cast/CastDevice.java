@@ -151,7 +151,38 @@ public class CastDevice extends AutoSafeParcelable {
     }
 
     public WebImage getIcon(int preferredWidth, int preferredHeight) {
-        return null;
+        if (icons == null || icons.isEmpty()) return null;
+
+        WebImage fallback = null;
+        if (preferredWidth <= 0 || preferredHeight <= 0) {
+            for (WebImage icon : icons) {
+                if (icon != null) return icon;
+            }
+            return null;
+        }
+
+        WebImage bestFit = null;
+        long bestFitDistance = Long.MAX_VALUE;
+        WebImage closest = null;
+        long closestDistance = Long.MAX_VALUE;
+        for (WebImage icon : icons) {
+            if (icon == null) continue;
+            if (fallback == null) fallback = icon;
+            int width = icon.getWidth();
+            int height = icon.getHeight();
+            if (width <= 0 || height <= 0) continue;
+            long distance = Math.abs((long) width - preferredWidth)
+                    + Math.abs((long) height - preferredHeight);
+            if (distance < closestDistance) {
+                closest = icon;
+                closestDistance = distance;
+            }
+            if (width >= preferredWidth && height >= preferredHeight && distance < bestFitDistance) {
+                bestFit = icon;
+                bestFitDistance = distance;
+            }
+        }
+        return bestFit != null ? bestFit : (closest != null ? closest : fallback);
     }
 
     public List<WebImage> getIcons() {
