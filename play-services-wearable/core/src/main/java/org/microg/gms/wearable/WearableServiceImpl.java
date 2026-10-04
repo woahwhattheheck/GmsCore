@@ -1831,6 +1831,8 @@ public class WearableServiceImpl extends IWearableService.Stub {
             ConnectionConfiguration[] configurations = wearable.getConfigurations();
             if (configurations.length > 0) {
                 enableConfig(callbacks, configurations[0].name);
+            } else {
+                callbacks.onStatus(new Status(CommonStatusCodes.ERROR));
             }
         });
     }
@@ -1843,6 +1845,8 @@ public class WearableServiceImpl extends IWearableService.Stub {
             ConnectionConfiguration[] configurations = wearable.getConfigurations();
             if (configurations.length > 0) {
                 disableConfig(callbacks, configurations[0].name);
+            } else {
+                callbacks.onStatus(new Status(CommonStatusCodes.ERROR));
             }
         });
     }
