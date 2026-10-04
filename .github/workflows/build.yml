@@ -90,6 +90,41 @@ jobs:
             cat "$ANDROID_HOME/platforms/android-35/source.properties"
             cat "$ANDROID_HOME/build-tools/35.0.0/source.properties"
           } > "$EVIDENCE_DIR/toolchain.log" 2>&1
+      - name: Add JDK HTTP server jar to the unit-test classpath
+        shell: bash
+        run: |
+          set -euo pipefail
+          module="$JAVA_HOME/jmods/jdk.httpserver.jmod"
+          test -f "$module"
+          module_dir="$EVIDENCE_DIR/jdk-httpserver-module"
+          mkdir -p "$module_dir"
+          "$JAVA_HOME/bin/jmod" extract --dir "$module_dir" "$module"
+          test -f "$module_dir/classes/com/sun/net/httpserver/HttpServer.class"
+          jar_file="$EVIDENCE_DIR/jdk-httpserver-test.jar"
+          "$JAVA_HOME/bin/jar" --create --file "$jar_file" -C "$module_dir/classes" com/sun/net/httpserver
+          test -s "$jar_file"
+          printf 'DOTT_JDK_HTTP_SERVER_JAR=%s\n' "$jar_file" >> "$GITHUB_ENV"
+          sha256sum "$module" "$jar_file" > "$EVIDENCE_DIR/jdk-httpserver-classpath.log"
+          cat > "$EVIDENCE_DIR/dott-test-classpath.init.gradle" <<'GRADLE'
+          gradle.projectsEvaluated {
+              def target = gradle.rootProject.findProject(':play-services-droidguard-core')
+              if (target == null) throw new GradleException('DroidGuard core project is missing.')
+              def jarPath = System.getenv('DOTT_JDK_HTTP_SERVER_JAR')
+              def jar = jarPath ? new File(jarPath) : null
+              if (jar == null || !jar.isFile()) throw new GradleException('Test-only JDK HTTP server jar is missing.')
+              target.dependencies.add('testImplementation', target.files(jar))
+              target.tasks.matching { it.name == 'compileDebugUnitTestKotlin' || it.name == 'compileDebugUnitTestJavaWithJavac' || it.name == 'testDebugUnitTest' }.configureEach {
+                  dependsOn(target.tasks.named('prepareHttpServerTestApi'))
+              }
+              target.tasks.named('testDebugUnitTest').configure {
+                  jvmArgs '--add-modules=jdk.httpserver'
+                  doFirst {
+                      println '--add-modules=jdk.httpserver'
+                      println 'DOTT_TEST_ONLY_CLASS_PATH=' + jarPath
+                  }
+              }
+          }
+          GRADLE
       - name: Run normal DroidGuard module unit-test task
         id: build
         shell: bash
@@ -98,7 +133,8 @@ jobs:
           export DOTT_BUILD_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           export DOTT_BUILD_STARTED_EPOCH="$(date +%s)"
           set +e
-          ./gradlew --no-daemon --console=plain --max-workers=1 --no-parallel --info \
+          ./gradlew --no-daemon --console=plain --max-workers=1 --no-parallel --info --stacktrace \
+            -I "$EVIDENCE_DIR/dott-test-classpath.init.gradle" \
             '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pkotlin.compiler.execution.strategy=in-process \
             :play-services-droidguard-core:testDebugUnitTest \
@@ -115,9 +151,10 @@ jobs:
                    "exit_code":int(os.environ["DOTT_BUILD_EXIT"]),
                    "source_commit":os.environ["VALIDATION_SOURCE_SHA"],"source_tree":os.environ["VALIDATION_SOURCE_TREE"],
                    "tasks":[":play-services-droidguard-core:testDebugUnitTest"],
-                   "test_filters":[],"init_scripts":[],"source_patch":[],"apk_assembly":False,
+                   "test_filters":[],"init_scripts":["dott-test-classpath.init.gradle"],"source_patch":[],"apk_assembly":False,
                    "gradle_jvmargs":"-Xmx3g -XX:MaxMetaspaceSize=768m","max_workers":1,
-                   "kotlin_compiler_execution_strategy":"in-process"}
+                   "kotlin_compiler_execution_strategy":"in-process",
+                   "test_classpath":"jdk.httpserver jar on testImplementation plus pinned prepareHttpServerTestApi"}
           (Path(os.environ["EVIDENCE_DIR"])/"build.json").write_text(json.dumps(receipt,indent=2)+"\n")
           print(json.dumps(receipt))
           PY
