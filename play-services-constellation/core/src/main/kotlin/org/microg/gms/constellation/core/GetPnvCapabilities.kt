@@ -77,9 +77,13 @@ suspend fun handleGetPnvCapabilities(
                     emptyList()
                 }
 
-                // TODO: Reflection should be used to call telephonyManager.getSubscriberId(it.subscriptionId) for SDK < N
                 val subscriberIdDigest = MessageDigest.getInstance("SHA-256")
-                    .digest(telephonyManager.subscriberId.orEmpty().toByteArray())
+                    .digest(
+                        telephonyManager
+                            .subscriberIdForSubscription(baseTelephonyManager, info.subscriptionId)
+                            .orEmpty()
+                            .toByteArray()
+                    )
                 val subscriberIdDigestEncoded =
                     Base64.encodeToString(subscriberIdDigest, Base64.NO_WRAP)
 
@@ -87,8 +91,9 @@ suspend fun handleGetPnvCapabilities(
                     info.simSlotIndex,
                     subscriberIdDigestEncoded,
                     carrierId,
-                    // TODO: SDK < N is TelephonyManager.getSimOperatorNameForSubscription
-                    telephonyManager.simOperatorName.orEmpty(),
+                    telephonyManager
+                        .simOperatorNameForSubscription(baseTelephonyManager, info.subscriptionId)
+                        .orEmpty(),
                     verificationCapabilities
                 )
             }
@@ -120,4 +125,42 @@ suspend fun handleGetPnvCapabilities(
             ApiMetadata.DEFAULT
         )
     }
+}
+
+/**
+ * Reads the subscription's IMSI. On N+ this receiver was already created for the subscription via
+ * [TelephonyManager.createForSubscriptionId], so [TelephonyManager.getSubscriberId] is per-SIM.
+ * Pre-N exposes no public per-subscription accessor, so the hidden `getSubscriberId(int)` overload
+ * is invoked reflectively, falling back to the default subscription's value when unavailable.
+ */
+@SuppressLint("HardwareIds")
+private fun TelephonyManager.subscriberIdForSubscription(
+    baseTelephonyManager: TelephonyManager,
+    subscriptionId: Int
+): String? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+    subscriberId
+} else {
+    runCatching {
+        TelephonyManager::class.java
+            .getMethod("getSubscriberId", Int::class.javaPrimitiveType)
+            .invoke(baseTelephonyManager, subscriptionId) as? String
+    }.getOrNull() ?: subscriberId
+}
+
+/**
+ * Reads the subscription's SIM operator name, mirroring [subscriberIdForSubscription]: per-SIM on
+ * N+, and the hidden `getSimOperatorNameForSubscription(int)` overload (with a default-subscription
+ * fallback) pre-N.
+ */
+private fun TelephonyManager.simOperatorNameForSubscription(
+    baseTelephonyManager: TelephonyManager,
+    subscriptionId: Int
+): String? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+    simOperatorName
+} else {
+    runCatching {
+        TelephonyManager::class.java
+            .getMethod("getSimOperatorNameForSubscription", Int::class.javaPrimitiveType)
+            .invoke(baseTelephonyManager, subscriptionId) as? String
+    }.getOrNull() ?: simOperatorName
 }
