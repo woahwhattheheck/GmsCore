@@ -51,7 +51,6 @@ class BleScannerImpl implements BleScanner {
                 }
             }
             activeCb = null;
-            scanning = false;
         } else {
             if (leScanCallback != null) {
                 btAdapter.stopLeScan(leScanCallback);
@@ -60,6 +59,7 @@ class BleScannerImpl implements BleScanner {
             currentListener = null;
             targetAddress = null;
         }
+        scanning = false;
         Log.d(TAG, "scan stopped");
     }
 
