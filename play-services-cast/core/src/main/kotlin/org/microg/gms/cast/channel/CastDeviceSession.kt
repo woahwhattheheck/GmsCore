@@ -193,7 +193,8 @@ class CastDeviceSession(
     }
 
     /** Attach to a running application. A null [appId] or [sessionId] matches any. */
-    fun joinApplication(appId: String?, sessionId: String?) = post {
+    @JvmOverloads
+    fun joinApplication(appId: String?, sessionId: String?, connectionType: Int = 0) = post {
         requestReceiver(JSONObject().put("type", "GET_STATUS")) { reply ->
             if (reply == null) {
                 callbacks.onApplicationConnectionFailed(STATUS_TIMEOUT)
@@ -207,7 +208,7 @@ class CastDeviceSession(
             val running = receiverStatus?.applications?.firstOrNull {
                 (appId.isNullOrEmpty() || it.appId == appId) && (sessionId.isNullOrEmpty() || it.sessionId == sessionId)
             }
-            if (running != null) attachApplication(running, false)
+            if (running != null) attachApplication(running, false, connectionType)
             else callbacks.onApplicationConnectionFailed(STATUS_APPLICATION_NOT_RUNNING)
         }
     }
@@ -293,9 +294,9 @@ class CastDeviceSession(
         }
     }
 
-    private fun attachApplication(app: ReceiverApplication, wasLaunched: Boolean) {
+    private fun attachApplication(app: ReceiverApplication, wasLaunched: Boolean, connectionType: Int = 0) {
         try {
-            channel?.connectTransport(app.transportId) ?: throw IOException("Not connected")
+            channel?.connectTransport(app.transportId, connectionType) ?: throw IOException("Not connected")
         } catch (e: IOException) {
             callbacks.onApplicationConnectionFailed(STATUS_NETWORK_ERROR)
             return

@@ -56,6 +56,44 @@ class CastDeviceSessionJoinTest {
             assertTrue(harness.callbacks.failures.isEmpty())
             assertEquals(listOf("fresh-transport"), harness.callbacks.connected.map { it.transportId })
             assertEquals(listOf("fresh-transport"), harness.transportConnections())
+            assertEquals(listOf(0), harness.transportConnectionTypes())
+        }
+    }
+
+    @Test
+    fun joinForwardsEachRequestedConnectionTypeToTheApplication() {
+        for (connectionType in listOf(0, 1, 2)) {
+            Harness().use { harness ->
+                val requestId = harness.beginJoin(connectionType)
+                harness.receive(receiverStatus("application-transport").put("requestId", requestId))
+
+                harness.assertConnected("application-transport", false)
+                assertEquals(listOf(connectionType), harness.transportConnectionTypes())
+            }
+        }
+    }
+
+    @Test
+    fun anExistingTransportKeepsItsModeUntilItIsClosed() {
+        Harness().use { harness ->
+            harness.receive(receiverStatus("application-transport").put("requestId", harness.beginJoin(2)))
+            assertEquals(listOf(2), harness.transportConnectionTypes())
+
+            harness.receive(receiverStatus("application-transport").put("requestId", harness.beginJoin(0)))
+            assertTrue(harness.transportConnections().isEmpty())
+
+            harness.leaveApplication()
+            harness.receive(receiverStatus("application-transport").put("requestId", harness.beginJoin()))
+            assertEquals(listOf(0), harness.transportConnectionTypes())
+        }
+    }
+
+    @Test
+    fun applicationJoinOptionsCannotMakeThePlatformConnectionInvisible() {
+        Harness().use { harness ->
+            harness.connectPlatform(2)
+            assertEquals(listOf(RECEIVER_ID), harness.transportConnections())
+            assertEquals(listOf(0), harness.transportConnectionTypes())
         }
     }
 
@@ -202,11 +240,20 @@ class CastDeviceSessionJoinTest {
             awaitIdle()
         }
 
-        fun beginJoin(): Long {
-            session.joinApplication(APP_ID, null)
+        fun beginJoin(connectionType: Int? = null): Long {
+            if (connectionType == null) session.joinApplication(APP_ID, null)
+            else session.joinApplication(APP_ID, null, connectionType)
             awaitIdle()
             return takeReceiverRequest("GET_STATUS")
         }
+
+        fun leaveApplication() {
+            session.leaveApplication()
+            awaitIdle()
+            output.reset()
+        }
+
+        fun connectPlatform(connectionType: Int) = channel.connectTransport(RECEIVER_ID, connectionType)
 
         fun beginLaunch(relaunchIfRunning: Boolean): Long {
             session.launchApplication(APP_ID, relaunchIfRunning, null)
@@ -228,6 +275,10 @@ class CastDeviceSessionJoinTest {
         fun transportConnections(): List<String> = outgoing()
             .filter { it.namespace == NAMESPACE_CONNECTION && JSONObject(it.payload_utf8!!).optString("type") == "CONNECT" }
             .map { it.destination_id }
+
+        fun transportConnectionTypes(): List<Int> = outgoing()
+            .filter { it.namespace == NAMESPACE_CONNECTION && JSONObject(it.payload_utf8!!).optString("type") == "CONNECT" }
+            .map { JSONObject(it.payload_utf8!!).optInt("connType", -1) }
 
         fun assertFailed(statusCode: Int) {
             assertEquals(emptyList<String>(), callbacks.connected.map { it.transportId })

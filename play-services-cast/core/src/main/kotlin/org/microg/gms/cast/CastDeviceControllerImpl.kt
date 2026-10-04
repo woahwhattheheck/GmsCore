@@ -207,7 +207,7 @@ class CastDeviceControllerImpl(
         )
 
     override fun joinApplication(applicationId: String?, sessionId: String?, joinOptions: JoinOptions?) =
-        session.joinApplication(applicationId, sessionId)
+        session.joinApplication(applicationId, sessionId, joinOptions?.connectionType ?: 0)
 
     // Session events, called on the session thread of the current session
 

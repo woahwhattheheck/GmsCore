@@ -133,11 +133,14 @@ class CastChannel(
     }
 
     /** Opens the virtual connection to [transportId] (a launched application) if it is not open yet. */
+    @JvmOverloads
     @Throws(IOException::class)
-    fun connectTransport(transportId: String) {
+    fun connectTransport(transportId: String, connectionType: Int = 0) {
         synchronized(lock) {
             if (connectedTransports.contains(transportId)) return
-            writeLocked(transportId, NAMESPACE_CONNECTION, CONNECT_PAYLOAD)
+            // The receiver platform connection is always strong; the client selects the application connection type.
+            val type = if (transportId == RECEIVER_ID) 0 else connectionType
+            writeLocked(transportId, NAMESPACE_CONNECTION, """{"type":"CONNECT","connType":$type,"origin":{}}""")
             connectedTransports.add(transportId)
         }
     }
@@ -269,7 +272,7 @@ class CastChannel(
         const val CONNECT_TIMEOUT_MILLIS = 10_000
         const val HEARTBEAT_INTERVAL_MILLIS = 5_000L
         const val HEARTBEAT_TIMEOUT_MILLIS = 20_000L
-        private const val CONNECT_PAYLOAD = """{"type":"CONNECT","origin":{}}"""
+        private const val CONNECT_PAYLOAD = """{"type":"CONNECT","connType":0,"origin":{}}"""
         private const val CLOSE_PAYLOAD = """{"type":"CLOSE"}"""
         private const val PING_PAYLOAD = """{"type":"PING"}"""
         private const val PONG_PAYLOAD = """{"type":"PONG"}"""
