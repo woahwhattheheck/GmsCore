@@ -265,6 +265,15 @@ public class SessionManagerImpl extends ISessionManager.Stub {
     }
 
     public void onRouteAdded(String routeId) {
+        if (currentSession != null && currentSession.isSuspended() && TextUtils.equals(routeId, currentSession.getRouteId())) {
+            Log.d(TAG, "Suspended session route " + routeId + " is available again, selecting it");
+            try {
+                castContext.getRouter().selectRouteById(routeId);
+            } catch (RemoteException e) {
+                Log.w(TAG, "Error selecting suspended route " + routeId + ": " + e.getMessage());
+            }
+            return;
+        }
         if (currentSession == null && resumeRouteId != null && TextUtils.equals(routeId, resumeRouteId)) {
             if (SystemClock.elapsedRealtime() >= resumeDeadline) {
                 clearPendingResume();
