@@ -96,7 +96,7 @@ public class CastSessionImpl extends ICastSession.Stub {
         Log.d(TAG, "onApplicationConnectionSuccess: " + sessionId + " launched=" + wasLaunched);
         this.applicationSessionId = sessionId;
         if (session.isResuming()) {
-            session.notifySessionResumed(false);
+            session.notifySessionResumed(session.wasSuspendedBeforeResume());
         } else if (session.isSuspended()) {
             session.notifySessionResumed(true);
         } else {
