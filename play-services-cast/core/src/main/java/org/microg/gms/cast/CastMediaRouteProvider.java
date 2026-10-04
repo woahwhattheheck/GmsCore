@@ -537,7 +537,7 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
         if (id == null) return;
         CastRoute route = routes.get(id);
         // Keep a route that is in use; it is removed once its controller disconnects.
-        if (route != null && !isInUse(route)) {
+        if (route != null && !isInUse(route) && !serviceCastIds.containsValue(id)) {
             routes.remove(id);
             Log.d(TAG, "Lost Cast device " + id);
             publishRoutes();
