@@ -19,6 +19,12 @@ internal class RemoteDroidGuardHttpClient(
     private val openConnection: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection }
 ) {
     fun post(path: String?, query: Map<String, String>, body: ByteArray?): String {
+        if (body != null && body.size > MAX_REQUEST_BODY_BYTES) {
+            throw IOException("Remote DroidGuard request body exceeds the adapter limit")
+        }
+        if (body != null && fieldCount(body) > MAX_BODY_FIELDS) {
+            throw IOException("Remote DroidGuard request body exceeds the adapter field limit")
+        }
         val connection = openConnection(URL(buildUrl(baseUrl, path, query)))
         try {
             connection.connectTimeout = timeoutMillis.coerceAtLeast(1)
@@ -55,6 +61,19 @@ internal class RemoteDroidGuardHttpClient(
     }
 
     companion object {
+        // Request bounds from server/droidguard_server.py: a request that can
+        // never be accepted fails before any connection work, not at the wire.
+        private const val MAX_REQUEST_TARGET_BYTES = 8 * 1024
+        private const val MAX_REQUEST_BODY_BYTES = 32 * 1024
+        private const val MAX_QUERY_FIELDS = 128
+        private const val MAX_BODY_FIELDS = 256
+
+        private fun fieldCount(target: String): Int =
+            if (target.isEmpty()) 0 else target.count { it == '&' } + 1
+
+        private fun fieldCount(body: ByteArray): Int =
+            if (body.isEmpty()) 0 else body.count { it == '&'.code.toByte() } + 1
+
         fun encodeForm(fields: Map<Any?, Any?>?): ByteArray {
             val encoded = fields.orEmpty().entries.mapNotNull { entry ->
                 val key = entry.key?.toString() ?: return@mapNotNull null
@@ -77,6 +96,13 @@ internal class RemoteDroidGuardHttpClient(
                 queryParts += "${encodeComponent(key)}=${encodeComponent(value)}"
             }
             val fullQuery = if (queryParts.isEmpty()) "" else "?${queryParts.joinToString("&")}" 
+            val requestTarget = "$fullPath$fullQuery"
+            if (requestTarget.toByteArray(StandardCharsets.UTF_8).size > MAX_REQUEST_TARGET_BYTES) {
+                throw IOException("Remote DroidGuard request URL exceeds the adapter limit")
+            }
+            if (fieldCount(fullQuery) > MAX_QUERY_FIELDS) {
+                throw IOException("Remote DroidGuard request URL exceeds the adapter field limit")
+            }
             return "${base.scheme}://${base.rawAuthority}$fullPath$fullQuery"
         }
 
