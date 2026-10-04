@@ -1,0 +1,183 @@
+# Additive diagnostics workflow for microg/GmsCore PR #3851 (RCS-2994 Constellation).
+# Owner-facing copy. Intended path on the owner-fork validation branch:
+#   .github/workflows/rcs-constellation-lint-report.yml
+#
+# Purpose: run the existing constellation-core unit tests and
+# :play-services-constellation-core:lintDebug against the exact push commit and
+# preserve the COMPLETE lint reports (text/XML/HTML), test XML, and receipt as
+# a workflow artifact — including when lint fails.
+# The upstream console log exposes only "First failure" (1 of 3 errors); the
+# artifact this workflow uploads is the evidence source for the remaining
+# diagnostics and for verifying the API-contract candidate.
+#
+# This file does NOT modify .github/workflows/build.yml, adds no secrets,
+# disables no checks, and does not turn a lint failure into a passing job:
+# the lint step's nonzero exit remains the job result.
+
+name: "RCS constellation-core lint diagnostics"
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - "validation/rcs3851-api19-lint-20261004"
+
+env:
+  GRADLE_MICROG_VERSION_WITHOUT_GIT: 1
+  MODULE_DIR: "play-services-constellation/core"
+  LINT_TASK: ":play-services-constellation-core:lintDebug"
+  TEST_TASK: ":play-services-constellation-core:testDebugUnitTest"
+  OUT_DIR: "lint-diagnostics"
+
+jobs:
+  lint-debug-diagnostics:
+    name: "constellation-core lintDebug (report-retaining)"
+    if: github.repository == 'woahwhattheheck/GmsCore' && github.ref == 'refs/heads/validation/rcs3851-api19-lint-20261004'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Free disk space"
+        run: |
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/hostedtoolcache/go
+          df -h
+
+      - name: "Checkout pinned source"
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: "Verify pinned source commit and tree"
+        run: |
+          actual_commit="$(git rev-parse HEAD)"
+          actual_tree="$(git rev-parse 'HEAD^{tree}')"
+          echo "checked out commit: ${actual_commit}"
+          echo "checked out tree:   ${actual_tree}"
+          test "${actual_commit}" = "${GITHUB_SHA}"
+          echo "source_commit=${actual_commit}" >> "$GITHUB_OUTPUT"
+          echo "source_tree=${actual_tree}" >> "$GITHUB_OUTPUT"
+
+      - name: "Setup Java"
+        uses: actions/setup-java@v6
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: "Setup Gradle"
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: "Setup matchers"
+        run: |
+          matchers_dir='${{ github.workspace }}/.github/matchers'
+          matcher_list()
+          {
+            echo 'gradle-build-matcher.json'
+            echo 'gradle-build-kotlin-error-matcher.json'
+          }
+
+          matcher_list | while IFS='' read -r NAME; do
+            if test -f "${matchers_dir:?}/${NAME:?}"; then
+              echo "::add-matcher::${matchers_dir:?}/${NAME:?}"
+              echo "Matcher configured: ${NAME:?}"
+            fi
+          done
+
+      - name: "Run constellation-core unit tests"
+        id: tests
+        if: always()
+        run: |
+          mkdir -p "${OUT_DIR}"
+          set +e
+          ./gradlew --no-daemon --console=plain --max-workers=1 --no-parallel \
+            "${TEST_TASK}" 2>&1 | tee "${OUT_DIR}-tests-console.txt"
+          test_exit="${PIPESTATUS[0]}"
+          echo "${test_exit}" > "${OUT_DIR}/test-exit.txt"
+          exit "${test_exit}"
+
+      - name: "Execute Gradle lint (module-scoped)"
+        id: lint
+        if: always()
+        run: |
+          set -o pipefail
+          mkdir -p "${OUT_DIR}"
+          set +e
+          ./gradlew --no-daemon --console=plain --max-workers=1 --no-parallel \
+            "${LINT_TASK}" 2>&1 | tee "${OUT_DIR}-lint-console.txt"
+          lint_exit="${PIPESTATUS[0]}"
+          echo "${lint_exit}" > "${OUT_DIR}/lint-exit.txt"
+          exit "${lint_exit}"
+        # NOTE: no continue-on-error, no || true, no exit-code rewrite.
+        # A nonzero lint exit fails this step and therefore the job.
+        # The collection, receipt, and upload steps below use if: always()
+        # so the report is still preserved.
+
+      - name: "Collect lint report outputs"
+        if: always()
+        run: |
+          set -u
+          mkdir -p "${OUT_DIR}"
+          if [ -f "${OUT_DIR}-tests-console.txt" ]; then
+            cp "${OUT_DIR}-tests-console.txt" "${OUT_DIR}/tests-console.txt"
+          fi
+          if [ -f "${OUT_DIR}-lint-console.txt" ]; then
+            cp "${OUT_DIR}-lint-console.txt" "${OUT_DIR}/lint-console.txt"
+          fi
+          # Primary expected outputs (paths observed in CI run 37212087812 logs):
+          #   ${MODULE_DIR}/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+          #   ${MODULE_DIR}/build/reports/lint-results-debug.xml
+          #   ${MODULE_DIR}/build/reports/lint-results-debug.html
+          found=0
+          while IFS= read -r f; do
+            found=$((found + 1))
+            dest="${OUT_DIR}/$(echo "${f}" | sed 's|/|__|g')"
+            cp "${f}" "${dest}"
+            echo "collected: ${f} -> ${dest}"
+          done < <(find "${MODULE_DIR}/build" -type f \
+              \( -name 'lint-results-debug*.txt' \
+              -o -name 'lint-results-debug*.xml' \
+              -o -name 'lint-results-debug*.html' \
+              -o -name 'lint-results*.sarif' \
+              -o -path '*/test-results/testDebugUnitTest/TEST-*.xml' \) 2>/dev/null | sort)
+          echo "collected_files=${found}" | tee "${OUT_DIR}/collected-count.txt"
+
+      - name: "Write source/run/hash receipt"
+        if: always()
+        run: |
+          set -u
+          RECEIPT="${OUT_DIR}/receipt.txt"
+          {
+            echo "RCS-3851 constellation-core lint diagnostics receipt"
+            echo "=================================================="
+            echo "repository:          ${{ github.repository }}"
+            echo "workflow:            ${{ github.workflow }}"
+            echo "workflow_ref:        ${{ github.workflow_ref }}"
+            echo "run_id:              ${{ github.run_id }}"
+            echo "run_number:          ${{ github.run_number }}"
+            echo "run_attempt:         ${{ github.run_attempt }}"
+            echo "run_url:             ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "event_name:          ${{ github.event_name }}"
+            echo "ref_checked_out:     $(git rev-parse HEAD)"
+            echo "tree_checked_out:    $(git rev-parse 'HEAD^{tree}')"
+            echo "event_commit:        ${GITHUB_SHA}"
+            echo "event_tree:          $(git rev-parse 'HEAD^{tree}')"
+            echo "gradle_task:         ${LINT_TASK}"
+            echo "test_task:           ${TEST_TASK}"
+            echo "test_step_outcome:   ${{ steps.tests.outcome }}"
+            echo "lint_step_outcome:   ${{ steps.lint.outcome }}"
+            echo "receipt_written_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } | tee "${RECEIPT}"
+          (cd "${OUT_DIR}" && find . -maxdepth 1 -type f ! -name 'SHA256SUMS' ! -name 'receipt.txt' -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS)
+          echo "Report/test hashes written to ${OUT_DIR}/SHA256SUMS."
+
+      - name: "Upload lint diagnostics artifact"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "rcs-constellation-lint-report-run${{ github.run_id }}-attempt${{ github.run_attempt }}"
+          path: "${{ env.OUT_DIR }}/"
+          if-no-files-found: error
+          retention-days: 30

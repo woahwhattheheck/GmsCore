@@ -26,12 +26,14 @@ import com.google.android.gms.constellation.internal.IConstellationCallbacks
 import com.squareup.wire.Instant
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.microg.gms.constellation.core.proto.RcsState
+import org.microg.gms.constellation.core.proto.ServerTimestamp
 import org.microg.gms.constellation.core.proto.VerifiedPhoneNumber
 import org.microg.gms.settings.SettingsContract
 import org.robolectric.RobolectricTestRunner
@@ -252,5 +254,47 @@ class VerifyPhoneNumberLocalReadTest {
 
         assertEquals("empty local state must use the RPC", 1, remote.calls)
         assertEquals(1, callbacks.deliveries)
+    }
+
+    @Test
+    fun nextSyncDeadlineMillis_appliesServerReportedOffset() {
+        // GMS stores the next sync deadline as local wall clock plus the offset between the
+        // server-provided deadline and the server-reported current time.
+        val serverNow = 1_800_000_000_000L
+        val before = System.currentTimeMillis()
+        val deadline = ConstellationStateStore.nextSyncDeadlineMillis(
+            ServerTimestamp(
+                timestamp = Instant.ofEpochMilli(serverNow + 600_000L),
+                now = Instant.ofEpochMilli(serverNow)
+            )
+        )
+        val after = System.currentTimeMillis()
+
+        assertNotNull("both timestamp fields present must yield a deadline", deadline)
+        assertTrue(
+            "deadline must equal local-now plus the 600s server offset",
+            deadline!! in (before + 600_000L)..(after + 600_000L)
+        )
+    }
+
+    @Test
+    fun nextSyncDeadlineMillis_missingTimestamps_returnsNull() {
+        val serverNow = Instant.ofEpochMilli(1_800_000_000_000L)
+        assertNull(
+            "absent next-sync timestamp must not establish freshness",
+            ConstellationStateStore.nextSyncDeadlineMillis(null)
+        )
+        assertNull(
+            "missing server timestamp must not establish freshness",
+            ConstellationStateStore.nextSyncDeadlineMillis(
+                ServerTimestamp(timestamp = null, now = serverNow)
+            )
+        )
+        assertNull(
+            "missing server-reported now must not establish freshness",
+            ConstellationStateStore.nextSyncDeadlineMillis(
+                ServerTimestamp(timestamp = serverNow, now = null)
+            )
+        )
     }
 }
