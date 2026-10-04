@@ -9,6 +9,7 @@ import android.annotation.SuppressLint
 import android.os.Bundle
 import android.util.Log
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.fragment.findNavController
 import androidx.preference.EditTextPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
@@ -59,6 +60,7 @@ class WearConfigFragment : PreferenceFragmentCompat() {
         configEnabledPreference.onPreferenceChangeListener =
             Preference.OnPreferenceChangeListener { _, newValue ->
                 val config = database.getConfiguration(configName)
+                    ?: return@OnPreferenceChangeListener false
                 config.enabled = newValue as Boolean
                 database.putConfiguration(config)
                 database.close()
@@ -68,6 +70,7 @@ class WearConfigFragment : PreferenceFragmentCompat() {
         configAddressPreference.onPreferenceChangeListener =
             Preference.OnPreferenceChangeListener { _, newValue ->
                 val config = database.getConfiguration(configName)
+                    ?: return@OnPreferenceChangeListener false
                 config.address = newValue as String
                 database.putConfiguration(config)
                 database.close()
@@ -78,6 +81,7 @@ class WearConfigFragment : PreferenceFragmentCompat() {
             Preference.OnPreferenceChangeListener { _, newValue ->
                 Log.d(TAG, "PackageName changed: $newValue")
                 val config = database.getConfiguration(configName)
+                    ?: return@OnPreferenceChangeListener false
                 config.packageName = newValue as String
                 database.putConfiguration(config)
                 database.close()
@@ -103,8 +107,8 @@ class WearConfigFragment : PreferenceFragmentCompat() {
             withContext(Dispatchers.IO) {
                 database.deleteConfiguration(configName)
                 database.close()
-                // TODO: Leave fragment
             }
+            findNavController().popBackStack()
         }
     }
 

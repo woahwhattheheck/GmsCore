@@ -26,6 +26,7 @@ class WearFragment : PreferenceFragmentCompat() {
     private lateinit var wearConnectionsAll: Preference
     private lateinit var wearConnectionsNone: Preference
     private lateinit var database: ConfigurationDatabaseHelper
+    private var showAllConnections = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,6 +45,12 @@ class WearFragment : PreferenceFragmentCompat() {
             preferenceScreen.findPreference("pref_wear_connections_all") ?: wearConnectionsAll
         wearConnectionsNone =
             preferenceScreen.findPreference("pref_wear_connections_none") ?: wearConnectionsNone
+
+        wearConnectionsAll.onPreferenceClickListener = Preference.OnPreferenceClickListener {
+            showAllConnections = true
+            updateContent()
+            true
+        }
 
         val recreateBtn =
             preferenceScreen.findPreference<Preference>("pref_recreate_connection_table")
@@ -85,7 +92,8 @@ class WearFragment : PreferenceFragmentCompat() {
 
             val (configs, showAll) = withContext(Dispatchers.IO) {
                 val configs = database.allConfigurations
-                val res = configs.take(3).mapIndexed { idx, config ->
+                val visibleConfigs = if (showAllConnections) configs.toList() else configs.take(3)
+                val res = visibleConfigs.mapIndexed { idx, config ->
                     val pref = WearConfigPreference(context)
                     pref.order = idx
                     pref.connectionConfig = config

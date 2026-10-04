@@ -1786,10 +1786,12 @@ public class WearableServiceImpl extends IWearableService.Stub {
     @Override
     public void syncWifiCredentialWithSsid(IWearableCallbacks callbacks, String ssid, String password) throws RemoteException {
         Log.d(TAG, "unimplemented Method: syncWifiCredentialWithSsid");
+        postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
     }
     @Override
     public void syncWifiCredentialForNode(IWearableCallbacks callbacks, String nodeId) throws RemoteException {
         Log.d(TAG, "unimplemented Method: syncWifiCredentialForNode");
+        postMain(callbacks, () -> callbacks.onStatus(new Status(WEAR_FEATURE_DISABLED)));
     }
 
     /*
