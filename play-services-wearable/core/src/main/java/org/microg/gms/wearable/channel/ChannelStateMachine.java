@@ -281,9 +281,8 @@ public class ChannelStateMachine {
                 Log.d(TAG, "Created send buffer of size " + DEFAULT_CHUNK_SIZE);
             }
 
-            if (sendOffset > 0) {
-                skipBytes(sendOffset);
-                sendOffset = 0;
+            if (sendOffset > 0 && !skipBytes()) {
+                return;
             }
 
             sendBuffer.clear();
@@ -360,18 +359,22 @@ public class ChannelStateMachine {
 
     }
 
-    private void skipBytes(long skip) throws IOException {
+    private boolean skipBytes() throws IOException {
         byte[] temp = new byte[8192];
-        long remaining = skip;
 
-        while (remaining > 0) {
-            int toRead = (int) Math.min(temp.length, remaining);
+        while (sendOffset > 0) {
+            int toRead = (int) Math.min(temp.length, sendOffset);
             int read = transport.read(outputFd, temp, 0, toRead);
             if (read < 0) {
                 throw new IOException("EOF while skipping bytes");
             }
-            remaining -= read;
+            // The transport is non-blocking. Yield the shared pump until more
+            // input arrives, retaining progress so the next pass skips only
+            // the remaining prefix rather than discarding payload bytes.
+            if (read == 0) return false;
+            sendOffset -= read;
         }
+        return true;
     }
 
     private void onAckTimeout() {
