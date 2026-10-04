@@ -263,6 +263,8 @@ public class SessionImpl extends ISession.Stub {
         if (state != STATE_ENDING && sessionManager != null) {
             this.state = STATE_ENDING;
             sessionManager.onSessionEnding(this);
+            // A listener may have completed the session synchronously.
+            if (state == STATE_ENDED) return;
         }
         this.state = STATE_ENDED;
         if (sessionManager != null) sessionManager.onSessionEnded(this, error);
