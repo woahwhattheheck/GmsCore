@@ -103,7 +103,10 @@ private suspend fun MoChallenge.sendOnce(context: Context, subId: Int): Challeng
         context,
         messageId.hashCode(),
         sentIntent,
-        PendingIntent.FLAG_ONE_SHOT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+        // Must be mutable: the telephony stack reports the send failure cause by filling in the
+        // "errorCode" extra, and fill-in extras are dropped for immutable PendingIntents. The
+        // intent is explicit (package set), so a mutable PendingIntent is safe here.
+        PendingIntent.FLAG_ONE_SHOT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
     )
 
     Log.d(TAG, "Sending MO SMS to $proxy_number with messageId: $messageId")
