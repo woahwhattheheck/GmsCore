@@ -198,22 +198,23 @@ private fun performOdsaRequest(
         .build()
 
     return try {
-        val response = okHttpClient.newCall(request).execute()
-        httpHistory += "RESP ${response.code} ${request.url}"
-        if (response.isSuccessful) {
-            response.body?.string()
-                ?: throw Ts43ApiException(
-                    errorCode = errorCode(32),
+        okHttpClient.newCall(request).execute().use { response ->
+            httpHistory += "RESP ${response.code} ${request.url}"
+            if (response.isSuccessful) {
+                response.body?.string()
+                    ?: throw Ts43ApiException(
+                        errorCode = errorCode(32),
+                        httpStatus = response.code,
+                        requestType = requestType
+                    )
+            } else {
+                Log.w(TAG, "ODSA request failed: ${response.code} for ${op.operation}")
+                throw Ts43ApiException(
+                    errorCode = errorCode(31),
                     httpStatus = response.code,
                     requestType = requestType
                 )
-        } else {
-            Log.w(TAG, "ODSA request failed: ${response.code} for ${op.operation}")
-            throw Ts43ApiException(
-                errorCode = errorCode(31),
-                httpStatus = response.code,
-                requestType = requestType
-            )
+            }
         }
     } catch (e: IOException) {
         Log.e(TAG, " Network error in ODSA request", e)
@@ -275,49 +276,51 @@ private fun buildOdsaRequestPayload(
             )
         }
 
-        val body = response.body?.string() ?: return null
-        httpHistory += "RESP ${response.code} ${currentRequest.url}"
-        if (!response.isSuccessful) {
-            Log.w(TAG, "EAP round $round failed with code ${response.code}")
-            throw Ts43ApiException(
-                errorCode = errorCode(31),
-                httpStatus = response.code,
-                requestType = Ts43ChallengeResponseError.RequestType.TS43_REQUEST_TYPE_AUTH_API
-            )
-        }
-
-        val token = extractAuthToken(body)
-        if (token != null) {
-            return req.copy(authentication_token = token)
-        }
-
-        val eapRelayPacket = extractEapRelayPacket(body)
-            ?: throw Ts43ApiException(
-                errorCode = errorCode(32),
-                httpStatus = response.code,
-                requestType = Ts43ChallengeResponseError.RequestType.TS43_REQUEST_TYPE_AUTH_API
-            )
-
-        val akaResponse = eapAkaService.performSimAkaAuth(eapRelayPacket, imsi, mccMnc)
-            ?: return null
-
-        val postBody = JSONObject().put("eap-relay-packet", akaResponse).toString()
-        currentRequest = Request.Builder()
-            .url(postUrl)
-            .header(
-                "Accept",
-                "application/vnd.gsma.eap-relay.v1.0+json, text/vnd.wap.connectivity-xml"
-            )
-            .header("User-Agent", userAgent)
-            .header("Content-Type", "application/vnd.gsma.eap-relay.v1.0+json")
-            .header("Accept-Language", acceptLanguage)
-            .post(
-                postBody.toByteArray().toRequestBody(
-                    "application/vnd.gsma.eap-relay.v1.0+json".toMediaType()
+        response.use {
+            val body = response.body?.string() ?: return null
+            httpHistory += "RESP ${response.code} ${currentRequest.url}"
+            if (!response.isSuccessful) {
+                Log.w(TAG, "EAP round $round failed with code ${response.code}")
+                throw Ts43ApiException(
+                    errorCode = errorCode(31),
+                    httpStatus = response.code,
+                    requestType = Ts43ChallengeResponseError.RequestType.TS43_REQUEST_TYPE_AUTH_API
                 )
-            )
-            .build()
-        httpHistory += "POST $postUrl"
+            }
+
+            val token = extractAuthToken(body)
+            if (token != null) {
+                return req.copy(authentication_token = token)
+            }
+
+            val eapRelayPacket = extractEapRelayPacket(body)
+                ?: throw Ts43ApiException(
+                    errorCode = errorCode(32),
+                    httpStatus = response.code,
+                    requestType = Ts43ChallengeResponseError.RequestType.TS43_REQUEST_TYPE_AUTH_API
+                )
+
+            val akaResponse = eapAkaService.performSimAkaAuth(eapRelayPacket, imsi, mccMnc)
+                ?: return null
+
+            val postBody = JSONObject().put("eap-relay-packet", akaResponse).toString()
+            currentRequest = Request.Builder()
+                .url(postUrl)
+                .header(
+                    "Accept",
+                    "application/vnd.gsma.eap-relay.v1.0+json, text/vnd.wap.connectivity-xml"
+                )
+                .header("User-Agent", userAgent)
+                .header("Content-Type", "application/vnd.gsma.eap-relay.v1.0+json")
+                .header("Accept-Language", acceptLanguage)
+                .post(
+                    postBody.toByteArray().toRequestBody(
+                        "application/vnd.gsma.eap-relay.v1.0+json".toMediaType()
+                    )
+                )
+                .build()
+            httpHistory += "POST $postUrl"
+        }
     }
 
     return null
