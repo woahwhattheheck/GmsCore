@@ -349,10 +349,6 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
             remotePlaybackSessionId = sessionId;
             remotePlaybackApplicationId = applicationId;
             stopApplicationWhenSessionEnds = stopWhenEnds;
-            if (sessionConnected && pendingSessionStart == null) {
-                callback.onResult(sessionStatusBundle(sessionId, MediaSessionStatus.SESSION_STATE_ACTIVE));
-                return true;
-            }
         }
         CastDeviceSession target = usableSession();
         if (target == null) {

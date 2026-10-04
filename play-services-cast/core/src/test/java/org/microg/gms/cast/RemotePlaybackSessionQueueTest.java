@@ -12,11 +12,22 @@ import androidx.mediarouter.media.MediaControlIntent;
 import androidx.mediarouter.media.MediaRouter;
 import androidx.mediarouter.media.MediaSessionStatus;
 import com.google.android.gms.cast.CastMediaControlIntent;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import okio.ByteString;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.microg.gms.cast.channel.CastChannel;
+import org.microg.gms.cast.channel.CastDeviceSession;
+import org.microg.gms.cast.proto.CastMessage;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 
@@ -89,29 +100,64 @@ public class RemotePlaybackSessionQueueTest {
     }
 
     @Test
-    public void startSessionCreatesActiveSessionStatus() throws Exception {
-        CastMediaRouteController controller = new CastMediaRouteController(null, "route", "192.168.1.40", 8009, 0);
-        field("sessionConnected").setBoolean(controller, true);
-        RecordingCallback result = new RecordingCallback();
-        Intent request = new Intent(MediaControlIntent.ACTION_START_SESSION)
-                .addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK)
-                .putExtra(CastMediaControlIntent.EXTRA_CAST_APPLICATION_ID, "CC1AD845");
-        assertTrue(controller.onControlRequest(request, result));
-        assertEquals(1, result.successes);
-        assertEquals(0, result.errors);
-        String sessionId = result.result.getString(MediaControlIntent.EXTRA_SESSION_ID);
-        assertFalse(sessionId == null || sessionId.isEmpty());
-        MediaSessionStatus status = MediaSessionStatus.fromBundle(
-                result.result.getBundle(MediaControlIntent.EXTRA_SESSION_STATUS));
-        assertEquals(MediaSessionStatus.SESSION_STATE_ACTIVE, status.getSessionState());
+    public void startSessionWaitsForReceiverApplicationBeforeReportingActive() throws Exception {
+        try (ConnectedReceiver receiver = new ConnectedReceiver()) {
+            CastMediaRouteController controller = receiver.controller;
+            RecordingCallback result = new RecordingCallback();
+            Intent request = new Intent(MediaControlIntent.ACTION_START_SESSION)
+                    .addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK)
+                    .putExtra(CastMediaControlIntent.EXTRA_CAST_APPLICATION_ID, "CC1AD845");
+            assertTrue(controller.onControlRequest(request, result));
+            receiver.drain();
+            assertEquals(0, result.successes);
+            assertEquals(0, result.errors);
+            JSONObject statusRequest = receiver.lastReceiverRequest();
+            assertEquals("GET_STATUS", statusRequest.getString("type"));
+            receiver.reply(new JSONObject().put("type", "RECEIVER_STATUS")
+                    .put("requestId", statusRequest.getLong("requestId"))
+                    .put("status", new JSONObject().put("applications", new JSONArray().put(
+                            new JSONObject().put("appId", "CC1AD845")
+                                    .put("sessionId", "receiver-session").put("transportId", "transport-1")))));
+            assertEquals(1, result.successes);
+            assertEquals(0, result.errors);
+            String sessionId = result.result.getString(MediaControlIntent.EXTRA_SESSION_ID);
+            assertFalse(sessionId == null || sessionId.isEmpty());
+            MediaSessionStatus status = MediaSessionStatus.fromBundle(
+                    result.result.getBundle(MediaControlIntent.EXTRA_SESSION_STATUS));
+            assertEquals(MediaSessionStatus.SESSION_STATE_ACTIVE, status.getSessionState());
 
-        RecordingCallback lookup = new RecordingCallback();
-        Intent getStatus = new Intent(MediaControlIntent.ACTION_GET_SESSION_STATUS)
-                .addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK)
-                .putExtra(MediaControlIntent.EXTRA_SESSION_ID, sessionId);
-        assertTrue(controller.onControlRequest(getStatus, lookup));
-        assertEquals(1, lookup.successes);
-        assertEquals(sessionId, lookup.result.getString(MediaControlIntent.EXTRA_SESSION_ID));
+            RecordingCallback lookup = new RecordingCallback();
+            Intent getStatus = new Intent(MediaControlIntent.ACTION_GET_SESSION_STATUS)
+                    .addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK)
+                    .putExtra(MediaControlIntent.EXTRA_SESSION_ID, sessionId);
+            assertTrue(controller.onControlRequest(getStatus, lookup));
+            assertEquals(1, lookup.successes);
+            assertEquals(sessionId, lookup.result.getString(MediaControlIntent.EXTRA_SESSION_ID));
+        }
+    }
+
+    @Test
+    public void startSessionRelaunchHonorsApplicationAndLanguageAndReportsLaunchFailure() throws Exception {
+        try (ConnectedReceiver receiver = new ConnectedReceiver()) {
+            RecordingCallback result = new RecordingCallback();
+            Intent request = new Intent(MediaControlIntent.ACTION_START_SESSION)
+                    .addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK)
+                    .putExtra(CastMediaControlIntent.EXTRA_CAST_APPLICATION_ID, "A1B2C3D4")
+                    .putExtra(CastMediaControlIntent.EXTRA_CAST_RELAUNCH_APPLICATION, true)
+                    .putExtra(CastMediaControlIntent.EXTRA_CAST_LANGUAGE_CODE, "fr");
+            assertTrue(receiver.controller.onControlRequest(request, result));
+            receiver.drain();
+            assertEquals(0, result.successes);
+            assertEquals(0, result.errors);
+            JSONObject launch = receiver.lastReceiverRequest();
+            assertEquals("LAUNCH", launch.getString("type"));
+            assertEquals("A1B2C3D4", launch.getString("appId"));
+            assertEquals("fr", launch.getString("language"));
+            receiver.reply(new JSONObject().put("type", "LAUNCH_ERROR")
+                    .put("requestId", launch.getLong("requestId")).put("reason", "NOT_FOUND"));
+            assertEquals(1, result.errors);
+            assertEquals(0, result.successes);
+        }
     }
 
     @Test
@@ -149,6 +195,68 @@ public class RemotePlaybackSessionQueueTest {
         Bundle extras = CastMediaRouteController.temporaryDisconnectExtras();
         assertEquals(CastMediaControlIntent.ERROR_CODE_TEMPORARILY_DISCONNECTED,
                 extras.getInt(CastMediaControlIntent.EXTRA_ERROR_CODE));
+    }
+
+    /** Actual session/channel code with an in-memory output; no network or receiver hardware. */
+    private static class ConnectedReceiver implements AutoCloseable {
+        private static final String RECEIVER_NAMESPACE = "urn:x-cast:com.google.cast.receiver";
+        final CastMediaRouteController controller =
+                new CastMediaRouteController(null, "route", "192.168.1.40", 8009, 0);
+        final ByteArrayOutputStream output = new ByteArrayOutputStream();
+        final CastDeviceSession session;
+        final ScheduledThreadPoolExecutor executor;
+
+        ConnectedReceiver() throws Exception {
+            Class<?> type = Class.forName(CastMediaRouteController.class.getName() + "$SessionCallbacks");
+            Constructor<?> constructor = type.getDeclaredConstructor(CastMediaRouteController.class);
+            constructor.setAccessible(true);
+            CastDeviceSession.Callbacks callbacks = (CastDeviceSession.Callbacks) constructor.newInstance(controller);
+            session = new CastDeviceSession("192.168.1.40", 8009, callbacks);
+            member(type, "session").set(callbacks, session);
+            field("session").set(controller, session);
+            field("sessionConnected").setBoolean(controller, true);
+            CastChannel channel = new CastChannel("192.168.1.40", 8009, session, "sender-0");
+            member(CastChannel.class, "output").set(channel, new DataOutputStream(output));
+            member(CastDeviceSession.class, "channel").set(session, channel);
+            executor = (ScheduledThreadPoolExecutor) member(CastDeviceSession.class, "executor").get(session);
+        }
+
+        void drain() throws Exception {
+            executor.submit(() -> {}).get(2, TimeUnit.SECONDS);
+        }
+
+        JSONObject lastReceiverRequest() throws Exception {
+            DataInputStream input = new DataInputStream(new ByteArrayInputStream(output.toByteArray()));
+            JSONObject request = null;
+            while (input.available() > 0) {
+                byte[] frame = new byte[input.readInt()];
+                input.readFully(frame);
+                CastMessage message = CastMessage.ADAPTER.decode(frame);
+                if (RECEIVER_NAMESPACE.equals(message.getNamespace())) {
+                    request = new JSONObject(message.getPayload_utf8());
+                }
+            }
+            if (request == null) throw new AssertionError("No receiver request was sent");
+            return request;
+        }
+
+        void reply(JSONObject reply) throws Exception {
+            session.onMessage(new CastMessage(CastMessage.ProtocolVersion.CASTV2_1_0,
+                    "receiver-0", "sender-0", RECEIVER_NAMESPACE, CastMessage.PayloadType.STRING,
+                    reply.toString(), null, ByteString.EMPTY));
+            drain();
+        }
+
+        @Override
+        public void close() {
+            executor.shutdownNow();
+        }
+    }
+
+    private static Field member(Class<?> type, String name) throws Exception {
+        Field field = type.getDeclaredField(name);
+        field.setAccessible(true);
+        return field;
     }
 
     private static class RecordingCallback extends MediaRouter.ControlRequestCallback {
