@@ -22,6 +22,7 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import com.google.android.gms.cast.CastDevice;
+import com.google.android.gms.cast.CastStatusCodes;
 import com.google.android.gms.cast.framework.ISession;
 import com.google.android.gms.cast.framework.ISessionProxy;
 import com.google.android.gms.dynamic.IObjectWrapper;
@@ -72,35 +73,50 @@ public class SessionImpl extends ISession.Stub {
         attach(castContext, castDevice, routeId, routeInfoExtra);
         this.state = STATE_STARTING;
         this.startType = START_TYPE_NEW;
-        this.proxy.onStarting(routeInfoExtra);
-        this.castContext.getSessionManagerImpl().onSessionStarting(this);
-        if (this.state != STATE_STARTING) {
-            // A listener ended the session from onSessionStarting
-            Log.d(TAG, "Session ended while starting");
-            return;
+        try {
+            this.proxy.onStarting(routeInfoExtra);
+            this.castContext.getSessionManagerImpl().onSessionStarting(this);
+            if (this.state != STATE_STARTING) {
+                // A listener ended the session from onSessionStarting
+                Log.d(TAG, "Session ended while starting");
+                return;
+            }
+            this.proxy.start(routeInfoExtra);
+        } catch (RemoteException e) {
+            notifyFailedToStartSession(CastStatusCodes.INTERNAL_ERROR);
+            throw e;
         }
-        this.proxy.start(routeInfoExtra);
     }
 
     public void resume(CastContextImpl castContext, CastDevice castDevice, String routeId, Bundle routeInfoExtra) throws RemoteException {
         attach(castContext, castDevice, routeId, routeInfoExtra);
         this.state = STATE_RESUMING;
         this.startType = START_TYPE_RESUMED;
-        this.proxy.onResuming(routeInfoExtra);
-        this.castContext.getSessionManagerImpl().onSessionResuming(this, sessionId);
-        if (this.state != STATE_RESUMING) {
-            // A listener ended the session from onSessionResuming
-            Log.d(TAG, "Session ended while resuming");
-            return;
+        try {
+            this.proxy.onResuming(routeInfoExtra);
+            this.castContext.getSessionManagerImpl().onSessionResuming(this, sessionId);
+            if (this.state != STATE_RESUMING) {
+                // A listener ended the session from onSessionResuming
+                Log.d(TAG, "Session ended while resuming");
+                return;
+            }
+            this.proxy.resume(routeInfoExtra);
+        } catch (RemoteException e) {
+            notifyFailedToResumeSession(CastStatusCodes.INTERNAL_ERROR);
+            throw e;
         }
-        this.proxy.resume(routeInfoExtra);
     }
 
     public void end(boolean stopCasting) throws RemoteException {
         if (state == STATE_ENDING || state == STATE_ENDED) return;
         this.state = STATE_ENDING;
         if (castContext != null) castContext.getSessionManagerImpl().onSessionEnding(this);
-        this.proxy.end(stopCasting);
+        try {
+            this.proxy.end(stopCasting);
+        } catch (RemoteException e) {
+            if (state == STATE_ENDING) notifySessionEnded(CastStatusCodes.INTERNAL_ERROR);
+            throw e;
+        }
     }
 
     private void attach(CastContextImpl castContext, CastDevice castDevice, String routeId, Bundle routeInfoExtra) {
