@@ -126,8 +126,8 @@ seconds; each ADB command has a 55-second deadline. Native work cannot always be
 preempted: a hung operation keeps its capacity occupied until it exits, rather
 than permitting an unbounded number of replacement handles.
 
-A nonzero ADB exit, stderr, malformed response, unavailable provider, or native
-failure produces an HTTP error. Operations are not retried automatically because
+A nonzero ADB exit, stderr, malformed response, unavailable provider, or explicit
+provider error status produces an HTTP error. Operations are not retried automatically because
 a lost response does not prove that initialization or a snapshot was not run.
 Valid Base64 alone does not establish successful attestation; the native runtime
 can also return error bytes.
