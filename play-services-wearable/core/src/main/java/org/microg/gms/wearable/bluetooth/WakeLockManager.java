@@ -2,6 +2,7 @@ package org.microg.gms.wearable.bluetooth;
 
 import android.content.Context;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.util.Log;
 
 import java.util.HashMap;
@@ -26,7 +27,7 @@ public class WakeLockManager {
 
     private ScheduledFuture<?> timeoutFuture;
     private long acquireTimeMs = 0;
-    private long maxTimeoutMs = MAX_TIMEOUT_MS;
+    private long timeoutDeadlineElapsedMs = 0;
 
     private int totalAcquires = 0;
     private int totalReleases = 0;
@@ -77,9 +78,19 @@ public class WakeLockManager {
             Log.d(TAG, String.format("acquire(tag=%s, timeout=%dms) refCount=%d",
                     tag, timeoutMs, count));
 
+            long effectiveTimeoutMs = timeoutMs > 0
+                    ? Math.min(timeoutMs, MAX_TIMEOUT_MS)
+                    : 0;
+            long requestedDeadlineElapsedMs = effectiveTimeoutMs > 0
+                    ? SystemClock.elapsedRealtime() + effectiveTimeoutMs
+                    : 0;
+            long platformTimeoutMs = effectiveTimeoutMs > 0
+                    ? Math.max(DEFAULT_TIMEOUT_MS, effectiveTimeoutMs)
+                    : DEFAULT_TIMEOUT_MS;
+
             if (count == 1) {
                 try {
-                    wakeLock.acquire(DEFAULT_TIMEOUT_MS);
+                    wakeLock.acquire(platformTimeoutMs);
                     acquireTimeMs = System.currentTimeMillis();
                     isForceReleased = false;
 
@@ -91,13 +102,15 @@ public class WakeLockManager {
                 }
             }
 
-            if (timeoutMs > 0) {
-                long effectiveTimeout = Math.min(timeoutMs, MAX_TIMEOUT_MS);
-
-                if (effectiveTimeout > maxTimeoutMs) {
-                    maxTimeoutMs = effectiveTimeout;
-                    scheduleTimeout(effectiveTimeout);
+            if (requestedDeadlineElapsedMs > timeoutDeadlineElapsedMs) {
+                if (count > 1) {
+                    // The wake lock is not reference counted. Re-acquiring it refreshes the
+                    // platform safety timeout so Android cannot release it before our newer
+                    // logical deadline.
+                    wakeLock.acquire(platformTimeoutMs);
                 }
+                timeoutDeadlineElapsedMs = requestedDeadlineElapsedMs;
+                scheduleTimeout(requestedDeadlineElapsedMs);
             }
         }
     }
@@ -177,6 +190,7 @@ public class WakeLockManager {
                 timeoutFuture.cancel(false);
                 timeoutFuture = null;
             }
+            timeoutDeadlineElapsedMs = 0;
 
             if (wakeLock.isHeld()) {
                 wakeLock.release();
@@ -184,7 +198,6 @@ public class WakeLockManager {
                 Log.d(TAG, String.format("Wake lock released (held for %dms)", heldDurationMs));
             }
 
-            maxTimeoutMs = MAX_TIMEOUT_MS;
             acquireTimeMs = 0;
 
         } catch (Exception e) {
@@ -192,17 +205,23 @@ public class WakeLockManager {
         }
     }
 
-    private void scheduleTimeout(long timeoutMs) {
+    private void scheduleTimeout(long deadlineElapsedMs) {
         if (timeoutFuture != null) {
             timeoutFuture.cancel(false);
         }
 
+        long delayMs = Math.max(0, deadlineElapsedMs - SystemClock.elapsedRealtime());
         timeoutFuture = executor.schedule(() -> {
-            Log.w(TAG, "Wake lock timeout - force releasing");
-            forceRelease();
-        }, timeoutMs, TimeUnit.MILLISECONDS);
+            synchronized (lock) {
+                if (refCount.get() <= 0 || timeoutDeadlineElapsedMs != deadlineElapsedMs) {
+                    return;
+                }
+                Log.w(TAG, "Wake lock timeout - force releasing");
+                forceRelease();
+            }
+        }, delayMs, TimeUnit.MILLISECONDS);
 
-        Log.d(TAG, String.format("Scheduled timeout in %dms", timeoutMs));
+        Log.d(TAG, String.format("Scheduled timeout in %dms", delayMs));
     }
 
     public void shutdown() {
