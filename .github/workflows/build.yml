@@ -168,9 +168,9 @@ jobs:
           after_source = blob(source)
           after_test = blob(test)
           changed = sorted(subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines())
-          expected_changed = sorted([str(source), str(test), "play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardSessionTest.kt"])
+          expected_changed = sorted([str(source), str(test)])
           if changed != expected_changed:
-              raise SystemExit("Validation patch changed an unexpected repository path.")
+              raise SystemExit(f"Validation patch changed an unexpected repository path: {changed!r}")
           if after_source == before_source or after_test == before_test:
               raise SystemExit("Expected both pinned source/test files to change.")
           receipt = {
@@ -182,6 +182,7 @@ jobs:
               "test_path": str(test),
               "test_before_blob": before_test,
               "test_after_blob": after_test,
+              "changed_paths": changed,
               "response_limit_bytes": 256 * 1024,
               "test_name": "rejectsResponseBodyExceedingLimitAndStillDisconnects",
           }
@@ -455,4 +456,3 @@ jobs:
           path: ${{ env.EVIDENCE_DIR }}/
           if-no-files-found: error
           retention-days: 30
-
