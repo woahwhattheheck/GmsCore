@@ -37,6 +37,13 @@ def prepareHttpServerTestApi = tasks.register('prepareHttpServerTestApi', Sync) 
     into(httpServerTestApiDir)
 }
 
+def packageHttpServerTestApi = tasks.register('packageHttpServerTestApi', Jar) {
+    dependsOn prepareHttpServerTestApi
+    from(httpServerTestApiDir)
+    archiveFileName = 'jdk-httpserver-test-api.jar'
+    destinationDirectory = layout.buildDirectory.dir('jdk-httpserver-test')
+}
+
 dependencies {
     api project(':play-services-droidguard')
 
@@ -53,7 +60,7 @@ dependencies {
 
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlinVersion"
 
-    testCompileOnly files(httpServerTestApiDir).builtBy(prepareHttpServerTestApi)
+    testCompileOnly files(packageHttpServerTestApi.flatMap { it.archiveFile }).builtBy(packageHttpServerTestApi)
     testImplementation "junit:junit:4.13.2"
 }
 
