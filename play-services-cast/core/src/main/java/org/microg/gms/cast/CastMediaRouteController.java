@@ -59,6 +59,8 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
     // App id of the Default Media Receiver, which implements the media namespace.
     private static final String DEFAULT_MEDIA_RECEIVER_APP_ID = "CC1AD845";
     private static final String MEDIA_NAMESPACE = "urn:x-cast:com.google.cast.media";
+    // MediaRouter permits a null callback when the caller does not need a result.
+    private static final MediaRouter.ControlRequestCallback NO_RESULT_CALLBACK = new MediaRouter.ControlRequestCallback() {};
 
     private volatile int volume;
     private volatile boolean volumeKnown;
@@ -73,7 +75,9 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
     private volatile int mediaPlaybackState = MediaItemStatus.PLAYBACK_STATE_PENDING;
     private volatile long mediaPositionMs;
     private volatile long mediaDurationMs = -1;
-    private long nextMediaRequestId = 1;
+    // Randomize the initial request id as required by the Cast media protocol.
+    private final long firstMediaRequestId = 1 + (UUID.randomUUID().getLeastSignificantBits() & 0x3fffffffL);
+    private long nextMediaRequestId = firstMediaRequestId;
     private PendingPlay pendingPlay;
     private final Map<Long, PendingControl> pendingControls = new HashMap<Long, PendingControl>();
 
@@ -140,6 +144,7 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
         if (action == null || !intent.hasCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK)) {
             return false;
         }
+        if (callback == null) callback = NO_RESULT_CALLBACK;
         switch (action) {
             case MediaControlIntent.ACTION_PLAY:
                 return onPlayRequest(intent, callback);
@@ -383,6 +388,15 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
     private void onMediaStatusMessage(JSONObject json) {
         long requestId = json.optLong("requestId", 0);
         PendingControl pending = requestId != 0 ? takePendingControl(requestId) : null;
+        // Status from another sender also carries a nonzero request id. Ignore only
+        // our own completed/expired requests, while retaining other senders' updates.
+        if (pending == null && requestId >= firstMediaRequestId && requestId < nextMediaRequestId) return;
+        if (pending != null && pending.receiverMediaSessionId > 0
+                && pending.receiverMediaSessionId != mediaSessionId
+                && !(pending.stopsPlayback && mediaSessionId == 0)) {
+            pending.callback.onError("Remote playback item was replaced", null);
+            return;
+        }
         JSONArray statuses = json.optJSONArray("status");
         JSONObject status = statuses != null ? statuses.optJSONObject(0) : null;
         MediaStatusSnapshot snapshot = status != null ? parseMediaStatus(status) : null;
