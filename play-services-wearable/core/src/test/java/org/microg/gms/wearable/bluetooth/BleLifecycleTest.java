@@ -99,17 +99,15 @@ public class BleLifecycleTest {
         }
 
         boolean awaitState(String expected) throws InterruptedException {
-            CountDownLatch stateReached = new CountDownLatch(1);
-            Runnable[] poll = new Runnable[1];
-            poll[0] = () -> {
-                if (isState(manager, expected)) {
-                    stateReached.countDown();
-                } else {
-                    manager.postDelayed(poll[0], 5);
-                }
-            };
-            manager.post(poll[0]);
-            return stateReached.await(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            CountDownLatch stateProcessed = new CountDownLatch(1);
+            AtomicBoolean stateReached = new AtomicBoolean();
+            // Startup posts its configuration message behind the first marker.
+            // The second observes the result without waiting for virtual time.
+            manager.post(() -> manager.post(() -> {
+                stateReached.set(isState(manager, expected));
+                stateProcessed.countDown();
+            }));
+            return stateProcessed.await(TIMEOUT_SECONDS, TimeUnit.SECONDS) && stateReached.get();
         }
 
         void shutdown() throws InterruptedException {

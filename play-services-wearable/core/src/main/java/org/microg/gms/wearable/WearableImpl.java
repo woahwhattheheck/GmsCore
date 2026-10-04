@@ -973,27 +973,33 @@ public class WearableImpl {
 
     public void invokeListeners(@Nullable Intent intent, ListenerInvoker invoker) {
         for (String packageName : new ArrayList<>(listeners.keySet())) {
-            List<ListenerInfo> listeners = this.listeners.get(packageName);
-            if (listeners == null) continue;
-            for (int i = 0; i < listeners.size(); i++) {
+            List<ListenerInfo> snapshot;
+            synchronized (this) {
+                List<ListenerInfo> current = listeners.get(packageName);
+                if (current == null) continue;
+                snapshot = new ArrayList<>(current);
+            }
+            for (ListenerInfo info : snapshot) {
                 boolean filterMatched = false;
                 if (intent != null) {
-                    for (IntentFilter filter : listeners.get(i).filters) {
+                    for (IntentFilter filter : info.filters) {
                         filterMatched |= filter.match(context.getContentResolver(), intent, false, TAG) > 0;
                     }
                 }
-                if (filterMatched || listeners.get(i).filters.length == 0) {
+                if (filterMatched || info.filters.length == 0) {
                     try {
-                        invoker.invoke(listeners.get(i).listener);
+                        invoker.invoke(info.listener);
                     } catch (RemoteException e) {
                         Log.w(TAG, "Registered listener at package " + packageName + " failed, removing.");
-                        listeners.remove(i);
-                        i--;
+                        removeListener(info.listener);
                     }
                 }
             }
-            if (listeners.isEmpty()) {
-                this.listeners.remove(packageName);
+            synchronized (this) {
+                List<ListenerInfo> current = listeners.get(packageName);
+                if (current != null && current.isEmpty()) {
+                    listeners.remove(packageName);
+                }
             }
         }
         if (intent != null) {
@@ -1131,7 +1137,7 @@ public class WearableImpl {
         }
     }
 
-    public void removeListener(IWearableListener listener) {
+    public synchronized void removeListener(IWearableListener listener) {
         if (listener == null) return;
         IBinder incoming = listener.asBinder();
         for (List<ListenerInfo> list : listeners.values()) {
