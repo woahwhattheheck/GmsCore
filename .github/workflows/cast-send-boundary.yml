@@ -1,0 +1,73 @@
+name: Cast public send body boundary
+
+on:
+  push:
+    branches:
+      - validation/cast580-public-send-body-boundary-20261004
+    paths:
+      - 'play-services-cast/core/src/test/kotlin/org/microg/gms/cast/channel/CastDeviceSessionSendCompletionTest.kt'
+      - '.github/workflows/cast-send-boundary.yml'
+      - 'validation/cast580-public-send-body-boundary/**'
+
+permissions:
+  contents: read
+
+env:
+  GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
+
+jobs:
+  sender-boundary:
+    if: github.repository == 'woahwhattheheck/GmsCore'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact sources
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - name: Record pinned product and test sources
+        run: python3 validation/cast580-public-send-body-boundary/check.py source
+      - name: Run maintained framing and public send checks
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew :play-services-cast-core:testDebugUnitTest --tests org.microg.gms.cast.channel.CastChannelFramingTest --tests org.microg.gms.cast.channel.CastDeviceSessionSendCompletionTest --no-daemon --stacktrace --max-workers=2 -Dorg.gradle.jvmargs="-Xmx2g" 2>&1 | tee validation-results/current-gradle.log
+          python3 validation/cast580-public-send-body-boundary/check.py result current 0
+      - name: Reject overly strict encoded-body limit
+        shell: bash
+        run: |
+          python3 validation/cast580-public-send-body-boundary/check.py mutate strict-cap
+          set +e
+          ./gradlew :play-services-cast-core:testDebugUnitTest --tests org.microg.gms.cast.channel.CastDeviceSessionSendCompletionTest.textAndBinarySendsAcceptExactly65536EncodedBodyBytes --tests org.microg.gms.cast.channel.CastDeviceSessionSendCompletionTest.textAndBinarySendsReject65537EncodedBodyBytesWithoutCorruptingNextSend --no-daemon --stacktrace --max-workers=2 -Dorg.gradle.jvmargs="-Xmx2g" > validation-results/strict-cap-gradle.log 2>&1
+          status=$?
+          set -e
+          python3 validation/cast580-public-send-body-boundary/check.py result strict-cap "$status"
+          python3 validation/cast580-public-send-body-boundary/check.py restore
+      - name: Reject omitted encoded-body guard
+        shell: bash
+        run: |
+          python3 validation/cast580-public-send-body-boundary/check.py mutate unguarded
+          set +e
+          ./gradlew :play-services-cast-core:testDebugUnitTest --tests org.microg.gms.cast.channel.CastDeviceSessionSendCompletionTest.textAndBinarySendsAcceptExactly65536EncodedBodyBytes --tests org.microg.gms.cast.channel.CastDeviceSessionSendCompletionTest.textAndBinarySendsReject65537EncodedBodyBytesWithoutCorruptingNextSend --no-daemon --stacktrace --max-workers=2 -Dorg.gradle.jvmargs="-Xmx2g" > validation-results/unguarded-gradle.log 2>&1
+          status=$?
+          set -e
+          python3 validation/cast580-public-send-body-boundary/check.py result unguarded "$status"
+      - name: Restore and verify product sources
+        if: always()
+        run: |
+          python3 validation/cast580-public-send-body-boundary/check.py restore
+          python3 validation/cast580-public-send-body-boundary/check.py source
+      - name: Preserve exact check evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cast580-public-send-body-boundary
+          path: validation-results/
+          if-no-files-found: error

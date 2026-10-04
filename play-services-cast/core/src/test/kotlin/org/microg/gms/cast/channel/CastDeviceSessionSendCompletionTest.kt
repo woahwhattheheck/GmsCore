@@ -5,6 +5,7 @@
 
 package org.microg.gms.cast.channel
 
+import okio.ByteString.Companion.toByteString
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -76,6 +77,49 @@ class CastDeviceSessionSendCompletionTest {
     }
 
     @Test
+    fun textAndBinarySendsAcceptExactly65536EncodedBodyBytes() {
+        val text = messageWithEncodedSize(MAX_PAYLOAD_SIZE, CastMessage.PayloadType.STRING)
+        val binary = messageWithEncodedSize(MAX_PAYLOAD_SIZE, CastMessage.PayloadType.BINARY)
+        session.sendMessage(namespace, text.payload_utf8!!, 42L)
+        session.sendBinaryMessage(namespace, binary.payload_binary!!.toByteArray(), Long.MAX_VALUE)
+        executor.submit {}.get(2, TimeUnit.SECONDS)
+
+        assertEquals(listOf(Completion(namespace, 42L, 0), Completion(namespace, Long.MAX_VALUE, 0)), completions.toList())
+        val frames = DataInputStream(ByteArrayInputStream(output.toByteArray()))
+        assertBoundaryFrame(frames, text)
+        assertBoundaryFrame(frames, binary)
+        assertEquals(0, frames.available())
+    }
+
+    @Test
+    fun textAndBinarySendsReject65537EncodedBodyBytesWithoutCorruptingNextSend() {
+        val text = messageWithEncodedSize(MAX_PAYLOAD_SIZE + 1, CastMessage.PayloadType.STRING)
+        val binary = messageWithEncodedSize(MAX_PAYLOAD_SIZE + 1, CastMessage.PayloadType.BINARY)
+        // These pass the raw-payload checks and reach the encoded-envelope limit.
+        assertTrue(text.payload_utf8!!.toByteArray(Charsets.UTF_8).size < MAX_PAYLOAD_SIZE)
+        assertTrue(binary.payload_binary!!.size < MAX_PAYLOAD_SIZE)
+        session.sendMessage(namespace, text.payload_utf8!!, 42L)
+        session.sendBinaryMessage(namespace, binary.payload_binary!!.toByteArray(), Long.MAX_VALUE)
+        executor.submit {}.get(2, TimeUnit.SECONDS)
+
+        assertEquals(listOf(Completion(namespace, 42L, 2006), Completion(namespace, Long.MAX_VALUE, 2006)), completions.toList())
+        assertEquals(0, output.size())
+
+        val smallBinary = byteArrayOf(3, 2, 1)
+        session.sendMessage(namespace, "after-rejection", 43L)
+        session.sendBinaryMessage(namespace, smallBinary, 44L)
+        executor.submit {}.get(2, TimeUnit.SECONDS)
+        assertEquals(listOf(
+            Completion(namespace, 42L, 2006), Completion(namespace, Long.MAX_VALUE, 2006),
+            Completion(namespace, 43L, 0), Completion(namespace, 44L, 0),
+        ), completions.toList())
+        val frames = DataInputStream(ByteArrayInputStream(output.toByteArray()))
+        assertEquals("after-rejection", readFrame(frames).payload_utf8)
+        assertArrayEquals(smallBinary, readFrame(frames).payload_binary!!.toByteArray())
+        assertEquals(0, frames.available())
+    }
+
+    @Test
     fun textAndBinarySendsAfterDisconnectEachFailOnceWithOriginalIds() {
         session.disconnect()
         assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS))
@@ -117,6 +161,34 @@ class CastDeviceSessionSendCompletionTest {
     }
 
     private fun failure(requestId: Long) = Completion(namespace, requestId, CastDeviceSession.STATUS_APPLICATION_NOT_RUNNING)
+
+    private fun assertBoundaryFrame(input: DataInputStream, expected: CastMessage) {
+        val length = input.readInt()
+        assertEquals(MAX_PAYLOAD_SIZE, length)
+        val body = ByteArray(length)
+        input.readFully(body)
+        assertArrayEquals(expected.encode(), body)
+        assertEquals(expected, CastMessage.ADAPTER.decode(body))
+    }
+
+    private fun messageWithEncodedSize(size: Int, payloadType: CastMessage.PayloadType): CastMessage {
+        var low = 0
+        var high = size
+        while (low <= high) {
+            val middle = (low + high) ushr 1
+            val candidate = CastMessage(
+                CastMessage.ProtocolVersion.CASTV2_1_0, "sender-under-test", "transport-id", namespace, payloadType,
+                payload_utf8 = if (payloadType == CastMessage.PayloadType.STRING) "x".repeat(middle) else null,
+                payload_binary = if (payloadType == CastMessage.PayloadType.BINARY) ByteArray(middle) { 0x5a }.toByteString() else null,
+            )
+            when {
+                candidate.encode().size < size -> low = middle + 1
+                candidate.encode().size > size -> high = middle - 1
+                else -> return candidate
+            }
+        }
+        error("Could not construct a CastMessage with encoded body size " + size)
+    }
 
     private fun readFrame(input: DataInputStream): CastMessage {
         val body = ByteArray(input.readInt())
