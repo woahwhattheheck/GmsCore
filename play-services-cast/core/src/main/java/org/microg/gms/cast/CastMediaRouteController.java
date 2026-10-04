@@ -137,8 +137,8 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
             case MediaControlIntent.ACTION_STOP:
                 return sendMediaCommand("STOP", intent, callback);
             case MediaControlIntent.ACTION_SEEK:
-                if (!intent.hasExtra(MediaControlIntent.EXTRA_ITEM_POSITION)) {
-                    callback.onError("Seek request without " + MediaControlIntent.EXTRA_ITEM_POSITION, null);
+                if (!intent.hasExtra(MediaControlIntent.EXTRA_ITEM_CONTENT_POSITION)) {
+                    callback.onError("Seek request without " + MediaControlIntent.EXTRA_ITEM_CONTENT_POSITION, null);
                     return true;
                 }
                 return sendMediaCommand("SEEK", intent, callback);
@@ -163,7 +163,7 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
         }
         synchronized (this) {
             pendingPlay = new PendingPlay(data.toString(), intent.getType(),
-                    intent.getLongExtra(MediaControlIntent.EXTRA_ITEM_POSITION, 0),
+                    intent.getLongExtra(MediaControlIntent.EXTRA_ITEM_CONTENT_POSITION, 0),
                     intent.getStringExtra(MediaControlIntent.EXTRA_ITEM_ID), callback);
         }
         // The media namespace is served by the receiver application, so make sure the default
@@ -189,12 +189,12 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
             requestId = nextMediaRequestId++;
             pendingControls.put(requestId, new PendingControl(
                     intent.getStringExtra(MediaControlIntent.EXTRA_ITEM_ID),
-                    intent.getLongExtra(MediaControlIntent.EXTRA_ITEM_POSITION, 0), isGetStatus, callback));
+                    intent.getLongExtra(MediaControlIntent.EXTRA_ITEM_CONTENT_POSITION, 0), isGetStatus, callback));
         }
         String message;
         try {
             message = buildMediaCommand(type, requestId, mediaSessionId,
-                    intent.getLongExtra(MediaControlIntent.EXTRA_ITEM_POSITION, 0));
+                    intent.getLongExtra(MediaControlIntent.EXTRA_ITEM_CONTENT_POSITION, 0));
         } catch (JSONException e) {
             synchronized (this) {
                 pendingControls.remove(requestId);
@@ -355,10 +355,10 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
         if (pending != null) {
             Bundle result = new Bundle();
             result.putBundle(MediaControlIntent.EXTRA_ITEM_STATUS, new MediaItemStatus.Builder(mediaPlaybackState)
-                    .setPlaybackPosition(mediaPositionMs).setContentDuration(mediaDurationMs).build().asBundle());
+                    .setContentPosition(mediaPositionMs).setContentDuration(mediaDurationMs).build().asBundle());
             if (pending.itemId != null) result.putString(MediaControlIntent.EXTRA_ITEM_ID, pending.itemId);
             if (mediaSessionId != 0) {
-                result.putString(MediaControlIntent.EXTRA_MEDIA_SESSION_ID, String.valueOf(mediaSessionId));
+                result.putString(MediaControlIntent.EXTRA_SESSION_ID, String.valueOf(mediaSessionId));
             }
             pending.callback.onResult(result);
         }
@@ -585,7 +585,7 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
             Bundle result = new Bundle();
             if (pending.itemId != null) result.putString(MediaControlIntent.EXTRA_ITEM_ID, pending.itemId);
             if (pending.positionMs != 0) {
-                result.putLong(MediaControlIntent.EXTRA_ITEM_POSITION, pending.positionMs);
+                result.putLong(MediaControlIntent.EXTRA_ITEM_CONTENT_POSITION, pending.positionMs);
             }
             pending.callback.onResult(result);
         }
