@@ -169,8 +169,13 @@ public class WearableServiceImpl extends IWearableService.Stub {
     public void enableConfig(IWearableCallbacks callbacks, final String name) throws RemoteException {
         Log.d(TAG, "enableConfig: " + name);
         postMain(callbacks, () -> {
-            wearable.enableConnection(name);
-            callbacks.onStatus(Status.SUCCESS);
+            Status status = Status.SUCCESS;
+            try {
+                wearable.enableConnection(name);
+            } catch (IllegalArgumentException e) {
+                status = new Status(CommonStatusCodes.ERROR);
+            }
+            callbacks.onStatus(status);
         });
     }
 
@@ -179,8 +184,13 @@ public class WearableServiceImpl extends IWearableService.Stub {
     public void disableConfig(IWearableCallbacks callbacks, final String name) throws RemoteException {
         Log.d(TAG, "disableConfig: " + name);
         postMain(callbacks, () -> {
-            wearable.disableConnection(name);
-            callbacks.onStatus(Status.SUCCESS);
+            Status status = Status.SUCCESS;
+            try {
+                wearable.disableConnection(name);
+            } catch (IllegalArgumentException e) {
+                status = new Status(CommonStatusCodes.ERROR);
+            }
+            callbacks.onStatus(status);
         });
     }
 

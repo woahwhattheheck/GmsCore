@@ -917,7 +917,7 @@ public class WearableImpl {
 
     public void onDisconnectReceived(WearableConnection connection, Connect connect) {
         for (ConnectionConfiguration config : getConfigurations()) {
-            if (connect.id.equals(config.peerNodeId) || config.nodeId.equals(connect.id)) {
+            if (connect.id.equals(config.peerNodeId) || connect.id.equals(config.nodeId)) {
                 config.connected = false;
             }
         }
@@ -1146,7 +1146,13 @@ public class WearableImpl {
     public void enableConnection(String name) {
         Log.d(TAG, "enableConnection: " + name);
 
+        if (configurationsUpdated) {
+            getConfigurations();
+        }
         ConnectionConfiguration config = getConfigurationByName(name);
+        if (config == null) {
+            throw new IllegalArgumentException("Unknown connection configuration");
+        }
 
         configDatabase.setEnabledState(config.name, true);
         configurationsUpdated = true;
@@ -1173,10 +1179,14 @@ public class WearableImpl {
     public void disableConnection(String name) {
         Log.d(TAG, "disableConnection: " + name);
 
-        configDatabase.setEnabledState(name, false);
-        configurationsUpdated = true;
-
         ConnectionConfiguration config = configDatabase.getConfiguration(name);
+        if (config == null) {
+            throw new IllegalArgumentException("Unknown connection configuration");
+        }
+
+        configDatabase.setEnabledState(name, false);
+        config.enabled = false;
+        configurationsUpdated = true;
 
         switch (config.type) {
             case TYPE_CLOUD:
