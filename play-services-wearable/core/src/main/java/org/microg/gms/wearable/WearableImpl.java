@@ -430,11 +430,16 @@ public class WearableImpl {
     }
 
     public File createAssetFile(String digest) {
+        File assetFile = getAssetFile(digest);
+        assetFile.getParentFile().mkdirs();
+        return assetFile;
+    }
+
+    File getAssetFile(String digest) {
         if (TextUtils.isEmpty(digest)) {
             throw new IllegalArgumentException("createAssetFile: digest must not be null or empty");
         }
         File dir = new File(new File(context.getFilesDir(), "assets"), digest.substring(digest.length() - 2));
-        dir.mkdirs();
         return new File(dir, digest + ".asset");
     }
 

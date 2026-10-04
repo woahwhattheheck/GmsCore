@@ -1402,7 +1402,7 @@ public class WearableServiceImpl extends IWearableService.Stub {
             aclCursor.close();
 
             for (String digest : assetDigests) {
-                File assetFile = new File(context.getFilesDir(), "assets/" + digest);
+                File assetFile = wearable.getAssetFile(digest);
                 if (assetFile.exists()) {
                     totalSize += assetFile.length();
                 }
@@ -1412,6 +1412,30 @@ public class WearableServiceImpl extends IWearableService.Stub {
         }
 
         return totalSize;
+    }
+
+    private static void clearAssetFiles(File assetsDir) throws IOException {
+        if (!assetsDir.exists()) return;
+        File canonicalDir = assetsDir.getCanonicalFile();
+        File expectedDir = new File(assetsDir.getParentFile().getCanonicalFile(), assetsDir.getName());
+        if (!canonicalDir.equals(expectedDir)) {
+            throw new IOException("Asset directory is a symbolic link: " + assetsDir);
+        }
+        File[] entries = assetsDir.listFiles();
+        if (entries == null) throw new IOException("Cannot list asset directory: " + assetsDir);
+        for (File entry : entries) {
+            // Assets use one shard directory. Do not follow symbolic links or
+            // recursively delete an unexpected directory layout.
+            if (entry.isDirectory()
+                    && entry.getCanonicalFile().equals(new File(canonicalDir, entry.getName()))) {
+                File[] assets = entry.listFiles();
+                if (assets == null) throw new IOException("Cannot list asset shard: " + entry);
+                for (File asset : assets) {
+                    if (!asset.delete()) throw new IOException("Cannot delete asset: " + asset);
+                }
+            }
+            if (!entry.delete()) throw new IOException("Cannot delete asset entry: " + entry);
+        }
     }
 
     @Override
@@ -1436,17 +1460,7 @@ public class WearableServiceImpl extends IWearableService.Stub {
 
                 Log.d(TAG, "clearStorage: database tables cleared");
 
-                File assetsDir = new File(context.getFilesDir(), "assets");
-                if (assetsDir.exists() && assetsDir.isDirectory()) {
-                    File[] assetFiles = assetsDir.listFiles();
-                    if (assetFiles != null) {
-                        for (File file : assetFiles) {
-                            if (file.isFile()) {
-                                file.delete();
-                            }
-                        }
-                    }
-                }
+                clearAssetFiles(new File(context.getFilesDir(), "assets"));
                 Log.d(TAG, "clearStorage: asset files cleared");
 
                 ClockworkNodePreferences prefs = wearable.getClockworkNodePreferences();
