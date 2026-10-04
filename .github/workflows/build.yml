@@ -1,19 +1,13 @@
-name: "Dott #3841 response body cap validation"
-
+name: "Dott #3841 project test classpath validation"
 on:
   push:
-    branches:
-      - 'validation/dott3841-integrated-cd79-20261004'
-    paths:
-      - '.github/workflows/build.yml'
-
+    branches: ['validation/dott3841-integrated-cd79-20261004']
+    paths: ['.github/workflows/build.yml']
 permissions:
   contents: read
-
 concurrency:
   group: dott3841-integrated
   cancel-in-progress: false
-
 jobs:
   dott-integrated:
     if: github.repository == 'woahwhattheheck/GmsCore' && github.ref == 'refs/heads/validation/dott3841-integrated-cd79-20261004'
@@ -21,205 +15,69 @@ jobs:
     timeout-minutes: 60
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
-      VALIDATION_SOURCE_SHA: '2de4887ea7ffd27ec86256f3ccbd48e3e46a8baf'
-      VALIDATION_SOURCE_TREE: 'f23fccdf238d29c8a515381de40e06f586958565'
-      EVIDENCE_DIR: /tmp/dott3841-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+      VALIDATION_SOURCE_SHA: 'c71305bda182e6c2863536b049992e2b3d18fd06'
+      VALIDATION_SOURCE_TREE: '0d73b59d4096377ad00d98f173d809fcf016db06'
+      EVIDENCE_DIR: /tmp/dott3841-project-module-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: Start the execution receipt
+      - name: Start execution receipt
         shell: bash
         run: |
           python3 - <<'PY'
-          import datetime, json, os, time
+          import datetime,json,os,time
           from pathlib import Path
-
-          evidence = Path(os.environ["EVIDENCE_DIR"])
-          evidence.mkdir(parents=True, exist_ok=True)
-          receipt = {
-              "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-              "started_monotonic_ns": time.monotonic_ns(),
-              "workflow_commit": os.environ["GITHUB_SHA"],
-              "workflow_ref": os.environ["GITHUB_REF"],
-              "run_url": (
-                  os.environ["GITHUB_SERVER_URL"] + "/" +
-                  os.environ["GITHUB_REPOSITORY"] + "/actions/runs/" +
-                  os.environ["GITHUB_RUN_ID"]
-              ),
-              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
-          }
-          (evidence / "execution-start.json").write_text(
-              json.dumps(receipt, indent=2) + "\n", encoding="utf-8"
-          )
+          out=Path(os.environ["EVIDENCE_DIR"]);out.mkdir(parents=True,exist_ok=True)
+          receipt={"started_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                   "started_monotonic_ns":time.monotonic_ns(),
+                   "workflow_commit":os.environ["GITHUB_SHA"],
+                   "workflow_ref":os.environ["GITHUB_REF"],
+                   "run_url":os.environ["GITHUB_SERVER_URL"]+"/"+os.environ["GITHUB_REPOSITORY"]+"/actions/runs/"+os.environ["GITHUB_RUN_ID"],
+                   "run_attempt":os.environ["GITHUB_RUN_ATTEMPT"]}
+          (out/"execution-start.json").write_text(json.dumps(receipt,indent=2)+"\n")
           PY
-
-      - name: Checkout the exact product source
+      - name: Checkout exact project source
         uses: actions/checkout@v7
         with:
           ref: ${{ env.VALIDATION_SOURCE_SHA }}
           fetch-depth: 1
           persist-credentials: false
-
-      - name: Record and verify source commit and tree
+      - name: Record source and tree
         shell: bash
         run: |
           python3 - <<'PY'
-          import json, os, subprocess
+          import json,os,subprocess
           from pathlib import Path
-
-          commit = subprocess.check_output(
-              ["git", "rev-parse", "HEAD"], text=True
-          ).strip()
-          tree = subprocess.check_output(
-              ["git", "rev-parse", "HEAD^{tree}"], text=True
-          ).strip()
-          receipt = {
-              "expected_commit": os.environ["VALIDATION_SOURCE_SHA"],
-              "expected_tree": os.environ["VALIDATION_SOURCE_TREE"],
-              "actual_commit": commit,
-              "actual_tree": tree,
-          }
-          receipt["matches"] = (
-              commit == receipt["expected_commit"] and
-              tree == receipt["expected_tree"]
-          )
-          (Path(os.environ["EVIDENCE_DIR"]) / "source.json").write_text(
-              json.dumps(receipt, indent=2) + "\n", encoding="utf-8"
-          )
-          print(json.dumps(receipt, sort_keys=True))
-          if not receipt["matches"]:
-              raise SystemExit("The checkout does not match the pinned source.")
-          PY
-
-
-      - name: Apply the bounded DroidGuard HTTP response candidate
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import json, os, subprocess
-          from pathlib import Path
-
-          evidence = Path(os.environ["EVIDENCE_DIR"])
-          source = Path("play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardHttpClient.kt")
-          test = Path("play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardHttpClientTest.kt")
-          expected_source = "db387f3ea824258e3bddf9d4fcafde1aea4be599"
-          expected_test = "7a4ec52d43ab717c5c890ee803f7c8e746fc82d6"
-          def blob(path):
-              return subprocess.check_output(["git", "hash-object", str(path)], text=True).strip()
-
-          before_source = blob(source)
-          before_test = blob(test)
-          if before_source != expected_source or before_test != expected_test:
-              raise SystemExit("HTTP-client source/test preimages do not match the reviewed source pin.")
-
-          old_return = "            return connection.inputStream.use { it.readBytes().toString(StandardCharsets.UTF_8) }"
-          new_return = """            return connection.inputStream.use { input ->
-                val out = ByteArrayOutputStream()
-                val buffer = ByteArray(8192)
-                var totalRead = 0
-                val limit = 256 * 1024
-                while (true) {
-                    val readLimit = minOf(buffer.size, limit - totalRead + 1)
-                    val read = input.read(buffer, 0, readLimit)
-                    if (read == -1) break
-                    totalRead += read
-                    if (totalRead > limit) {
-                        throw IOException(\"Response body exceeds 256 KiB limit\")
-                    }
-                    out.write(buffer, 0, read)
-                }
-                out.toByteArray().toString(StandardCharsets.UTF_8)
-            }"""
-          source_text = source.read_text(encoding="utf-8")
-          import_line = "import java.io.IOException"
-          if source_text.count(import_line) != 1:
-              raise SystemExit("Expected exactly one java.io.IOException import.")
-          source_text = source_text.replace(import_line, "import java.io.ByteArrayOutputStream\n" + import_line)
-          if source_text.count(old_return) != 1:
-              raise SystemExit("Expected exactly one unbounded response-body read.")
-          source.write_text(source_text.replace(old_return, new_return), encoding="utf-8", newline="\n")
-
-          marker = "    private class RecordingConnection("
-          new_test = """    @Test
-              fun rejectsResponseBodyExceedingLimitAndStillDisconnects() {
-                  lateinit var connection: RecordingConnection
-                  val client = RemoteDroidGuardHttpClient(
-                      \"http://example.test\",
-                      2_000,
-                      openConnection = { url ->
-                          val oversizeResponse = \"a\".repeat(256 * 1024 + 1)
-                          RecordingConnection(url, 200, oversizeResponse).also { connection = it }
-                      }
-                  )
-
-                  try {
-                      client.post(\"snapshot\", emptyMap(), null)
-                      throw AssertionError(\"Expected an IOException for exceeding limit\")
-                  } catch (e: IOException) {
-                      assertTrue(e.message.orEmpty().contains(\"256 KiB limit\", ignoreCase = true))
-                      assertTrue(connection.disconnected)
-                  }
-              }
-
-          """
-          test_text = test.read_text(encoding="utf-8")
-          if "fun rejectsResponseBodyExceedingLimitAndStillDisconnects()" in test_text or test_text.count(marker) != 1:
-              raise SystemExit("Unexpected existing response-limit test or insertion point.")
-          test.write_text(test_text.replace(marker, new_test + marker), encoding="utf-8", newline="\n")
-
-          after_source = blob(source)
-          after_test = blob(test)
-          changed = sorted(subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines())
-          expected_changed = sorted([str(source), str(test)])
-          if changed != expected_changed:
-              raise SystemExit(f"Validation patch changed an unexpected repository path: {changed!r}")
-          if after_source == before_source or after_test == before_test:
-              raise SystemExit("Expected both pinned source/test files to change.")
-          receipt = {
-              "source_commit": os.environ["VALIDATION_SOURCE_SHA"],
-              "source_tree": os.environ["VALIDATION_SOURCE_TREE"],
-              "source_path": str(source),
-              "source_before_blob": before_source,
-              "source_after_blob": after_source,
-              "test_path": str(test),
-              "test_before_blob": before_test,
-              "test_after_blob": after_test,
-              "changed_paths": changed,
-              "response_limit_bytes": 256 * 1024,
-              "test_name": "rejectsResponseBodyExceedingLimitAndStillDisconnects",
-          }
-          (evidence / "http-response-bound-patch.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
-          print(json.dumps(receipt, sort_keys=True))
+          git=lambda *args:subprocess.check_output(["git",*args],text=True).strip()
+          source={"expected_commit":os.environ["VALIDATION_SOURCE_SHA"],"expected_tree":os.environ["VALIDATION_SOURCE_TREE"],
+                  "actual_commit":git("rev-parse","HEAD"),"actual_tree":git("rev-parse","HEAD^{tree}"),
+                  "build_gradle_blob":git("hash-object","play-services-droidguard/core/build.gradle")}
+          source["matches"]=(source["expected_commit"]==source["actual_commit"] and source["expected_tree"]==source["actual_tree"]
+                             and source["build_gradle_blob"]=="471014a9b298559ef1d62614500f72f6415d3e92")
+          (Path(os.environ["EVIDENCE_DIR"])/"source.json").write_text(json.dumps(source,indent=2)+"\n")
+          print(json.dumps(source))
+          if not source["matches"]:raise SystemExit("Source pin mismatch")
           PY
       - name: Set up Java
         uses: actions/setup-java@v5.7.0
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
-
       - name: Ensure Android 35 build components
         shell: bash
         run: |
           set -euo pipefail
-          dott_sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-          test -n "$dott_sdk_root"
-          dott_sdkmanager="$dott_sdk_root/cmdline-tools/latest/bin/sdkmanager"
-          if ! test -x "$dott_sdkmanager"; then
-            dott_sdkmanager="$(command -v sdkmanager)"
+          sdk_root="$ANDROID_HOME"
+          manager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          if ! test -x "$manager"; then manager="$(command -v sdkmanager)"; fi
+          if ! test -f "$sdk_root/platforms/android-35/android.jar" || ! test -x "$sdk_root/build-tools/35.0.0/aapt2"; then
+            "$manager" --sdk_root="$sdk_root" 'platforms;android-35' 'build-tools;35.0.0'
           fi
-          if ! test -f "$dott_sdk_root/platforms/android-35/android.jar" ||
-             ! test -x "$dott_sdk_root/build-tools/35.0.0/aapt2"; then
-            "$dott_sdkmanager" --sdk_root="$dott_sdk_root" \
-              'platforms;android-35' 'build-tools;35.0.0'
-          fi
-          test -f "$dott_sdk_root/platforms/android-35/android.jar"
-          test -x "$dott_sdk_root/build-tools/35.0.0/aapt2"
-
-
-      - name: Record the execution toolchain
+          test -f "$sdk_root/platforms/android-35/android.jar"
+          test -x "$sdk_root/build-tools/35.0.0/aapt2"
+      - name: Record toolchain
         shell: bash
         run: |
           {
@@ -227,62 +85,12 @@ jobs:
             uname -a
             java -version
             javac -version
-            printf 'JAVA_HOME=%s\n' "$JAVA_HOME"
-            printf 'ANDROID_HOME=%s\n' "$ANDROID_HOME"
+            java --list-modules
             cat gradle/wrapper/gradle-wrapper.properties
-            cat "$ANDROID_HOME/build-tools/35.0.0/source.properties"
             cat "$ANDROID_HOME/platforms/android-35/source.properties"
-            df -h .
+            cat "$ANDROID_HOME/build-tools/35.0.0/source.properties"
           } > "$EVIDENCE_DIR/toolchain.log" 2>&1
-          cat "$EVIDENCE_DIR/toolchain.log"
-
-      - name: Prepare test-only JDK HTTP server classpath
-        shell: bash
-        run: |
-          set -euo pipefail
-          module="$JAVA_HOME/jmods/jdk.httpserver.jmod"
-          test -f "$module"
-          module_dir="$EVIDENCE_DIR/jdk-httpserver-module"
-          mkdir -p "$module_dir"
-          "$JAVA_HOME/bin/jmod" extract --dir "$module_dir" "$module"
-          test -d "$module_dir/classes/com/sun/net/httpserver"
-          jar_file="$EVIDENCE_DIR/jdk-httpserver-test.jar"
-          "$JAVA_HOME/bin/jar" --create --file "$jar_file" -C "$module_dir/classes" .
-          test -s "$jar_file"
-          printf 'DOTT_JDK_HTTP_SERVER_JAR=%s\n' "$jar_file" >> "$GITHUB_ENV"
-          {
-            printf 'JDK_HTTP_SERVER_MODULE=%s\n' "$module"
-            sha256sum "$module" "$jar_file"
-            "$JAVA_HOME/bin/jar" --list --file "$jar_file" | grep '^com/sun/net/httpserver/HttpServer.class$'
-          } > "$EVIDENCE_DIR/jdk-httpserver-classpath.log" 2>&1
-          cat "$EVIDENCE_DIR/jdk-httpserver-classpath.log"
-          cat > "$EVIDENCE_DIR/dott-test-classpath.init.gradle" <<'GRADLE'
-          gradle.projectsEvaluated {
-              def target = gradle.rootProject.findProject(':play-services-droidguard-core')
-              if (target == null) throw new GradleException('DroidGuard core project is missing.')
-              def jarPath = System.getenv('DOTT_JDK_HTTP_SERVER_JAR')
-              if (!jarPath || !new File(jarPath).isFile()) throw new GradleException('Test-only JDK HTTP server jar is missing.')
-              target.dependencies.add('testImplementation', target.files(jarPath))
-              def task = target.tasks.findByName('compileDebugUnitTestKotlin')
-              if (task == null) throw new GradleException('Focused Android unit-test compile task is missing.')
-              task.doFirst {
-                  def options = task.hasProperty('kotlinOptions') ? task.property('kotlinOptions') : null
-                  def value = { object, property ->
-                      try {
-                          return object != null && object.metaClass.hasProperty(object, property)
-                              ? String.valueOf(object.property(property)) : '<not-exposed>'
-                      } catch (Throwable ignored) {
-                          return '<unavailable>'
-                      }
-                  }
-                  println 'DOTT_KOTLIN_COMPILE_TASK_CLASS=' + task.class.name
-                  println 'DOTT_KOTLIN_NO_JDK=' + value(options, 'noJdk')
-                  println 'DOTT_KOTLIN_JDK_HOME=' + value(options, 'jdkHome')
-                  println 'DOTT_TEST_ONLY_CLASS_PATH=' + jarPath
-              }
-          }
-          GRADLE
-      - name: Run the three DroidGuard test classes and one APK variant
+      - name: Run normal DroidGuard module unit-test task
         id: build
         shell: bash
         run: |
@@ -290,217 +98,93 @@ jobs:
           export DOTT_BUILD_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           export DOTT_BUILD_STARTED_EPOCH="$(date +%s)"
           set +e
-          ./gradlew --no-daemon --console=plain --max-workers=1 --no-parallel \
-            -I "$EVIDENCE_DIR/dott-test-classpath.init.gradle" \
+          ./gradlew --no-daemon --console=plain --max-workers=1 --no-parallel --info \
             '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pkotlin.compiler.execution.strategy=in-process \
             :play-services-droidguard-core:testDebugUnitTest \
-            --tests org.microg.gms.droidguard.core.RemoteDroidGuardInitializationTest \
-            --tests org.microg.gms.droidguard.core.RemoteDroidGuardSessionTest \
-            --tests org.microg.gms.droidguard.core.RemoteDroidGuardHttpClientTest \
-            assembleVtmDefaultDebug \
             2>&1 | tee "$EVIDENCE_DIR/gradle.log"
-          dott_gradle_exit="${PIPESTATUS[0]}"
+          dott_exit="${PIPESTATUS[0]}"
           set -e
-          export DOTT_BUILD_EXIT="$dott_gradle_exit"
+          export DOTT_BUILD_EXIT="$dott_exit"
           python3 - <<'PY'
-          import datetime, json, os, time
+          import datetime,json,os,time
           from pathlib import Path
-
-          receipt = {
-              "started_at": os.environ["DOTT_BUILD_STARTED_AT"],
-              "ended_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-              "elapsed_seconds": round(time.time() - int(os.environ["DOTT_BUILD_STARTED_EPOCH"]), 3),
-              "exit_code": int(os.environ["DOTT_BUILD_EXIT"]),
-              "source_commit": os.environ["VALIDATION_SOURCE_SHA"],
-              "source_tree": os.environ["VALIDATION_SOURCE_TREE"],
-              "gradle_jvmargs": "-Xmx3g -XX:MaxMetaspaceSize=768m",
-              "max_workers": 1,
-              "kotlin_compiler_execution_strategy": "in-process",
-              "test_only_jdk_module": "jdk.httpserver via runner-module-derived testImplementation JAR",
-              "tasks": [
-                  ":play-services-droidguard-core:testDebugUnitTest",
-                  "assembleVtmDefaultDebug",
-              ],
-              "test_filters": [
-                  "org.microg.gms.droidguard.core.RemoteDroidGuardInitializationTest",
-                  "org.microg.gms.droidguard.core.RemoteDroidGuardSessionTest",
-                  "org.microg.gms.droidguard.core.RemoteDroidGuardHttpClientTest",
-              ],
-          }
-          (Path(os.environ["EVIDENCE_DIR"]) / "build.json").write_text(
-              json.dumps(receipt, indent=2) + "\n", encoding="utf-8"
-          )
-          print(json.dumps(receipt, sort_keys=True))
+          receipt={"started_at":os.environ["DOTT_BUILD_STARTED_AT"],
+                   "ended_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                   "elapsed_seconds":round(time.time()-int(os.environ["DOTT_BUILD_STARTED_EPOCH"]),3),
+                   "exit_code":int(os.environ["DOTT_BUILD_EXIT"]),
+                   "source_commit":os.environ["VALIDATION_SOURCE_SHA"],"source_tree":os.environ["VALIDATION_SOURCE_TREE"],
+                   "tasks":[":play-services-droidguard-core:testDebugUnitTest"],
+                   "test_filters":[],"init_scripts":[],"source_patch":[],"apk_assembly":False,
+                   "gradle_jvmargs":"-Xmx3g -XX:MaxMetaspaceSize=768m","max_workers":1,
+                   "kotlin_compiler_execution_strategy":"in-process"}
+          (Path(os.environ["EVIDENCE_DIR"])/"build.json").write_text(json.dumps(receipt,indent=2)+"\n")
+          print(json.dumps(receipt))
           PY
-          exit "$dott_gradle_exit"
-
-      - name: Collect actual test XML, APK, hashes, and elapsed time
+          exit "$dott_exit"
+      - name: Retain all test XML and source-bound evidence
         if: always()
-        env:
-          BUILD_STEP_OUTCOME: ${{ steps.build.outcome }}
         shell: bash
         run: |
           python3 - <<'PY'
-          import datetime, hashlib, json, os, shutil, subprocess, time
+          import datetime,hashlib,json,os,shutil,subprocess,time
           import xml.etree.ElementTree as ET
           from pathlib import Path
-
-          evidence = Path(os.environ["EVIDENCE_DIR"])
-          evidence.mkdir(parents=True, exist_ok=True)
-          problems = []
-          files = []
-
+          out=Path(os.environ["EVIDENCE_DIR"]);out.mkdir(parents=True,exist_ok=True)
+          problems=[];files=[]
           def retain(path):
-              target = evidence / "files" / path
-              target.parent.mkdir(parents=True, exist_ok=True)
-              shutil.copy2(path, target)
-              with target.open("rb") as stream:
-                  digest = hashlib.file_digest(stream, "sha256").hexdigest()
-              entry = {
-                  "path": str(Path("files") / path),
-                  "bytes": target.stat().st_size,
-                  "sha256": digest,
-              }
-              files.append(entry)
-              return entry
-
-          modules = {
-              "droidguard_core": Path("play-services-droidguard/core"),
-          }
-          junit = {}
-          for name, module in modules.items():
-              reports = sorted(
-                  (module / "build/test-results/testDebugUnitTest").glob("TEST-*.xml")
-              )
-              totals = {
-                  "report_files": len(reports), "tests": 0,
-                  "failures": 0, "errors": 0, "skipped": 0, "files": [],
-              }
-              for report in reports:
-                  totals["files"].append(retain(report))
-                  try:
-                      root = ET.parse(report).getroot()
-                  except ET.ParseError as error:
-                      problems.append(f"{report}: invalid XML: {error}")
-                      continue
-                  for case in root.iter("testcase"):
-                      totals["tests"] += 1
-                      totals["failures"] += len(case.findall("failure"))
-                      totals["errors"] += len(case.findall("error"))
-                      totals["skipped"] += len(case.findall("skipped"))
-              if not reports or totals["tests"] <= totals["skipped"]:
-                  problems.append(f"{name}: no executed test cases in actual XML")
-              if totals["failures"] or totals["errors"]:
-                  problems.append(f"{name}: test failures or errors")
-              if totals["skipped"]:
-                  problems.append(f"{name}: focused cases were skipped")
-              junit[name] = totals
-
-          expected_counts = {
-              "org.microg.gms.droidguard.core.RemoteDroidGuardInitializationTest": 5,
-              "org.microg.gms.droidguard.core.RemoteDroidGuardSessionTest": 4,
-              "org.microg.gms.droidguard.core.RemoteDroidGuardHttpClientTest": 3,
-          }
-          actual_counts = {}
-          for report in Path("play-services-droidguard/core/build/test-results/testDebugUnitTest").glob("TEST-*.xml"):
-              try:
-                  root = ET.parse(report).getroot()
-              except ET.ParseError:
-                  continue
-              for case in root.iter("testcase"):
-                  name = case.get("classname")
-                  actual_counts[name] = actual_counts.get(name, 0) + 1
-          if actual_counts != expected_counts:
-              problems.append(f"Focused test class/count mismatch: {actual_counts!r}")
-
-          apks = []
-          apk_root = Path("play-services-core/build/outputs/apk")
-          for metadata in sorted(apk_root.rglob("output-metadata.json")):
-              try:
-                  descriptor = json.loads(metadata.read_text(encoding="utf-8"))
-              except (OSError, json.JSONDecodeError) as error:
-                  problems.append(f"{metadata}: invalid APK metadata: {error}")
-                  continue
-              if descriptor.get("variantName") != "vtmDefaultDebug":
-                  continue
-              retain(metadata)
-              for element in descriptor.get("elements", []):
-                  apk = metadata.parent / element["outputFile"]
-                  if apk.is_file() and apk.suffix == ".apk":
-                      apks.append(retain(apk))
-                  else:
-                      problems.append(f"Expected APK missing: {apk}")
-          if not apks:
-              problems.append("No VtmDefaultDebug APK was produced.")
-
-          build_path = evidence / "build.json"
-          source_path = evidence / "source.json"
-          build = json.loads(build_path.read_text()) if build_path.is_file() else None
-          source = json.loads(source_path.read_text()) if source_path.is_file() else None
-          if build is None:
-              problems.append("The Gradle command has no completion receipt.")
-          elif build["exit_code"] != 0:
-              problems.append(f"Gradle exited {build['exit_code']}.")
-          if source is None or not source.get("matches"):
-              problems.append("The pinned source was not confirmed.")
-
-          start_path = evidence / "execution-start.json"
-          start = json.loads(start_path.read_text()) if start_path.is_file() else {}
-          source_delta = subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines()
-          expected_delta = sorted([
-              "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardHttpClient.kt",
-              "play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardHttpClientTest.kt",
-          ])
-          if sorted(source_delta) != expected_delta:
-              problems.append(f"Unexpected source delta: {source_delta!r}")
-          summary = {
-              "source": source,
-              "execution": {
-                  **start,
-                  "ended_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                  "elapsed_seconds": (
-                      round((time.monotonic_ns() - start["started_monotonic_ns"]) / 1e9, 3)
-                      if "started_monotonic_ns" in start else None
-                  ),
-              },
-              "build_step_outcome": os.environ["BUILD_STEP_OUTCOME"],
-              "build": build,
-              "junit": junit,
-              "focused_class_counts": actual_counts,
-              "http_response_bound_patch": (
-                  json.loads((evidence / "http-response-bound-patch.json").read_text())
-                  if (evidence / "http-response-bound-patch.json").is_file() else None
-              ),
-              "source_delta_after_build": source_delta,
-              "apks": apks,
-              "problems": problems,
-              "device_dott_result": "not executed by this workflow",
-          }
-          (evidence / "summary.json").write_text(
-              json.dumps(summary, indent=2) + "\n", encoding="utf-8"
-          )
-          for retained in sorted(evidence.glob("*.json")) + sorted(evidence.glob("*.log")):
-              with retained.open("rb") as stream:
-                  digest = hashlib.file_digest(stream, "sha256").hexdigest()
-              files.append({
-                  "path": retained.name, "bytes": retained.stat().st_size,
-                  "sha256": digest,
-              })
-          (evidence / "SHA256SUMS").write_text(
-              "".join(f"{entry['sha256']}  {entry['path']}\n" for entry in files),
-              encoding="utf-8",
-          )
-          print(json.dumps(summary, indent=2))
-          if problems:
-              raise SystemExit(1)
+            target=out/"files"/path;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(path,target)
+            item={"path":str(Path("files")/path),"bytes":target.stat().st_size,
+                  "sha256":hashlib.sha256(target.read_bytes()).hexdigest()}
+            files.append(item);return item
+          counts={};totals={"tests":0,"failures":0,"errors":0,"skipped":0,"report_files":0}
+          for report in sorted(Path("play-services-droidguard/core/build/test-results/testDebugUnitTest").glob("TEST-*.xml")):
+            retain(report);totals["report_files"]+=1
+            try:root=ET.parse(report).getroot()
+            except ET.ParseError:problems.append("Invalid XML: "+str(report));continue
+            for case in root.iter("testcase"):
+              name=case.get("classname");counts[name]=counts.get(name,0)+1;totals["tests"]+=1
+              for kind in ("failure","error","skipped"):
+                totals[{"failure":"failures","error":"errors","skipped":"skipped"}[kind]]+=len(case.findall(kind))
+          for name in ("RemoteDroidGuardInitializationTest","RemoteDroidGuardSessionTest","RemoteDroidGuardHttpClientTest","RemoteDroidGuardHandleInteropTest"):
+            if not counts.get("org.microg.gms.droidguard.core."+name):problems.append("No executed maintained class: "+name)
+          if totals["failures"] or totals["errors"] or totals["skipped"]:problems.append("Unit tests failed, errored or skipped")
+          if totals["tests"]==0:problems.append("No executed cases")
+          api=Path("play-services-droidguard/core/build/jdk-httpserver-test/api")
+          api_files=sorted(api.rglob("*.class"))
+          if not (api/"com/sun/net/httpserver/HttpServer.class").is_file():problems.append("Generated test API missing")
+          if any(not str(p.relative_to(api)).startswith("com/sun/net/httpserver/") for p in api_files):problems.append("Non-public package in test compile-only API")
+          api_manifest=[{"path":str(p.relative_to(api)),"sha256":hashlib.sha256(p.read_bytes()).hexdigest()} for p in api_files]
+          (out/"test-api-classes.json").write_text(json.dumps(api_manifest,indent=2)+"\n")
+          retain(Path("play-services-droidguard/core/build.gradle"))
+          changed=subprocess.check_output(["git","diff","--name-only"],text=True).splitlines()
+          if changed:problems.append("Unexpected source delta after build: "+repr(changed))
+          source=json.loads((out/"source.json").read_text()) if (out/"source.json").is_file() else {}
+          build=json.loads((out/"build.json").read_text()) if (out/"build.json").is_file() else {}
+          start=json.loads((out/"execution-start.json").read_text()) if (out/"execution-start.json").is_file() else {}
+          if not source.get("matches"):problems.append("Source pin unconfirmed")
+          if build.get("exit_code")!=0:problems.append("Gradle exit not zero")
+          log=(out/"gradle.log").read_text(errors="replace") if (out/"gradle.log").is_file() else ""
+          runtime_module_arg="--add-modules=jdk.httpserver" in log
+          if not runtime_module_arg:problems.append("Test JVM module argument missing from --info log")
+          summary={"source":source,"build":build,"junit":totals,"class_counts":counts,
+                   "generated_api_class_count":len(api_files),"test_jvm_module_argument_observed":runtime_module_arg,
+                   "source_delta_after_build":changed,"problems":problems,
+                   "execution":{**start,"ended_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                                "elapsed_seconds":round((time.monotonic_ns()-start["started_monotonic_ns"])/1e9,3) if "started_monotonic_ns" in start else None},
+                   "device_result":"not executed"}
+          (out/"summary.json").write_text(json.dumps(summary,indent=2)+"\n")
+          for p in sorted(out.glob("*.json"))+sorted(out.glob("*.log")):
+            files.append({"path":p.name,"bytes":p.stat().st_size,"sha256":hashlib.sha256(p.read_bytes()).hexdigest()})
+          (out/"SHA256SUMS").write_text("".join(f"{x['sha256']}  {x['path']}\n" for x in files))
+          print(json.dumps(summary,indent=2))
+          if problems:raise SystemExit(1)
           PY
-
-      - name: Upload the APK and execution evidence
+      - name: Upload execution evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dott3841-response-bound-${{ env.VALIDATION_SOURCE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.EVIDENCE_DIR }}/
+          name: dott3841-project-jdkmodule-${{ env.VALIDATION_SOURCE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_DIR }}
           if-no-files-found: error
           retention-days: 30
