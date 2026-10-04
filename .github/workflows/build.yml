@@ -21,8 +21,8 @@ jobs:
     timeout-minutes: 60
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
-      VALIDATION_SOURCE_SHA: '1d63e944ab606bc2683f19b5a34ac5ee7a4841fc'
-      VALIDATION_SOURCE_TREE: 'c36c1e1524fc220a3766709230f0e9e37505d31d'
+      VALIDATION_SOURCE_SHA: '71c28a2a67859fb2314d18fc8638fe633da2304c'
+      VALIDATION_SOURCE_TREE: 'e940bb056b9887292ca44ce5ee2017134800a7ce'
       EVIDENCE_DIR: /tmp/rcs2994-evidence-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Start the execution receipt
@@ -97,6 +97,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: false
 
       - name: Ensure Android 35 build components
         shell: bash
