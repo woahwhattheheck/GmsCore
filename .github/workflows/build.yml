@@ -3,7 +3,7 @@ permissions:
   contents: read
 on:
   push:
-    branches: ["validate/wear3852-e8fcc76c-b35f-20261004"]
+    branches: ["validate/wear3852-lint-b35f-20261004"]
 jobs:
   validate:
     runs-on: ubuntu-latest
