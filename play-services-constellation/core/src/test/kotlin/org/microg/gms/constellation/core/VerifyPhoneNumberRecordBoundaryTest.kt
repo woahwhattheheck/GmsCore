@@ -24,6 +24,7 @@ import com.google.android.gms.constellation.VerifyPhoneNumberRequest
 import com.google.android.gms.constellation.VerifyPhoneNumberResponse
 import com.google.android.gms.constellation.internal.IConstellationCallbacks
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -67,7 +68,10 @@ class VerifyPhoneNumberRecordBoundaryTest {
         override fun asBinder(): IBinder = Binder()
     }
 
-    private class RecordingSettingsProvider(private val onQuery: () -> Cursor?) : ContentProvider() {
+    private class RecordingSettingsProvider(
+        private val onQuery: () -> Cursor?,
+        private val onUpdate: () -> Unit = {}
+    ) : ContentProvider() {
         var updateCount = 0
             private set
         override fun onCreate() = true
@@ -77,7 +81,7 @@ class VerifyPhoneNumberRecordBoundaryTest {
         ): Cursor? = onQuery()
         override fun update(
             uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?
-        ): Int { updateCount++; return 1 }
+        ): Int { updateCount++; onUpdate(); return 1 }
         override fun insert(uri: Uri, values: ContentValues?): Uri? = null
         override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
         override fun getType(uri: Uri): String? = null
@@ -111,6 +115,50 @@ class VerifyPhoneNumberRecordBoundaryTest {
         assertTrue("cancellation must propagate to the dispatcher", thrown is CancellationException)
         assertEquals("a cancelled request must NOT write a verification record", 0, provider.updateCount)
         assertEquals("a cancelled request must NOT deliver to the caller", 0, callbacks.deliveries)
+    }
+
+    @Test
+    fun cancellationDuringSettingsRead_writesNoRecord_andDoesNotDeliver() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val requestJob = Job()
+        val provider = RecordingSettingsProvider(onQuery = {
+            requestJob.cancel(CancellationException("caller died during settings read"))
+            enabledCursor(0)
+        })
+        ShadowContentResolver.registerProviderInternal(SettingsContract.getAuthority(context), provider)
+
+        val callbacks = RecordingCallbacks()
+        val thrown = runCatching {
+            runBlocking(requestJob) {
+                handleVerifyPhoneNumberRequest(context, callbacks, newRequest(), "com.example.caller")
+            }
+        }.exceptionOrNull()
+
+        assertTrue("cancellation must propagate to the dispatcher", thrown is CancellationException)
+        assertEquals("cancellation during a synchronous read must prevent the record", 0, provider.updateCount)
+        assertEquals("a cancelled request must NOT deliver to the caller", 0, callbacks.deliveries)
+    }
+
+    @Test
+    fun cancellationDuringRecord_doesNotDeliver() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val requestJob = Job()
+        val provider = RecordingSettingsProvider(
+            onQuery = { enabledCursor(0) },
+            onUpdate = { requestJob.cancel(CancellationException("caller died during settings update")) }
+        )
+        ShadowContentResolver.registerProviderInternal(SettingsContract.getAuthority(context), provider)
+
+        val callbacks = RecordingCallbacks()
+        val thrown = runCatching {
+            runBlocking(requestJob) {
+                handleVerifyPhoneNumberRequest(context, callbacks, newRequest(), "com.example.caller")
+            }
+        }.exceptionOrNull()
+
+        assertTrue("cancellation must propagate to the dispatcher", thrown is CancellationException)
+        assertEquals("the record began while the request was active", 1, provider.updateCount)
+        assertEquals("cancellation during a synchronous update must prevent delivery", 0, callbacks.deliveries)
     }
 
     @Test

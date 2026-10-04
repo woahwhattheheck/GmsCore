@@ -20,6 +20,7 @@ import com.squareup.wire.GrpcException
 import com.squareup.wire.GrpcStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.microg.gms.common.Constants
 import org.microg.gms.constellation.core.proto.AsterismClient
@@ -42,6 +43,7 @@ import org.microg.gms.constellation.core.proto.builder.invoke
 import org.microg.gms.constellation.core.verification.ChallengeProcessor
 import org.microg.gms.constellation.core.verification.MtSmsInboxRegistry
 import java.util.UUID
+import kotlin.coroutines.coroutineContext
 
 private const val TAG = "VerifyPhoneNumber"
 
@@ -227,6 +229,8 @@ private suspend fun handleVerifyPhoneNumberRequest(
         }
     }
 
+    // Synchronous settings calls can return normally after this request was cancelled.
+    coroutineContext.ensureActive()
     val successful = status.isSuccess && when (readCallbackMode) {
         ReadCallbackMode.NONE -> verifications.isNotEmpty() &&
                 (request.targetedSims.isEmpty() ||
@@ -238,6 +242,7 @@ private suspend fun handleVerifyPhoneNumberRequest(
         else -> true
     }
     ConstellationStateStore.recordPhoneNumberVerification(context, callingPackage, successful)
+    coroutineContext.ensureActive()
 
     if (readCallbackMode == ReadCallbackMode.LEGACY ||
         readCallbackMode == ReadCallbackMode.NONE && legacyCallbackOnFullFlow
