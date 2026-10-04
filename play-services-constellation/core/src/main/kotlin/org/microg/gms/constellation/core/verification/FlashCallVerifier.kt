@@ -127,7 +127,8 @@ internal fun PhoneRange.matches(caller: String, defaultCountryIso: String): Bool
         ?.uppercase(Locale.ROOT)
         ?: defaultCountryIso
     val candidates = linkedSetOf(caller.digitsOnly())
-    if (regionIso.isNotEmpty()) {
+    // formatNumberToE164 is API 21; constellation-core minSdk is 19. On KitKat, compare digits only.
+    if (regionIso.isNotEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
         PhoneNumberUtils.formatNumberToE164(caller, regionIso)?.let { candidates += it.digitsOnly() }
     }
     return candidates.any { it.isNotEmpty() && it.startsWith(prefix) && it.endsWith(suffix) }
