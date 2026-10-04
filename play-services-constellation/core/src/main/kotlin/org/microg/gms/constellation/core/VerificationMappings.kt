@@ -54,7 +54,9 @@ fun Verification.toClientVerification(imsiToSlotMap: Map<String, Int>): PhoneNum
     val clientStatus = effectiveStatus.toClientStatus()
     val extras = buildClientExtras()
     val simImsi = association?.sim?.sim_info?.imsi?.firstOrNull()
-    val simSlot = if (simImsi != null) imsiToSlotMap[simImsi] ?: -1 else -1
+    val simSlot = resolveVerificationSimSlot(
+        simImsi, imsiToSlotMap, association?.sim?.sim_slot?.slot_index
+    )
 
     var phoneNumber = ""
     var timestampMillis = 0L
