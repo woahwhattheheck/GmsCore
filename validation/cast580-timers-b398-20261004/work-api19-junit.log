@@ -1,0 +1,8 @@
+JUnit version 4.13.2
+.TIMER_TIMEOUT callbacks=1 pending=0 queue=0
+.TIMER_MEASUREMENT {"pendingRequestsAfterReplies":0,"canceledTimersRetained":512,"timersScheduled":512,"callbacks":512,"repliesProcessed":512,"elapsedMillis":196,"launchRequests":256,"statusRequests":256}
+
+Time: 0.379
+
+OK (2 tests)
+

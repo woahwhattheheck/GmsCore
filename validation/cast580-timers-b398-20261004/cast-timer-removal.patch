@@ -1,0 +1,20 @@
+--- a/play-services-cast/core/src/main/kotlin/org/microg/gms/cast/channel/CastDeviceSession.kt
++++ b/play-services-cast/core/src/main/kotlin/org/microg/gms/cast/channel/CastDeviceSession.kt
+@@ -5,6 +5,7 @@
+ 
+ package org.microg.gms.cast.channel
+ 
++import android.os.Build
+ import org.json.JSONException
+ import org.json.JSONObject
+ import org.microg.gms.cast.proto.CastMessage
+@@ -75,6 +76,9 @@
+ 
+     private val executor = ScheduledThreadPoolExecutor(1) { Thread(it, "CastDeviceSession-$host").apply { isDaemon = true } }.apply {
+         executeExistingDelayedTasksAfterShutdownPolicy = false
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
++            removeOnCancelPolicy = true
++        }
+     }
+     private var channel: CastChannel? = null
+     private var nextRequestId = 1L
