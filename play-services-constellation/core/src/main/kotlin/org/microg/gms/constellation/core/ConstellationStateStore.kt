@@ -194,16 +194,21 @@ object ConstellationStateStore {
 
     /**
      * Merges [entries] into the locally stored verified numbers, keyed by IMSI. Expired and
-     * incomplete entries are dropped, and records for SIMs that [entries] does not mention are
-     * kept as long as they are still valid.
+     * incomplete entries are dropped. Records for SIMs in [refreshedImsis] are removed even when
+     * the fresh sync did not yield a cacheable replacement; untouched valid SIM records are kept.
      */
-    fun storeVerifiedNumbers(context: Context, entries: List<StoredVerifiedNumber>) {
+    fun storeVerifiedNumbers(
+        context: Context,
+        entries: List<StoredVerifiedNumber>,
+        refreshedImsis: Set<String> = emptySet()
+    ) {
         val now = System.currentTimeMillis()
         val fresh = entries.filter {
             it.imsi.isNotEmpty() && it.phoneNumber.isNotEmpty() && it.expirationMillis > now
         }
-        if (fresh.isEmpty()) return
-        val replaced = fresh.map { it.imsi }.toSet()
+        val replaced = refreshedImsis.filter { it.isNotEmpty() }.toSet() +
+                fresh.map { it.imsi }
+        if (fresh.isEmpty() && replaced.isEmpty()) return
         val retained = loadVerifiedNumbers(context).filterNot { it.imsi in replaced }
         writeVerifiedNumbers(context, retained + fresh)
     }
