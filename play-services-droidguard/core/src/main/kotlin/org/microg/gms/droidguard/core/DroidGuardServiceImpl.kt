@@ -24,7 +24,7 @@ class DroidGuardServiceImpl(private val service: DroidGuardChimeraService, priva
         val result = try {
             handle = getHandle()
             if (request != null) handle.initWithRequest(flow, request) else handle.init(flow)
-            handle.snapshot(map ?: mutableMapOf())
+            handle.snapshot(map ?: mutableMapOf<Any?, Any?>())
         } catch (e: Exception) {
             Log.w(TAG, "guard failed", e)
             FallbackCreator.create(flow, service, map.orEmpty(), e)
