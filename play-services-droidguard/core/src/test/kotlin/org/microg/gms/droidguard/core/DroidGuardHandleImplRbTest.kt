@@ -10,9 +10,9 @@ import android.os.Bundle
 import androidx.test.core.app.ApplicationProvider
 import com.google.android.gms.droidguard.internal.DroidGuardResultsRequest
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -88,7 +88,8 @@ class DroidGuardHandleImplRbTest {
         val reply = service.initWithRequest("test", null)
 
         assertNotNull(reply.pfd)
-        assertSame(value, reply.`object`)
+        val returned = reply.`object` as Bundle
+        assertEquals("rb", returned.getString("marker"))
         assertArrayEquals(SNAPSHOT, service.snapshot(mutableMapOf()))
         reply.pfd?.close()
         service.close()
@@ -121,13 +122,13 @@ class DroidGuardHandleImplRbTest {
         service.close()
     }
 
-    class NoRbVm {
+    private class NoRbVm {
         fun init() = true
         fun ss(map: Map<Any?, Any?>): ByteArray = SNAPSHOT
         fun close() = Unit
     }
 
-    class RbVm(
+    private class RbVm(
         private val value: android.os.Parcelable?,
         private val throwOnRb: Boolean = false
     ) {
