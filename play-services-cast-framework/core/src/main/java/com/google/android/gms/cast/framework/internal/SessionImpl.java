@@ -75,6 +75,7 @@ public class SessionImpl extends ISession.Stub {
         this.startType = START_TYPE_NEW;
         try {
             this.proxy.onStarting(routeInfoExtra);
+            if (this.state != STATE_STARTING) return;
             this.castContext.getSessionManagerImpl().onSessionStarting(this);
             if (this.state != STATE_STARTING) {
                 // A listener ended the session from onSessionStarting
@@ -94,6 +95,7 @@ public class SessionImpl extends ISession.Stub {
         this.startType = START_TYPE_RESUMED;
         try {
             this.proxy.onResuming(routeInfoExtra);
+            if (this.state != STATE_RESUMING) return;
             this.castContext.getSessionManagerImpl().onSessionResuming(this, sessionId);
             if (this.state != STATE_RESUMING) {
                 // A listener ended the session from onSessionResuming
