@@ -245,6 +245,17 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
             return true;
         }
         String sessionId = intent.getStringExtra(MediaControlIntent.EXTRA_SESSION_ID);
+        synchronized (this) {
+            if (sessionId != null && remotePlaybackSessionId != null && !sessionId.equals(remotePlaybackSessionId)) {
+                callback.onError("Unknown remote playback session", null);
+                return true;
+            }
+        }
+        CastDeviceSession target = usableSession();
+        if (target == null) {
+            callback.onError("No connection to " + routeId, null);
+            return true;
+        }
         long receiverMediaSessionId;
         synchronized (this) {
             if (sessionId != null && remotePlaybackSessionId != null && !sessionId.equals(remotePlaybackSessionId)) {
@@ -256,11 +267,6 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
             }
             remotePlaybackSessionId = sessionId;
             receiverMediaSessionId = mediaSessionId;
-        }
-        CastDeviceSession target = usableSession();
-        if (target == null) {
-            callback.onError("No connection to " + routeId, null);
-            return true;
         }
         if (receiverMediaSessionId <= 0) {
             PendingPlay previous;
