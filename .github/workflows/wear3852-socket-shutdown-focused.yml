@@ -1,0 +1,20 @@
+name: Wear3852 socket shutdown focused test
+on:
+  push:
+    branches: [validation/wear3852-socket-shutdown-e309-20261004]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: e309dd0bc0acf5933d3d945671144026fb6b7ac3
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: GRADLE_MICROG_VERSION_WITHOUT_GIT=1 ./gradlew --no-daemon --no-configuration-cache --no-build-cache --max-workers=2 :play-services-wearable-core:testDebugUnitTest --tests org.microg.gms.wearable.SocketConnectionThreadShutdownTest
