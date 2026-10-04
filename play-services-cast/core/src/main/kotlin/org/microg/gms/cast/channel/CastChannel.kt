@@ -74,7 +74,7 @@ class CastChannel(
     private val connectedTransports = HashSet<String>()
 
     @Volatile
-    private var lastReceived = 0L
+    private var lastReceivedNanos = 0L
 
     @Volatile
     private var closed = false
@@ -102,7 +102,7 @@ class CastChannel(
                 sslSocket.soTimeout = 0
                 writeLocked(RECEIVER_ID, NAMESPACE_CONNECTION, CONNECT_PAYLOAD)
                 connectedTransports.add(RECEIVER_ID)
-                lastReceived = System.currentTimeMillis()
+                lastReceivedNanos = System.nanoTime()
                 reader = Thread({ readLoop(input) }, "CastChannel-$host").apply { isDaemon = true; start() }
                 heartbeat = Executors.newSingleThreadScheduledExecutor { Thread(it, "CastHeartbeat-$host").apply { isDaemon = true } }.also {
                     heartbeatTask = it.scheduleWithFixedDelay(::heartbeatTick, HEARTBEAT_INTERVAL_MILLIS, HEARTBEAT_INTERVAL_MILLIS, TimeUnit.MILLISECONDS)
@@ -192,7 +192,7 @@ class CastChannel(
         try {
             while (!closed) {
                 val message = readMessage(input)
-                lastReceived = System.currentTimeMillis()
+                lastReceivedNanos = System.nanoTime()
                 when (message.namespace) {
                     NAMESPACE_HEARTBEAT -> if (message.payload_utf8?.contains("\"PING\"") == true) {
                         synchronized(lock) { writeLocked(message.source_id, NAMESPACE_HEARTBEAT, PONG_PAYLOAD) }
@@ -215,7 +215,8 @@ class CastChannel(
     }
 
     private fun heartbeatTick() {
-        if (System.currentTimeMillis() - lastReceived > HEARTBEAT_TIMEOUT_MILLIS) {
+        // Wall-clock corrections must not change the elapsed heartbeat timeout.
+        if (System.nanoTime() - lastReceivedNanos > TimeUnit.MILLISECONDS.toNanos(HEARTBEAT_TIMEOUT_MILLIS)) {
             shutdown(SocketTimeoutException("No message from $host for ${HEARTBEAT_TIMEOUT_MILLIS}ms"))
             return
         }

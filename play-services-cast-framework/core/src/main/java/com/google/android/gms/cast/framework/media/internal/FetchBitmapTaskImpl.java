@@ -123,7 +123,9 @@ public class FetchBitmapTaskImpl extends IFetchBitmapTask.Stub {
         BitmapFactory.decodeByteArray(data, 0, data.length, options);
         int sampleSize = 1;
         if (targetWidth > 0 && targetHeight > 0) {
-            while (options.outWidth / (sampleSize * 2) >= targetWidth && options.outHeight / (sampleSize * 2) >= targetHeight) {
+            // The final resize fits inside the hints. Keep enough pixels for
+            // either limiting dimension, without fully decoding wide/tall art.
+            while (options.outWidth / (sampleSize * 2L) >= targetWidth || options.outHeight / (sampleSize * 2L) >= targetHeight) {
                 sampleSize *= 2;
             }
         } else {
