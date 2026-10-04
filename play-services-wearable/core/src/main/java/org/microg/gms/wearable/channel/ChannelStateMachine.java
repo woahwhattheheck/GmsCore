@@ -311,7 +311,8 @@ public class ChannelStateMachine {
             int bytesRead = sendBuffer.hasRemaining() ? transport.read(outputFd,
                     sendBuffer.array(), sendBuffer.position(), 0) : 0;
 
-            if (!gotAnyData && !hitEof)
+            // A zero-length send still needs a final frame, even without an input read.
+            if (!gotAnyData && !hitEof && sendMaxLength != 0)
             {
                 sendBuffer.clear();
                 return;
