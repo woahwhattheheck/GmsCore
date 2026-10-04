@@ -30,7 +30,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Run focused Cast core unit tests
-        run: ./gradlew :play-services-cast:core:testDebugUnitTest --no-daemon --stacktrace
+        run: ./gradlew :play-services-cast-core:testDebugUnitTest --no-daemon --stacktrace
 
       - name: Upload JUnit XML
         if: always()
