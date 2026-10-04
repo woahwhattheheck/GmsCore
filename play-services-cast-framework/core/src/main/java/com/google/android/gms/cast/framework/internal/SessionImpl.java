@@ -127,6 +127,8 @@ public class SessionImpl extends ISession.Stub {
         String routeId = this.routeId;
         if (castContext == null || routeId == null) return;
         castContext.runOnMainThread(() -> {
+            SessionImpl currentSession = castContext.getSessionManagerImpl().getCurrentSession();
+            if (currentSession != null && currentSession != this) return;
             try {
                 IMediaRouter router = castContext.getRouter();
                 if (TextUtils.equals(router.getSelectedRouteId(), routeId)) {

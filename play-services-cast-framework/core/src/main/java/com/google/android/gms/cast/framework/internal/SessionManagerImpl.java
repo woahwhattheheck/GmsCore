@@ -59,6 +59,8 @@ public class SessionManagerImpl extends ISessionManager.Stub {
     private final Map<Object, ICastStateListener> castStateListeners = new IdentityHashMap<>();
 
     private SessionImpl currentSession;
+    // A replaced session may still own the saved record until its end callback arrives.
+    private SessionImpl savedSession;
 
     private int castState = CastState.NO_DEVICES_AVAILABLE;
 
@@ -191,6 +193,7 @@ public class SessionManagerImpl extends ISessionManager.Stub {
             }
             this.currentSession = session;
             if (resume) {
+                savedSession = session;
                 Log.d(TAG, "Resuming session " + sessionId + " on " + routeId);
                 session.resume(castContext, castDevice, routeId, extras);
             } else {
@@ -242,6 +245,7 @@ public class SessionManagerImpl extends ISessionManager.Stub {
      * Remembers the last session of a recoverable session provider, so it can be resumed when the app is restarted.
      */
     void tryResumeSavedSession() {
+        if (!castContext.getOptions().getResumeSavedSession()) return;
         SharedPreferences preferences = getPreferences();
         String routeId = preferences.getString(PREF_ROUTE_ID, null);
         String sessionId = preferences.getString(PREF_SESSION_ID, null);
@@ -279,6 +283,7 @@ public class SessionManagerImpl extends ISessionManager.Stub {
         // Only sessions of the default (Cast) session provider are resumed.
         if (!TextUtils.equals(session.getCategory(), castContext.getDefaultCategory())) return;
         if (session.getRouteId() == null || session.getSessionId() == null) return;
+        savedSession = session;
         getPreferences().edit()
                 .putString(PREF_ROUTE_ID, session.getRouteId())
                 .putString(PREF_SESSION_ID, session.getSessionId())
@@ -287,6 +292,7 @@ public class SessionManagerImpl extends ISessionManager.Stub {
     }
 
     private void clearSavedSession() {
+        savedSession = null;
         getPreferences().edit().clear().apply();
     }
 
@@ -395,10 +401,8 @@ public class SessionManagerImpl extends ISessionManager.Stub {
     }
 
     public void onSessionEnded(SessionImpl session, int error) {
-        if (this.currentSession == session) {
-            this.currentSession = null;
-            clearSavedSession();
-        }
+        if (this.currentSession == session) this.currentSession = null;
+        if (savedSession == session) clearSavedSession();
         this.updateCastState();
         for (ISessionManagerListener listener : new ArrayList<>(this.sessionManagerListeners.values())) {
             try {
@@ -421,10 +425,8 @@ public class SessionManagerImpl extends ISessionManager.Stub {
     }
 
     public void onSessionResumeFailed(SessionImpl session, int error) {
-        if (this.currentSession == session) {
-            this.currentSession = null;
-            clearSavedSession();
-        }
+        if (this.currentSession == session) this.currentSession = null;
+        if (savedSession == session) clearSavedSession();
         this.updateCastState();
         for (ISessionManagerListener listener : new ArrayList<>(this.sessionManagerListeners.values())) {
             try {
