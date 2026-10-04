@@ -3,6 +3,7 @@ from pathlib import Path
 SOURCE = 'play-services-cast/core/src/main/kotlin/org/microg/gms/cast/channel/CastDeviceSession.kt'
 
 def patch(text):
+    newline = '\r\n' if '\r\n' in text else '\n'
     replacements = [
         ('    fun connect() = post {', '    fun connect() = post(onRejected = { callbacks.onConnectionFailed(STATUS_NETWORK_ERROR) }) {'),
         ('    ) = post {\n        if (relaunchIfRunning)', '    ) = post(onRejected = { callbacks.onApplicationConnectionFailed(STATUS_APPLICATION_NOT_RUNNING) }) {\n        if (relaunchIfRunning)'),
@@ -11,6 +12,7 @@ def patch(text):
         ('    fun stopApplication(sessionId: String?) = post {', '    fun stopApplication(sessionId: String?) = post(onRejected = { callbacks.onStopApplicationResult(STATUS_APPLICATION_NOT_RUNNING) }) {'),
     ]
     for old, new in replacements:
+        old, new = old.replace('\n', newline), new.replace('\n', newline)
         if text.count(old) != 1:
             raise RuntimeError('Expected exactly one source match: ' + old)
         text = text.replace(old, new, 1)
