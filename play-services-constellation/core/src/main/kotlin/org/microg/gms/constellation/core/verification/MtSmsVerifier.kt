@@ -111,12 +111,25 @@ internal class MtSmsInboxScope(
         val replaced: List<MtSmsInboxHandle>
         synchronized(lock) {
             check(!disposed) { "MtSmsInboxScope already disposed" }
+            val replacements = HashMap<Int, MtSmsInboxHandle>()
+            try {
+                for (subId in effectiveSubIds) {
+                    replacements[subId] = inboxFactory(context, subId)
+                }
+            } catch (failure: Throwable) {
+                for (inbox in replacements.values) {
+                    try {
+                        inbox.dispose()
+                    } catch (cleanupFailure: Throwable) {
+                        if (cleanupFailure !== failure) failure.addSuppressed(cleanupFailure)
+                    }
+                }
+                throw failure
+            }
             // Only ever touches THIS request's own inboxes.
             replaced = inboxes.values.toList()
             inboxes.clear()
-            for (subId in effectiveSubIds) {
-                inboxes[subId] = inboxFactory(context, subId)
-            }
+            inboxes.putAll(replacements)
         }
         replaced.forEach { it.dispose() }
     }
