@@ -156,6 +156,47 @@ public class RemotePlaybackResponseOwnershipTest {
         assertFalse(controller.onControlRequest(new Intent(MediaControlIntent.ACTION_PLAY), null));
     }
 
+    @Test public void currentSeekRejectsMismatchedReplyBeforeStateChange() throws Exception {
+        assertRejectedCurrentReply(false, true,
+                "[{\"mediaSessionId\":42,\"playerState\":\"PAUSED\",\"currentTime\":2,\"media\":{\"duration\":9}}]");
+    }
+
+    @Test public void currentStopRejectsMismatchedReplyBeforeStateChange() throws Exception {
+        assertRejectedCurrentReply(true, false,
+                "[{\"mediaSessionId\":42,\"playerState\":\"IDLE\"}]");
+    }
+
+    @Test public void currentItemRequestStillClearsAuthoritativeEmptyStatus() throws Exception {
+        CastMediaRouteController controller = currentItem();
+        RecordingCallback result = new RecordingCallback();
+        long requestId = track(controller,
+                new CastMediaRouteController.PendingControl("new-session", "new-item", true, false, 43, result));
+        callbacks(controller).onTextMessage(MEDIA,
+                "{\"type\":\"MEDIA_STATUS\",\"requestId\":" + requestId + ",\"status\":[]}");
+        assertEquals(0, field("mediaSessionId").getLong(controller));
+        assertNull(field("remotePlaybackItemId").get(controller));
+        assertEquals(MediaItemStatus.PLAYBACK_STATE_FINISHED, field("mediaPlaybackState").getInt(controller));
+        assertEquals(1, result.errors);
+        assertEquals(0, result.successes);
+    }
+
+    private static void assertRejectedCurrentReply(boolean stop, boolean item, String status) throws Exception {
+        CastMediaRouteController controller = currentItem();
+        RecordingCallback result = new RecordingCallback();
+        long requestId = track(controller,
+                new CastMediaRouteController.PendingControl("new-session", "new-item", item, stop, 43, result));
+        CastDeviceSession.Callbacks receiver = callbacks(controller);
+        String reply = "{\"type\":\"MEDIA_STATUS\",\"requestId\":" + requestId + ",\"status\":" + status + "}";
+        receiver.onTextMessage(MEDIA, reply);
+        assertCurrentItem(controller);
+        assertEquals(1, result.errors);
+        assertEquals(0, result.successes);
+        assertTrue(pending(controller).isEmpty());
+        receiver.onTextMessage(MEDIA, reply);
+        assertCurrentItem(controller);
+        assertEquals(1, result.errors);
+    }
+
     private static CastMediaRouteController currentItem() throws Exception {
         CastMediaRouteController controller = new CastMediaRouteController(null, "route", "localhost", 8009, 0);
         field("mediaSessionId").setLong(controller, 43);
