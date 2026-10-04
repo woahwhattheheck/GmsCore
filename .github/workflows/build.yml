@@ -1,64 +1,117 @@
-name: "Gradle build"
-permissions: {}
+name: Wear 3852 exact source validation
+permissions:
+  contents: read
 on:
-  - push
-  - pull_request
-  - workflow_dispatch
-
+  push:
+    branches: ["validate/wear3852-1062b78d-b35f-20261004"]
 jobs:
-  build:
-    name: "Gradle build ${{ matrix.target }}"
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
-      GRADLE_MICROG_VERSION_WITHOUT_GIT: 1
-
-    strategy:
-      matrix:
-        target: [Debug, Release]
-
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
     steps:
-      - name: "Free disk space"
+      - uses: actions/checkout@v7
+        with:
+          ref: 1062b78d9cb7c6cd28afb3f342dbd4b87998e936
+          fetch-depth: 1
+      - name: Source and runtime pin
         run: |
-          # Deleting unneeded software packages
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /opt/hostedtoolcache/go
-
-          # Log available space
+          test "$(git rev-parse HEAD)" = "1062b78d9cb7c6cd28afb3f342dbd4b87998e936"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          mkdir validation-evidence
+          git rev-parse HEAD HEAD^{tree}
           df -h
-      - name: "Checkout sources"
-        uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
-          fetch-depth: 0
-      - name: "Setup Java"
-        uses: actions/setup-java@v6
-        with:
-          distribution: "temurin"
+          distribution: temurin
           java-version: "17"
-      - name: "Setup Gradle"
-        uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@v6
         with:
-          cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
-          build-scan-publish: true
-          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
-          build-scan-terms-of-use-agree: "yes"
-      - name: "Setup matchers"
+          cache-read-only: true
+      - name: Required combined validation
+        shell: bash
         run: |
-          # Setting up matchers...
-
-          matchers_dir='${{ github.workspace }}/.github/matchers'
-          matcher_list()
-          {
-            echo 'gradle-build-matcher.json'
-            echo 'gradle-build-kotlin-error-matcher.json'
-          }
-
-          matcher_list | while IFS='' read -r NAME; do
-            if test -f "${matchers_dir:?}/${NAME:?}"; then
-              echo "::add-matcher::${matchers_dir:?}/${NAME:?}"
-              echo "Matcher configured: ${NAME:?}"
-            fi
-          done
-      - name: "Execute Gradle assemble"
-        run: "./gradlew assemble${{ matrix.target }}"
-      - name: "Execute Gradle lint"
-        run: "./gradlew lint${{ matrix.target }}"
+          java -version 2>validation-evidence/java-version.txt
+          ./gradlew --version >validation-evidence/gradle-version.txt
+          printf '%s\n' './gradlew --no-daemon --max-workers=2 --no-configuration-cache --continue :play-services-wearable-core:testDebugUnitTest :play-services-wearable:testDebugUnitTest :play-services-wearable-core:compileDebugAndroidTestJavaWithJavac assembleVtmDefaultDebug' >validation-evidence/required.command
+          set +e
+          ./gradlew --no-daemon --max-workers=2 --no-configuration-cache --continue :play-services-wearable-core:testDebugUnitTest :play-services-wearable:testDebugUnitTest :play-services-wearable-core:compileDebugAndroidTestJavaWithJavac assembleVtmDefaultDebug 2>&1 | tee validation-evidence/required.log
+          command_exit=${PIPESTATUS[0]}
+          printf '%s\n' "$command_exit" >validation-evidence/required.exit
+          exit 0
+      - name: Retain exact current lint diagnostics
+        shell: bash
+        run: |
+          printf '%s\n' './gradlew --no-daemon --max-workers=2 --no-configuration-cache :play-services-wearable-core:lintDebug' >validation-evidence/lint.command
+          set +e
+          ./gradlew --no-daemon --max-workers=2 --no-configuration-cache :play-services-wearable-core:lintDebug 2>&1 | tee validation-evidence/lint.log
+          command_exit=${PIPESTATUS[0]}
+          printf '%s\n' "$command_exit" >validation-evidence/lint.exit
+          exit 0
+      - name: Collect actual XML counts and artifact hashes
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,shutil,subprocess,xml.etree.ElementTree as ET
+          root=pathlib.Path(".")
+          out=root/"validation-evidence"
+          def git(*args):
+              return subprocess.check_output(["git",*args],text=True).strip()
+          def sha(path):
+              h=hashlib.sha256()
+              with path.open("rb") as f:
+                  for b in iter(lambda:f.read(1048576),b""): h.update(b)
+              return h.hexdigest()
+          report={"source_sha":git("rev-parse","HEAD"),"source_tree":git("rev-parse","HEAD^{tree}"),"controller_sha":os.environ["GITHUB_SHA"],"run_id":os.environ["GITHUB_RUN_ID"],"run_attempt":os.environ["GITHUB_RUN_ATTEMPT"],"tracked_source_diff":git("diff","--name-only"),"commands":{},"suites":{},"apks":[],"physical_watch_acceptance":"unverified"}
+          for group in ("required","lint"):
+              report["commands"][group]={"exit_code":int((out/(group+".exit")).read_text()),"command":(out/(group+".command")).read_text().strip()}
+          for group,path in (("core",root/"play-services-wearable/core/build/test-results/testDebugUnitTest"),("api",root/"play-services-wearable/build/test-results/testDebugUnitTest")):
+              summary={"tests":0,"failures":0,"errors":0,"skipped":0,"files":[]}
+              for xml in sorted(path.glob("TEST-*.xml")):
+                  element=ET.parse(xml).getroot()
+                  record={"file":str(xml),"sha256":sha(xml),"name":element.attrib.get("name"),"tests":int(element.attrib.get("tests",0)),"failures":int(element.attrib.get("failures",0)),"errors":int(element.attrib.get("errors",0)),"skipped":int(element.attrib.get("skipped",0))}
+                  for key in ("tests","failures","errors","skipped"): summary[key]+=record[key]
+                  summary["files"].append(record)
+                  destination=out/"junit"/group/xml.name
+                  destination.parent.mkdir(parents=True,exist_ok=True)
+                  shutil.copy2(xml,destination)
+              report["suites"][group]=summary
+          for apk in sorted((root/"play-services-core/build/outputs/apk").rglob("*.apk")):
+              record={"path":str(apk),"bytes":apk.stat().st_size,"sha256":sha(apk)}
+              report["apks"].append(record)
+              destination=out/"apk"/apk.name
+              destination.parent.mkdir(parents=True,exist_ok=True)
+              if destination.exists(): raise RuntimeError("duplicate APK basename")
+              shutil.copy2(apk,destination)
+          for pattern in ("play-services-wearable/core/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt","play-services-wearable/core/build/reports/lint-results-debug.html","play-services-wearable/core/build/reports/lint-results-debug.xml"):
+              path=root/pattern
+              if path.exists():
+                  destination=out/"lint"/path.name
+                  destination.parent.mkdir(parents=True,exist_ok=True)
+                  shutil.copy2(path,destination)
+          (out/"source-tree.txt").write_text(git("ls-tree","-r","HEAD")+"\n")
+          report["required_passed"]=(report["source_sha"]=="1062b78d9cb7c6cd28afb3f342dbd4b87998e936" and not report["tracked_source_diff"] and report["commands"]["required"]["exit_code"]==0 and bool(report["apks"]) and all(v["tests"]>0 and v["failures"]==0 and v["errors"]==0 for v in report["suites"].values()))
+          (out/"results.json").write_text(json.dumps(report,indent=2)+"\n")
+          print(json.dumps(report,indent=2))
+          for path in sorted(out.rglob("*")):
+              if path.is_file() and path.name!="SHA256SUMS": 
+                  with (out/"SHA256SUMS").open("a") as f: f.write(sha(path)+"  "+str(path.relative_to(out))+"\n")
+          
+          PY
+      - name: Upload source-pinned execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wear3852-1062b78d-${{ github.run_id }}
+          path: validation-evidence/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Required acceptance gate
+        run: |
+          python3 - <<'PY'
+          import json
+          r=json.load(open("validation-evidence/results.json"))
+          if not r["required_passed"]: raise SystemExit("Required source-pinned validation failed; inspect uploaded evidence")
+          PY
