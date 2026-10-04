@@ -30,7 +30,7 @@ public class AssetFetcher {
     private final Set<String> fetchingAssets = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
 
     private final Map<String, AssetFetchAttempt> failedAssets = new ConcurrentHashMap<>();
-    private final Map<String, PendingFetch> pendingFetches = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, PendingFetch> pendingFetches = new ConcurrentHashMap<>();
 
     private static final int ASSET_BATCH_SIZE = 4;
     static final int MAX_RETRY_COUNT = 3;

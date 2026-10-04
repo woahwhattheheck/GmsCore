@@ -1,5 +1,6 @@
 package org.microg.gms.wearable.channel;
 
+import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
@@ -179,7 +180,8 @@ public class ChannelTransport {
 
     static boolean isBrokenPipe(Throwable error) {
         for (Throwable cause = error; cause != null; cause = cause.getCause()) {
-            if (cause instanceof android.system.ErrnoException
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
+                    && cause instanceof android.system.ErrnoException
                     && ((android.system.ErrnoException) cause).errno == android.system.OsConstants.EPIPE) {
                 return true;
             }

@@ -127,7 +127,11 @@ public class WearableService extends BaseService {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        wearable.stop();
+        try {
+            wearable.stop();
+        } catch (SecurityException e) {
+            Log.w(TAG, "Bluetooth permission revoked during Wear shutdown", e);
+        }
     }
 
     @Override
