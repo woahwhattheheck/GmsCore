@@ -15,6 +15,7 @@ import com.google.android.gms.common.api.GoogleApiClient
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -78,6 +79,51 @@ class CastDeviceControllerReconnectTest {
 
         assertTrue(listener.events.contains("onConnectedWithResult:0"))
         // Rejoin is posted on the session executor and must not open a socket in this test.
+        assertEquals(1, executors.single().pending.size)
+        executors.single().pending.clear()
+    }
+
+    @Test
+    fun successfulLeaveDoesNotRejoinAfterConnectionLoss() {
+        val listener = RecordingListener()
+        val controller = controller(listener)
+        val callbacks = callbacks(session(controller))
+        callbacks.onApplicationConnected(org.microg.gms.cast.channel.ReceiverApplication(
+            "CC1AD845", "Default Media Receiver", "app-session", "transport", "Ready", null, emptyList()
+        ), true)
+
+        callbacks.onLeaveApplicationResult(CastDeviceSession.STATUS_SUCCESS)
+
+        assertEquals(listOf("onApplicationConnectionSuccess", "onLeaveApplicationResult:0"), listener.events)
+        callbacks.onDisconnected(CastDeviceSession.STATUS_NETWORK_ERROR)
+        executors.single().pending.clear()
+        callbacks.onConnected()
+
+        assertTrue(listener.events.contains("onConnectedWithResult:0"))
+        // The device connection resumes, but the application the client left must not be rejoined.
+        assertEquals("A successful leave must not queue another application join", 0, executors.single().pending.size)
+        assertNull(attached(controller, "attachedApplicationId"))
+        assertNull(attached(controller, "attachedSessionId"))
+    }
+
+    @Test
+    fun failedLeavePreservesApplicationForReconnect() {
+        val listener = RecordingListener()
+        val controller = controller(listener)
+        val callbacks = callbacks(session(controller))
+        callbacks.onApplicationConnected(org.microg.gms.cast.channel.ReceiverApplication(
+            "CC1AD845", "Default Media Receiver", "app-session", "transport", "Ready", null, emptyList()
+        ), true)
+
+        callbacks.onLeaveApplicationResult(CastDeviceSession.STATUS_NETWORK_ERROR)
+
+        assertEquals("CC1AD845", attached(controller, "attachedApplicationId"))
+        assertEquals("app-session", attached(controller, "attachedSessionId"))
+        assertEquals(listOf("onApplicationConnectionSuccess", "onLeaveApplicationResult:7"), listener.events)
+        callbacks.onDisconnected(CastDeviceSession.STATUS_NETWORK_ERROR)
+        executors.single().pending.clear()
+        callbacks.onConnected()
+
         assertEquals(1, executors.single().pending.size)
         executors.single().pending.clear()
     }
@@ -183,7 +229,9 @@ class CastDeviceControllerReconnectTest {
 
         override fun onTextMessageReceived(namespace: String?, message: String?) {}
         override fun onBinaryMessageReceived(namespace: String?, data: ByteArray?) {}
-        override fun onLeaveApplicationResult(statusCode: Int) {}
+        override fun onLeaveApplicationResult(statusCode: Int) {
+            events += "onLeaveApplicationResult:$statusCode"
+        }
         override fun onStopApplicationResult(statusCode: Int) {}
         override fun onApplicationDisconnected(statusCode: Int) {
             events += "onApplicationDisconnected"

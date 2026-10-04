@@ -250,7 +250,13 @@ class CastDeviceControllerImpl(
             notify { onApplicationDisconnected(statusCode) }
         }
         override fun onStopApplicationResult(statusCode: Int) = ifCurrent { notify { onStopApplicationResult(statusCode) } }
-        override fun onLeaveApplicationResult(statusCode: Int) = ifCurrent { notify { onLeaveApplicationResult(statusCode) } }
+        override fun onLeaveApplicationResult(statusCode: Int) = ifCurrent {
+            if (statusCode == CastDeviceSession.STATUS_SUCCESS) {
+                attachedApplicationId = null
+                attachedSessionId = null
+            }
+            notify { onLeaveApplicationResult(statusCode) }
+        }
         override fun onTextMessage(namespace: String, message: String) = ifCurrent { notify { onTextMessageReceived(namespace, message) } }
         override fun onBinaryMessage(namespace: String, data: ByteArray) = ifCurrent { notify { onBinaryMessageReceived(namespace, data) } }
         override fun onSendMessageSuccess(namespace: String, requestId: Long) = ifCurrent { notify { onSendMessageSuccess(namespace, requestId) } }
