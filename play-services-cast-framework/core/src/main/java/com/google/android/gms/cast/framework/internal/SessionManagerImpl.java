@@ -169,6 +169,10 @@ public class SessionManagerImpl extends ISessionManager.Stub {
             Log.d(TAG, "Selected route " + routeId + " is not a Cast device");
             return;
         }
+        if (castContext.getSessionProvider(category) == null) {
+            Log.w(TAG, "No session provider for " + category);
+            return;
+        }
         if (currentSession != null && !currentSession.isDisconnected()) {
             if (TextUtils.equals(currentSession.getRouteId(), routeId)) {
                 // Also reached when the route matches the categories of multiple session providers.
@@ -177,6 +181,7 @@ public class SessionManagerImpl extends ISessionManager.Stub {
             }
             endCurrentSessionInternal(castContext.getOptions().getStopReceiverApplicationWhenEndingSession());
         }
+        // Ending listeners can remove the provider, so look it up again after teardown.
         ISessionProvider provider = castContext.getSessionProvider(category);
         if (provider == null) {
             Log.w(TAG, "No session provider for " + category);
