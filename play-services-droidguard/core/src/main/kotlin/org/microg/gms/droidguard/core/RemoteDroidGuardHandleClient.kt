@@ -5,8 +5,6 @@
 
 package org.microg.gms.droidguard.core
 
-import androidx.annotation.NonNull
-import androidx.annotation.Nullable
 import com.google.android.gms.droidguard.DroidGuardClient
 import com.google.android.gms.droidguard.DroidGuardHandle
 import com.google.android.gms.droidguard.internal.DroidGuardResultsRequest
@@ -29,8 +27,7 @@ class RemoteDroidGuardHandleClient(
     private val timeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
     private val executor: Executor = DEFAULT_EXECUTOR
 ) : DroidGuardClient {
-    @NonNull
-    override fun init(@NonNull flow: String, @Nullable request: DroidGuardResultsRequest?): Task<DroidGuardHandle> {
+    override fun init(flow: String, request: DroidGuardResultsRequest?): Task<DroidGuardHandle> {
         val completion = TaskCompletionSource<DroidGuardHandle>()
         try {
             executor.execute {
@@ -46,11 +43,10 @@ class RemoteDroidGuardHandleClient(
         return completion.task
     }
 
-    @NonNull
     override fun getResults(
-        @NonNull flow: String,
-        @Nullable data: Map<String, String>?,
-        @Nullable request: DroidGuardResultsRequest?
+        flow: String,
+        data: Map<String, String>?,
+        request: DroidGuardResultsRequest?
     ): Task<String> {
         val completion = TaskCompletionSource<String>()
         try {
