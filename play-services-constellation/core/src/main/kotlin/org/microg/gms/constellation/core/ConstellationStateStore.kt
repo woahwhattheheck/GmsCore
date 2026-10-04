@@ -239,6 +239,7 @@ object ConstellationStateStore {
      * The absolute wall-clock deadline described by a server-provided next-sync [timestamp], or
      * null when the server did not send one. Local state has no established freshness without it.
      */
+    @RequiresApi(Build.VERSION_CODES.O)
     fun nextSyncDeadlineMillis(timestamp: ServerTimestamp?): Long? {
         val serverMillis = timestamp?.timestamp?.toEpochMilli() ?: return null
         val localMillis = timestamp.now?.toEpochMilli() ?: return null
