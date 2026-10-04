@@ -4,6 +4,8 @@
 
 package org.microg.gms.wearable.channel;
 
+import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.system.ErrnoException;
 import android.system.OsConstants;
@@ -313,6 +315,44 @@ public class ChannelBehaviorTest {
     }
 
     @Test
+    public void zeroLengthSendEmitsFinalFrameAndClosesOnlyAfterAck() throws Exception {
+        RecordingManager manager = new RecordingManager();
+        RecordingTransport transport = new RecordingTransport();
+        ChannelStateMachine channel = new ChannelStateMachine(token(true), manager, transport, null,
+                ChannelAssetApiEnum.ORIGIN_CHANNEL_API, false, true, null,
+                new Handler(Looper.getMainLooper()));
+        channel.connectionState = ChannelStateMachine.CONNECTION_STATE_ESTABLISHED;
+        ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();
+        try {
+            channel.setOutputStream(pipe[0], null, 0, 0);
+            channel.processOutgoingData();
+
+            assertEquals(1, manager.sentData.size());
+            assertArrayEquals(new byte[0], manager.sentData.get(0));
+            assertEquals(0L, manager.sentHeaders.get(0).requestId);
+            assertTrue(manager.sentHeaders.get(0).isFinal);
+            assertEquals("a zero-length send must not read the input", 0, transport.readCalls);
+            assertTrue("the output stays open until the final ACK", channel.hasOutputStream());
+            assertEquals(ChannelStateMachine.SENDING_STATE_WAITING_FOR_ACK, channel.sendingState);
+
+            channel.processOutgoingData();
+            assertEquals("waiting for the ACK must not resend", 1, manager.sentData.size());
+            channel.onDataAckReceived(0L, true);
+
+            assertFalse(channel.hasOutputStream());
+            assertEquals(ChannelStateMachine.SENDING_STATE_CLOSED, channel.sendingState);
+            assertEquals(null, channel.sendPendingOp);
+            assertEquals(0L, channel.totalBytesSent);
+        } finally {
+            if (channel.hasOutputStream()) {
+                channel.onChannelOutputClosed(ChannelStatusCodes.CLOSE_REASON_NORMAL, 0);
+            }
+            pipe[0].close();
+            pipe[1].close();
+        }
+    }
+
+    @Test
     public void optionalScalarDefaultHelpersKeepWireIdentity() {
         assertFalse(ChannelProtocolDefaults.fromChannelOperator(null));
         assertFalse(ChannelProtocolDefaults.finalMessage(null));
@@ -361,6 +401,8 @@ public class ChannelBehaviorTest {
     private static final class RecordingManager extends ChannelManager {
         final List<Integer> closeCodes = new ArrayList<>();
         final List<Ack> dataAcks = new ArrayList<>();
+        final List<byte[]> sentData = new ArrayList<>();
+        final List<Ack> sentHeaders = new ArrayList<>();
         boolean failNextClose;
 
         RecordingManager() {
@@ -377,6 +419,13 @@ public class ChannelBehaviorTest {
         }
 
         @Override
+        public boolean sendData(ChannelStateMachine channel, byte[] data, boolean isFinal, long requestId) {
+            sentData.add(data);
+            sentHeaders.add(new Ack(requestId, isFinal));
+            return true;
+        }
+
+        @Override
         public void sendDataAck(ChannelStateMachine channel, long offset, boolean isFinal) {
             dataAcks.add(new Ack(offset, isFinal));
         }
@@ -385,6 +434,21 @@ public class ChannelBehaviorTest {
     private static final class RecordingTransport extends ChannelTransport {
         byte[] lastWrite;
         final List<byte[]> writes = new ArrayList<>();
+        int readCalls;
+
+        @Override
+        public void register(ParcelFileDescriptor fd) {
+        }
+
+        @Override
+        public void unregister(ParcelFileDescriptor fd) {
+        }
+
+        @Override
+        public int read(ParcelFileDescriptor fd, byte[] buffer, int offset, int length) {
+            readCalls++;
+            return 0;
+        }
 
         @Override
         public int write(ParcelFileDescriptor fd, byte[] buffer, int offset, int length) {
