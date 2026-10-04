@@ -1,64 +1,283 @@
-name: "Gradle build"
-permissions: {}
+name: "RCS #2994 DroidGuard captured-reply verification tests"
+
 on:
-  - push
-  - pull_request
-  - workflow_dispatch
+  push:
+    branches:
+      - 'validation/rcs-2994-sigverify-swe7-20261004'
+    paths:
+      - '.github/workflows/build.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rcs2994-rb-swe7
+  cancel-in-progress: false
 
 jobs:
-  build:
-    name: "Gradle build ${{ matrix.target }}"
+  rcs-combined:
+    if: github.repository == 'woahwhattheheck/GmsCore' && github.ref == 'refs/heads/validation/rcs-2994-sigverify-swe7-20261004'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
-      GRADLE_MICROG_VERSION_WITHOUT_GIT: 1
-
-    strategy:
-      matrix:
-        target: [Debug, Release]
-
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
+      VALIDATION_SOURCE_SHA: ${{ github.sha }}
+      VALIDATION_SOURCE_TREE: ${{ github.event.head_commit.tree_id }}
+      EVIDENCE_DIR: /tmp/rcs2994-evidence-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: "Free disk space"
+      - name: Start the execution receipt
+        shell: bash
         run: |
-          # Deleting unneeded software packages
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /opt/hostedtoolcache/go
+          python3 - <<'PY'
+          import datetime, json, os, time
+          from pathlib import Path
 
-          # Log available space
-          df -h
-      - name: "Checkout sources"
+          evidence = Path(os.environ["EVIDENCE_DIR"])
+          evidence.mkdir(parents=True, exist_ok=True)
+          receipt = {
+              "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "started_monotonic_ns": time.monotonic_ns(),
+              "workflow_commit": os.environ["GITHUB_SHA"],
+              "workflow_ref": os.environ["GITHUB_REF"],
+              "run_url": (
+                  os.environ["GITHUB_SERVER_URL"] + "/" +
+                  os.environ["GITHUB_REPOSITORY"] + "/actions/runs/" +
+                  os.environ["GITHUB_RUN_ID"]
+              ),
+              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+          }
+          (evidence / "execution-start.json").write_text(
+              json.dumps(receipt, indent=2) + "\n", encoding="utf-8"
+          )
+          PY
+
+      - name: Checkout the exact product source
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0
-      - name: "Setup Java"
-        uses: actions/setup-java@v6
+          ref: ${{ env.VALIDATION_SOURCE_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Record and verify source commit and tree
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+
+          commit = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], text=True
+          ).strip()
+          tree = subprocess.check_output(
+              ["git", "rev-parse", "HEAD^{tree}"], text=True
+          ).strip()
+          receipt = {
+              "expected_commit": os.environ["VALIDATION_SOURCE_SHA"],
+              "expected_tree": os.environ["VALIDATION_SOURCE_TREE"],
+              "actual_commit": commit,
+              "actual_tree": tree,
+          }
+          receipt["matches"] = (
+              commit == receipt["expected_commit"] and
+              tree == receipt["expected_tree"]
+          )
+          (Path(os.environ["EVIDENCE_DIR"]) / "source.json").write_text(
+              json.dumps(receipt, indent=2) + "\n", encoding="utf-8"
+          )
+          print(json.dumps(receipt, sort_keys=True))
+          if not receipt["matches"]:
+              raise SystemExit("The checkout does not match the pinned source.")
+          PY
+
+      - name: Set up Java
+        uses: actions/setup-java@v5.7.0
         with:
-          distribution: "temurin"
-          java-version: "17"
-      - name: "Setup Gradle"
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
-          cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
-          build-scan-publish: true
-          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
-          build-scan-terms-of-use-agree: "yes"
-      - name: "Setup matchers"
+          cache-read-only: false
+
+      - name: Ensure Android 35 build components
+        shell: bash
         run: |
-          # Setting up matchers...
+          set -euo pipefail
+          rcs_sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$rcs_sdk_root"
+          rcs_sdkmanager="$rcs_sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          if ! test -x "$rcs_sdkmanager"; then
+            rcs_sdkmanager="$(command -v sdkmanager)"
+          fi
+          if ! test -f "$rcs_sdk_root/platforms/android-35/android.jar" ||
+             ! test -x "$rcs_sdk_root/build-tools/35.0.0/aapt2"; then
+            "$rcs_sdkmanager" --sdk_root="$rcs_sdk_root" \
+              'platforms;android-35' 'build-tools;35.0.0'
+          fi
+          test -f "$rcs_sdk_root/platforms/android-35/android.jar"
+          test -x "$rcs_sdk_root/build-tools/35.0.0/aapt2"
 
-          matchers_dir='${{ github.workspace }}/.github/matchers'
-          matcher_list()
-          {
-            echo 'gradle-build-matcher.json'
-            echo 'gradle-build-kotlin-error-matcher.json'
+      - name: Run the two DroidGuard unit suites
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RCS_BUILD_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export RCS_BUILD_STARTED_EPOCH="$(date +%s)"
+          set +e
+          ./gradlew --no-daemon --console=plain --max-workers=1 --no-parallel \
+            '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            :play-services-droidguard:testDebugUnitTest \
+            :play-services-droidguard-core:testDebugUnitTest \
+            2>&1 | tee "$EVIDENCE_DIR/gradle.log"
+          rcs_gradle_exit="${PIPESTATUS[0]}"
+          set -e
+          export RCS_BUILD_EXIT="$rcs_gradle_exit"
+          python3 - <<'PY'
+          import datetime, json, os, time
+          from pathlib import Path
+
+          receipt = {
+              "started_at": os.environ["RCS_BUILD_STARTED_AT"],
+              "ended_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "elapsed_seconds": round(time.time() - int(os.environ["RCS_BUILD_STARTED_EPOCH"]), 3),
+              "exit_code": int(os.environ["RCS_BUILD_EXIT"]),
+              "source_commit": os.environ["VALIDATION_SOURCE_SHA"],
+              "source_tree": os.environ["VALIDATION_SOURCE_TREE"],
+              "gradle_jvmargs": "-Xmx3g -XX:MaxMetaspaceSize=768m",
+              "max_workers": 1,
+              "kotlin_compiler_execution_strategy": "in-process",
+              "tasks": [
+                  ":play-services-droidguard:testDebugUnitTest",
+                  ":play-services-droidguard-core:testDebugUnitTest",
+              ],
           }
+          (Path(os.environ["EVIDENCE_DIR"]) / "build.json").write_text(
+              json.dumps(receipt, indent=2) + "\n", encoding="utf-8"
+          )
+          print(json.dumps(receipt, sort_keys=True))
+          PY
+          exit "$rcs_gradle_exit"
 
-          matcher_list | while IFS='' read -r NAME; do
-            if test -f "${matchers_dir:?}/${NAME:?}"; then
-              echo "::add-matcher::${matchers_dir:?}/${NAME:?}"
-              echo "Matcher configured: ${NAME:?}"
-            fi
-          done
-      - name: "Execute Gradle assemble"
-        run: "./gradlew assemble${{ matrix.target }}"
-      - name: "Execute Gradle lint"
-        run: "./gradlew lint${{ matrix.target }}"
+      - name: Collect actual test XML, APK, hashes, and elapsed time
+        if: always()
+        env:
+          BUILD_STEP_OUTCOME: ${{ steps.build.outcome }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import datetime, hashlib, json, os, shutil, time
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          evidence = Path(os.environ["EVIDENCE_DIR"])
+          evidence.mkdir(parents=True, exist_ok=True)
+          problems = []
+          files = []
+
+          def retain(path):
+              target = evidence / "files" / path
+              target.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(path, target)
+              with target.open("rb") as stream:
+                  digest = hashlib.file_digest(stream, "sha256").hexdigest()
+              entry = {
+                  "path": str(Path("files") / path),
+                  "bytes": target.stat().st_size,
+                  "sha256": digest,
+              }
+              files.append(entry)
+              return entry
+
+          modules = {
+              "droidguard": Path("play-services-droidguard"),
+              "droidguard_core": Path("play-services-droidguard/core"),
+          }
+          junit = {}
+          for name, module in modules.items():
+              reports = sorted(
+                  (module / "build/test-results/testDebugUnitTest").glob("TEST-*.xml")
+              )
+              totals = {
+                  "report_files": len(reports), "tests": 0,
+                  "failures": 0, "errors": 0, "skipped": 0, "files": [],
+              }
+              for report in reports:
+                  totals["files"].append(retain(report))
+                  try:
+                      root = ET.parse(report).getroot()
+                  except ET.ParseError as error:
+                      problems.append(f"{report}: invalid XML: {error}")
+                      continue
+                  for case in root.iter("testcase"):
+                      totals["tests"] += 1
+                      totals["failures"] += len(case.findall("failure"))
+                      totals["errors"] += len(case.findall("error"))
+                      totals["skipped"] += len(case.findall("skipped"))
+              if not reports or totals["tests"] <= totals["skipped"]:
+                  problems.append(f"{name}: no executed test cases in actual XML")
+              if totals["failures"] or totals["errors"]:
+                  problems.append(f"{name}: test failures or errors")
+              junit[name] = totals
+
+          apks = []  # No APK variant is built by this focused run; unit XML is the evidence.
+
+          build_path = evidence / "build.json"
+          source_path = evidence / "source.json"
+          build = json.loads(build_path.read_text()) if build_path.is_file() else None
+          source = json.loads(source_path.read_text()) if source_path.is_file() else None
+          if build is None:
+              problems.append("The Gradle command has no completion receipt.")
+          elif build["exit_code"] != 0:
+              problems.append(f"Gradle exited {build['exit_code']}.")
+          if source is None or not source.get("matches"):
+              problems.append("The pinned source was not confirmed.")
+
+          start_path = evidence / "execution-start.json"
+          start = json.loads(start_path.read_text()) if start_path.is_file() else {}
+          summary = {
+              "source": source,
+              "execution": {
+                  **start,
+                  "ended_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                  "elapsed_seconds": (
+                      round((time.monotonic_ns() - start["started_monotonic_ns"]) / 1e9, 3)
+                      if "started_monotonic_ns" in start else None
+                  ),
+              },
+              "build_step_outcome": os.environ["BUILD_STEP_OUTCOME"],
+              "build": build,
+              "junit": junit,
+              "apks": apks,
+              "problems": problems,
+              "device_rcs_result": "not executed by this workflow",
+          }
+          (evidence / "summary.json").write_text(
+              json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+          )
+          for retained in sorted(evidence.glob("*.json")) + sorted(evidence.glob("*.log")):
+              with retained.open("rb") as stream:
+                  digest = hashlib.file_digest(stream, "sha256").hexdigest()
+              files.append({
+                  "path": retained.name, "bytes": retained.stat().st_size,
+                  "sha256": digest,
+              })
+          (evidence / "SHA256SUMS").write_text(
+              "".join(f"{entry['sha256']}  {entry['path']}\n" for entry in files),
+              encoding="utf-8",
+          )
+          print(json.dumps(summary, indent=2))
+          if problems:
+              raise SystemExit(1)
+          PY
+
+      - name: Upload the test XML and execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rcs2994-sigverify-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_DIR }}/
+          if-no-files-found: error
+          retention-days: 30
