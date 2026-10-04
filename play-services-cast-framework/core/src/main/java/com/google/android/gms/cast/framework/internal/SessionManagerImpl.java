@@ -356,12 +356,18 @@ public class SessionManagerImpl extends ISessionManager.Stub {
             castContext.runOnMainThread(this::updateCastState);
             return;
         }
+        boolean routeAvailable = isRouteAvailable();
+        try {
+            ((DiscoveryManagerImpl) castContext.getDiscoveryManagerImpl()).onDeviceAvailabilityChanged(routeAvailable);
+        } catch (RemoteException e) {
+            Log.d(TAG, "Unable to update discovery availability: " + e.getMessage());
+        }
         int newState;
         if (currentSession != null && currentSession.isConnected()) {
             newState = CastState.CONNECTED;
         } else if (currentSession != null && (currentSession.isConnecting() || currentSession.isResuming() || currentSession.isSuspended())) {
             newState = CastState.CONNECTING;
-        } else if (isRouteAvailable()) {
+        } else if (routeAvailable) {
             newState = CastState.NOT_CONNECTED;
         } else {
             newState = CastState.NO_DEVICES_AVAILABLE;
