@@ -23,7 +23,7 @@ jobs:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
       VALIDATION_SOURCE_SHA: '1d63e944ab606bc2683f19b5a34ac5ee7a4841fc'
       VALIDATION_SOURCE_TREE: 'c36c1e1524fc220a3766709230f0e9e37505d31d'
-      EVIDENCE_DIR: ${{ runner.temp }}/rcs2994-evidence
+      EVIDENCE_DIR: /tmp/rcs2994-evidence-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Start the execution receipt
         shell: bash
