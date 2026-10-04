@@ -1,0 +1,24 @@
+name: Cast operation completion
+on:
+  push:
+    branches: [validation/cast-completion-84aa-20261004]
+permissions:
+  contents: read
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Execute the source-pinned before and after comparison
+        run: python3 run.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cast-completion-84aa
+          path: evidence/
+          retention-days: 14
