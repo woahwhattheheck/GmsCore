@@ -1132,9 +1132,11 @@ public class WearableImpl {
     }
 
     public void removeListener(IWearableListener listener) {
+        if (listener == null) return;
+        IBinder incoming = listener.asBinder();
         for (List<ListenerInfo> list : listeners.values()) {
             for (int i = 0; i < list.size(); i++) {
-                if (list.get(i).listener.equals(listener)) {
+                if (list.get(i).listener.asBinder().equals(incoming)) {
                     list.remove(i);
                     i--;
                 }
