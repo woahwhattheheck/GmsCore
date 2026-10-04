@@ -21,8 +21,8 @@ jobs:
     timeout-minutes: 60
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
-      VALIDATION_SOURCE_SHA: '71c28a2a67859fb2314d18fc8638fe633da2304c'
-      VALIDATION_SOURCE_TREE: 'e940bb056b9887292ca44ce5ee2017134800a7ce'
+      VALIDATION_SOURCE_SHA: '66dd1dcd6d643048d5c7cea759545fc5e175a77f'
+      VALIDATION_SOURCE_TREE: '271380a4011fdfa78fe24447ffb8fd0bed3e74d0'
       EVIDENCE_DIR: /tmp/rcs2994-evidence-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Start the execution receipt
@@ -118,7 +118,7 @@ jobs:
           test -f "$rcs_sdk_root/platforms/android-35/android.jar"
           test -x "$rcs_sdk_root/build-tools/35.0.0/aapt2"
 
-      - name: Run the three module suites and one APK variant
+      - name: Run the four module suites and one APK variant
         id: build
         shell: bash
         run: |
@@ -132,6 +132,7 @@ jobs:
             :play-services-constellation-core:testDebugUnitTest \
             :play-services-asterism-core:testDebugUnitTest \
             :play-services-droidguard:testDebugUnitTest \
+            :play-services-droidguard-core:testDebugUnitTest \
             :play-services-core:assembleVtmDefaultDebug \
             2>&1 | tee "$EVIDENCE_DIR/gradle.log"
           rcs_gradle_exit="${PIPESTATUS[0]}"
@@ -155,6 +156,7 @@ jobs:
                   ":play-services-constellation-core:testDebugUnitTest",
                   ":play-services-asterism-core:testDebugUnitTest",
                   ":play-services-droidguard:testDebugUnitTest",
+                  ":play-services-droidguard-core:testDebugUnitTest",
                   ":play-services-core:assembleVtmDefaultDebug",
               ],
           }
@@ -199,6 +201,7 @@ jobs:
               "constellation": Path("play-services-constellation/core"),
               "asterism": Path("play-services-asterism/core"),
               "droidguard": Path("play-services-droidguard"),
+              "droidguard_core": Path("play-services-droidguard/core"),
           }
           junit = {}
           for name, module in modules.items():
