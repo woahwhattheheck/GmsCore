@@ -5,6 +5,7 @@
 
 package org.microg.gms.droidguard.core
 
+import android.accounts.AccountManager
 import android.content.Context
 import com.android.volley.NetworkResponse
 import com.android.volley.VolleyError
@@ -99,7 +100,11 @@ open class NetworkHandleProxyFactory(private val context: Context) : HandleProxy
                 ),
                 versionName = version.versionString,
                 versionCode = BuildConfig.VERSION_CODE,
-                hasAccount = false,
+                hasAccount = try {
+                    AccountManager.get(context).getAccountsByType("com.google").isNotEmpty()
+                } catch (e: SecurityException) {
+                    false
+                },
                 isGoogleCn = false,
                 enableInlineVm = true,
                 cached = getCacheDir().list()?.map { it.decodeHex() }.orEmpty(),
