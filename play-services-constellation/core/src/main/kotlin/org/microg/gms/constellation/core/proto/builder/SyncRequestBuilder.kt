@@ -110,6 +110,13 @@ fun getTelephonyPhoneNumbers(
     }
 }
 
+// The phone number hint is optional on targeted SIMs; send an empty value instead of passing null to Wire.
+internal fun buildVerificationParams(
+    targetedSims: List<VerifyPhoneNumberRequest.ImsiRequest>
+): List<VerificationParam> = targetedSims.map {
+    VerificationParam(key = it.imsi, value_ = it.phoneNumberHint.orEmpty())
+}
+
 suspend operator fun SyncRequest.Companion.invoke(
     context: Context,
     sessionId: String,
@@ -143,9 +150,7 @@ suspend operator fun SyncRequest.Companion.invoke(
 ): SyncRequest {
     val apiParamsList = Param.getList(request.extras)
 
-    val verificationParams = request.targetedSims.map {
-        VerificationParam(key = it.imsi, value_ = it.phoneNumberHint)
-    }
+    val verificationParams = buildVerificationParams(request.targetedSims)
 
     val structuredParams = VerificationPolicy(
         policy_id = request.policyId,
