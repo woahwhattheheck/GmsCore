@@ -1,0 +1,212 @@
+{
+  "source_pin": "1062b78d9cb7c6cd28afb3f342dbd4b87998e936",
+  "workflow_commit": "e03be03a5d54d3cc6a88153eb0517f1f3ee180fc",
+  "run_url": "https://github.com/woahwhattheheck/GmsCore/actions/runs/37208182205",
+  "physical_watch_acceptance": "not tested",
+  "gradle_exit_code": 0,
+  "modules": {
+    "core": {
+      "tests": 105,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "suites": [
+        {
+          "name": "org.microg.gms.wearable.AssetCompletionListenerTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.AssetFdAccessTest",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.AssetReadinessDatabaseTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.CapabilityServiceTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.ChannelInitializationCallbackTest",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.DataItemRecordCursorTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.DataItemUriFilterTest",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.LegacyConnectionCallbackTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.ListenerBinderIdentityTest",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.MessageHandlerAssetDispatchTest",
+          "tests": 17,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.TypedWearableCallbackTest",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.UnsupportedAncsCallbackTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.UnsupportedTelephonyCallbackTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.WearableConnectionReassemblyTest",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.bluetooth.BleLifecycleTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.bluetooth.BluetoothConnectionThreadShutdownTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.bluetooth.BluetoothWearableConnectionCleanupTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.channel.ChannelBehaviorTest",
+          "tests": 12,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.channel.ChannelSendOffsetTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.network.NetworkConnectionManagerTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        },
+        {
+          "name": "org.microg.gms.wearable.proto.ChannelControlRequestWireDecodeTest",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        }
+      ],
+      "passed": 105,
+      "xml_files": 21
+    },
+    "api": {
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "suites": [
+        {
+          "name": "com.google.android.gms.wearable.internal.RequestParcelableRoundTripTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "failed_cases": []
+        }
+      ],
+      "passed": 3,
+      "xml_files": 1
+    }
+  },
+  "apks": [
+    {
+      "path": "play-services-core/build/outputs/apk/vtmDefault/debug/com.google.android.gms-252432000.apk",
+      "bytes": 107564314,
+      "sha256": "a13b4b47b859a71f3a39945bd63f1964d636d0c202f86e7de71bb03e29f40e48"
+    }
+  ]
+}
