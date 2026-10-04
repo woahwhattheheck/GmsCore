@@ -1,227 +1,142 @@
-name: "Dott #3841 project test classpath validation"
+name: "Dott linked TCP JSON contract"
 on:
   push:
-    branches: ['validation/dott3841-integrated-cd79-20261004']
+    branches: ['validation/dott3841-linked-tcp-20261004']
     paths: ['.github/workflows/build.yml']
 permissions:
   contents: read
 concurrency:
-  group: dott3841-integrated
+  group: dott3841-linked-tcp
   cancel-in-progress: false
 jobs:
-  dott-integrated:
-    if: github.repository == 'woahwhattheheck/GmsCore' && github.ref == 'refs/heads/validation/dott3841-integrated-cd79-20261004'
+  tcp-protocol-contract:
+    if: github.repository == 'woahwhattheheck/GmsCore' && github.ref == 'refs/heads/validation/dott3841-linked-tcp-20261004'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 10
     env:
-      GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
-      VALIDATION_SOURCE_SHA: 'e5208cbd1dfd316c4032d10ca4745242fe3702c5'
-      VALIDATION_SOURCE_TREE: '4866ca63ddd39f343bbe5c08a3c40a576d947e0d'
-      EVIDENCE_DIR: /tmp/dott3841-project-module-${{ github.run_id }}-${{ github.run_attempt }}
+      HARNESS_SHA256: '5fda86344bd13b62499c65442dfcd90b71bc9eb44cf142cc2c0758c170d1de99'
+      HARNESS_BASE64: 'IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwojIFNQRFgtRmlsZUNvcHlyaWdodFRleHQ6IDIwMjYgbWljcm9HIFByb2plY3QgVGVhbQojIFNQRFgtTGljZW5zZS1JZGVudGlmaWVyOiBBcGFjaGUtMi4wCgoiIiJIb3N0IHRyYW5zcG9ydCBjb250cmFjdCBmb3IgdGhlIGlzc3VlLWxpbmtlZCBQbGF5SW50ZWdyaXR5U2VydmVyIEMrKyByZWxheS4KClByb3ZpZGUgUExBWUlOVEVHUklUWV9TT1VSQ0VfRElSIGFzIGFuIGV4cGxpY2l0IGNoZWNrb3V0IGF0IExJTktFRF9DT01NSVQuCk5vIHNvdXJjZSBpcyBmZXRjaGVkIGJ5IHRoaXMgdGVzdC4gVGhlIGFjdHVhbCByZWxheSBhbmQgcmVnaXN0cnkgYXJlIGNvbXBpbGVkOwpvbmx5IEpOSS9sb2dnaW5nIGRlY2xhcmF0aW9ucyBhbmQgZGdfY2FsbGVyX3JlcXVlc3QgYXJlIGhvc3QgZml4dHVyZXMuIEdvb2dsZSwKQW5kcm9pZCBuYXRpdmUgZXhlY3V0aW9uLCBhbmQgYXR0ZXN0YXRpb24gdmFsaWRpdHkgYXJlIG91dHNpZGUgdGhpcyB0ZXN0LgoKUExBWUlOVEVHUklUWV9IRUFERVJfUkVQQUlSPTEgZXhwbGljaXRseSBzZWxlY3RzIGEgZGlzcG9zYWJsZSBzb3VyY2UgY2FuZGlkYXRlCmFkZGluZyB0aGUgbWlzc2luZyA8Y2ludHR5cGVzPiBpbmNsdWRlLiBUaGUgYmFzZWxpbmUgaGFzIG5vIGF1dG9tYXRpYyBmYWxsYmFjay4KQm90aCB0aGUgb3JpZ2luYWwgYW5kIGV4ZWN1dGVkIGJsb2JzLCBwYXRjaCwgY29tcGlsZXIgY29tbWFuZCBhbmQgZXhpdCBhcmUgbG9nZ2VkLgoiIiIKCmltcG9ydCBkaWZmbGliCmltcG9ydCBoYXNobGliCmltcG9ydCBqc29uCmltcG9ydCBvcwppbXBvcnQgc2h1dGlsCmltcG9ydCBzb2NrZXQKaW1wb3J0IHN0cnVjdAppbXBvcnQgc3VicHJvY2VzcwppbXBvcnQgdGVtcGZpbGUKaW1wb3J0IHRpbWUKaW1wb3J0IHVuaXR0ZXN0CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAoKTElOS0VEX0NPTU1JVCA9ICI4YTE0ZmRlNTViNTJjNmUyYWFkOThmNTBkYmIxMGQ2OWQ2YTJmNjg0IgpMSU5LRURfVFJFRSA9ICI3ZjE4YWY0NmYyM2E1OGU4MjQ3NDczNGIyZWE0N2Y1ZDJhNzgxODVlIgpTT1VSQ0VfQkxPQlMgPSB7CiAgICAic3JjL3JlbGF5LmNwcCI6ICJkNmMyODNmZjM4NDM4N2VhZDc2OGJlNzEzYTI1OWM3NzVmYjg0NDAxIiwKICAgICJzcmMvcmVsYXkuaCI6ICIzMTAxMWRhN2E5MDY0MjY0YzAxNzA0YzFiZDMyMDVhY2EyYmM3NWYxIiwKICAgICJzcmMvc2Vzc2lvbi5oIjogIjk5OGM5YmYwYTVlODZlZDBkOWJhMTM3NzVlOGZkMjFlZDEzZWZkNTgiLAogICAgInNyYy9kZ19jYWxsZXIuaCI6ICI5ZTI5MGVlNTUxYmRkNDUyODg3MjY0Yzc4MTcyOWVkMDRmZDE0ZDIwIiwKfQoKSE9TVF9DUFAgPSByJycnCiNpbmNsdWRlICJyZWxheS5oIgojaW5jbHVkZSAic2Vzc2lvbi5oIgojaW5jbHVkZSA8YXRvbWljPgojaW5jbHVkZSA8Y3N0ZGxpYj4KI2luY2x1ZGUgPGlvc3RyZWFtPgojaW5jbHVkZSA8bXV0ZXg+CiNpbmNsdWRlIDxzdHJpbmc+CgpzdGF0aWMgc3RkOjphdG9taWM8aW50PiBjYWxsc3swfTsKc3RhdGljIHN0ZDo6bXV0ZXggb3V0cHV0OwpleHRlcm4gIkMiIGludCBfX2FuZHJvaWRfbG9nX3ByaW50KGludCwgY29uc3QgY2hhciosIGNvbnN0IGNoYXIqLCAuLi4pIHsgcmV0dXJuIDA7IH0KCnZvaWQgZGdfY2FsbGVyX3JlcXVlc3QoSmF2YVZNKiwgU2Vzc2lvbiogc2VzcykgewogICAgY29uc3QgaW50IG51bWJlciA9ICsrY2FsbHM7CiAgICB7CiAgICAgICAgc3RkOjpsb2NrX2d1YXJkPHN0ZDo6bXV0ZXg+IGxvY2sob3V0cHV0KTsKICAgICAgICBzdGQ6OmNvdXQgPDwgIkRJU1BBVENIICIgPDwgbnVtYmVyIDw8ICIgIiA8PCBzZXNzLT5pZCA8PCAiICIgPDwgc2Vzcy0+cGFja2FnZU5hbWUKICAgICAgICAgICAgICAgICAgPDwgIiAiIDw8IHNlc3MtPm5vbmNlQjY0IDw8ICIgIiA8PCBzZXNzLT5jZXJ0U2hhMjU2IDw8ICIgIiA8PCBzZXNzLT52ZXJzaW9uQ29kZQogICAgICAgICAgICAgICAgICA8PCBzdGQ6OmVuZGw7CiAgICB9CiAgICB7CiAgICAgICAgc3RkOjpsb2NrX2d1YXJkPHN0ZDo6bXV0ZXg+IGxvY2soc2Vzcy0+bXR4KTsKICAgICAgICBzZXNzLT5yZXN1bHQgPSAiZml4dHVyZS0iICsgc3RkOjp0b19zdHJpbmcobnVtYmVyKSArICI6IiArIHN0ZDo6dG9fc3RyaW5nKHNlc3MtPmlkKSArICI6IiArIHNlc3MtPm5vbmNlQjY0OwogICAgICAgIHNlc3MtPnN0YXR1cyA9IFNlc3Npb25TdGF0dXM6OlNVQ0NFU1M7CiAgICB9CiAgICBzZXNzLT5jdi5ub3RpZnlfYWxsKCk7Cn0KCmludCBtYWluKGludCBhcmdjLCBjaGFyKiogYXJndikgewogICAgaWYgKGFyZ2MgIT0gMikgcmV0dXJuIDI7CiAgICByZWxheV9zZXJ2ZXJfc3RhcnQobnVsbHB0ciwgc3RhdGljX2Nhc3Q8dWludDE2X3Q+KHN0ZDo6YXRvaShhcmd2WzFdKSkpOwogICAgeyBzdGQ6OmxvY2tfZ3VhcmQ8c3RkOjptdXRleD4gbG9jayhvdXRwdXQpOyBzdGQ6OmNvdXQgPDwgIkhPU1RfU1RBUlRFRCIgPDwgc3RkOjplbmRsOyB9CiAgICBzdGQ6OnN0cmluZyBjb21tYW5kOwogICAgd2hpbGUgKHN0ZDo6Z2V0bGluZShzdGQ6OmNpbiwgY29tbWFuZCkpIGlmIChjb21tYW5kID09ICJRVUlUIikgYnJlYWs7CiAgICByZXR1cm4gMDsKfQonJycKCgpkZWYgZ2l0X2Jsb2IoZGF0YSk6CiAgICByZXR1cm4gaGFzaGxpYi5zaGExKGIiYmxvYiAiICsgc3RyKGxlbihkYXRhKSkuZW5jb2RlKCkgKyBiIlwwIiArIGRhdGEpLmhleGRpZ2VzdCgpCgoKQHVuaXR0ZXN0LnNraXBVbmxlc3Mob3MuZW52aXJvbi5nZXQoIlBMQVlJTlRFR1JJVFlfU09VUkNFX0RJUiIpLCAiUmVxdWlyZXMgdGhlIGV4cGxpY2l0IHBpbm5lZCBsaW5rZWQtc291cmNlIGNoZWNrb3V0IikKY2xhc3MgUGxheUludGVncml0eVRjcENvbnRyYWN0VGVzdCh1bml0dGVzdC5UZXN0Q2FzZSk6CiAgICBAY2xhc3NtZXRob2QKICAgIGRlZiBzZXRVcENsYXNzKGNscyk6CiAgICAgICAgY2xzLnRlbXBvcmFyeSA9IHRlbXBmaWxlLlRlbXBvcmFyeURpcmVjdG9yeShwcmVmaXg9InBsYXlpbnRlZ3JpdHktdGNwLSIpCiAgICAgICAgY2xzLmFkZENsYXNzQ2xlYW51cChjbHMudGVtcG9yYXJ5LmNsZWFudXApCiAgICAgICAgY2xzLndvcmsgPSBQYXRoKGNscy50ZW1wb3JhcnkubmFtZSkKICAgICAgICBjbHMuZXZpZGVuY2UgPSBQYXRoKG9zLmVudmlyb24uZ2V0KCJQTEFZSU5URUdSSVRZX1BST1RPQ09MX0VWSURFTkNFIiwgc3RyKGNscy53b3JrIC8gImV2aWRlbmNlIikpKQogICAgICAgIGNscy5ldmlkZW5jZS5ta2RpcihwYXJlbnRzPVRydWUsIGV4aXN0X29rPVRydWUpCiAgICAgICAgc291cmNlID0gUGF0aChvcy5lbnZpcm9uWyJQTEFZSU5URUdSSVRZX1NPVVJDRV9ESVIiXSkucmVzb2x2ZSgpCiAgICAgICAgb3JpZ2luYWxzID0ge30KICAgICAgICBmb3IgcmVsYXRpdmUsIGV4cGVjdGVkIGluIFNPVVJDRV9CTE9CUy5pdGVtcygpOgogICAgICAgICAgICBkYXRhID0gKHNvdXJjZSAvIHJlbGF0aXZlKS5yZWFkX2J5dGVzKCkKICAgICAgICAgICAgaWYgZ2l0X2Jsb2IoZGF0YSkgIT0gZXhwZWN0ZWQ6CiAgICAgICAgICAgICAgICByYWlzZSBSdW50aW1lRXJyb3IoIkxpbmtlZCBzb3VyY2UgYmxvYiBkb2VzIG5vdCBtYXRjaCBwaW46ICIgKyByZWxhdGl2ZSkKICAgICAgICAgICAgb3JpZ2luYWxzW3JlbGF0aXZlXSA9IGRhdGEKICAgICAgICAgICAgdGFyZ2V0ID0gY2xzLndvcmsgLyByZWxhdGl2ZQogICAgICAgICAgICB0YXJnZXQucGFyZW50Lm1rZGlyKHBhcmVudHM9VHJ1ZSwgZXhpc3Rfb2s9VHJ1ZSkKICAgICAgICAgICAgdGFyZ2V0LndyaXRlX2J5dGVzKGRhdGEpCiAgICAgICAgY2xzLnJlcGFpciA9IG9zLmVudmlyb24uZ2V0KCJQTEFZSU5URUdSSVRZX0hFQURFUl9SRVBBSVIiKSA9PSAiMSIKICAgICAgICBpZiBjbHMucmVwYWlyOgogICAgICAgICAgICBvcmlnaW5hbCA9IG9yaWdpbmFsc1sic3JjL3JlbGF5LmNwcCJdLmRlY29kZSgidXRmLTgiKQogICAgICAgICAgICBtYXJrZXIgPSAiI2luY2x1ZGUgPGF0b21pYz5cbiIKICAgICAgICAgICAgaWYgb3JpZ2luYWwuY291bnQobWFya2VyKSAhPSAxIG9yICIjaW5jbHVkZSA8Y2ludHR5cGVzPiIgaW4gb3JpZ2luYWw6CiAgICAgICAgICAgICAgICByYWlzZSBSdW50aW1lRXJyb3IoIlVuZXhwZWN0ZWQgc3RhbmRhcmQtaGVhZGVyIHJlcGFpciBwcmVpbWFnZSIpCiAgICAgICAgICAgIGNhbmRpZGF0ZSA9IG9yaWdpbmFsLnJlcGxhY2UobWFya2VyLCBtYXJrZXIgKyAiI2luY2x1ZGUgPGNpbnR0eXBlcz5cbiIpCiAgICAgICAgICAgIChjbHMud29yayAvICJzcmMvcmVsYXkuY3BwIikud3JpdGVfYnl0ZXMoY2FuZGlkYXRlLmVuY29kZSgidXRmLTgiKSkKICAgICAgICAgICAgcGF0Y2ggPSAiIi5qb2luKGRpZmZsaWIudW5pZmllZF9kaWZmKG9yaWdpbmFsLnNwbGl0bGluZXMoVHJ1ZSksIGNhbmRpZGF0ZS5zcGxpdGxpbmVzKFRydWUpLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGZyb21maWxlPSJhL3NyYy9yZWxheS5jcHAiLCB0b2ZpbGU9ImIvc3JjL3JlbGF5LmNwcCIpKQogICAgICAgICAgICAoY2xzLmV2aWRlbmNlIC8gInN0YW5kYXJkLWhlYWRlci1jYW5kaWRhdGUucGF0Y2giKS53cml0ZV9ieXRlcyhwYXRjaC5lbmNvZGUoInV0Zi04IikpCiAgICAgICAgc3R1YiA9IGNscy53b3JrIC8gImhvc3QtaW5jbHVkZSIKICAgICAgICAoc3R1YiAvICJhbmRyb2lkIikubWtkaXIocGFyZW50cz1UcnVlKQogICAgICAgIChzdHViIC8gImpuaS5oIikud3JpdGVfdGV4dCgiI3ByYWdtYSBvbmNlXG5zdHJ1Y3QgSmF2YVZNO1xuIiwgZW5jb2Rpbmc9InV0Zi04IikKICAgICAgICAoc3R1YiAvICJhbmRyb2lkL2xvZy5oIikud3JpdGVfdGV4dCgKICAgICAgICAgICAgJyNwcmFnbWEgb25jZVxuI2RlZmluZSBBTkRST0lEX0xPR19JTkZPIDRcbiNkZWZpbmUgQU5EUk9JRF9MT0dfRVJST1IgNlxuJwogICAgICAgICAgICAnZXh0ZXJuICJDIiBpbnQgX19hbmRyb2lkX2xvZ19wcmludChpbnQsIGNvbnN0IGNoYXIqLCBjb25zdCBjaGFyKiwgLi4uKTtcbicsIGVuY29kaW5nPSJ1dGYtOCIpCiAgICAgICAgaG9zdCA9IGNscy53b3JrIC8gImhvc3QuY3BwIgogICAgICAgIGhvc3Qud3JpdGVfdGV4dChIT1NUX0NQUCwgZW5jb2Rpbmc9InV0Zi04IikKICAgICAgICBjbHMuYmluYXJ5ID0gY2xzLndvcmsgLyAidGNwLWNvbnRyYWN0LWhvc3QiCiAgICAgICAgY29tcGlsZXIgPSBzaHV0aWwud2hpY2gob3MuZW52aXJvbi5nZXQoIkNYWCIsICJnKysiKSkKICAgICAgICBpZiBjb21waWxlciBpcyBOb25lOgogICAgICAgICAgICByYWlzZSBSdW50aW1lRXJyb3IoIkNvbmZpZ3VyZWQgaG9zdCBDKysgY29tcGlsZXIgaXMgdW5hdmFpbGFibGUiKQogICAgICAgIGNvbW1hbmQgPSBbY29tcGlsZXIsICItc3RkPWMrKzE3IiwgIi1wdGhyZWFkIiwgIi1PMCIsICItSSIsIHN0cihzdHViKSwgIi1JIiwgc3RyKGNscy53b3JrIC8gInNyYyIpLAogICAgICAgICAgICAgICAgICAgc3RyKGNscy53b3JrIC8gInNyYy9yZWxheS5jcHAiKSwgc3RyKGhvc3QpLCAiLW8iLCBzdHIoY2xzLmJpbmFyeSldCiAgICAgICAgY29tcGlsZWQgPSBzdWJwcm9jZXNzLnJ1bihjb21tYW5kLCBjYXB0dXJlX291dHB1dD1UcnVlLCB0ZXh0PVRydWUsIHRpbWVvdXQ9NDUpCiAgICAgICAgKGNscy5ldmlkZW5jZSAvICJjb21waWxlci5sb2ciKS53cml0ZV90ZXh0KGNvbXBpbGVkLnN0ZG91dCArIGNvbXBpbGVkLnN0ZGVyciwgZW5jb2Rpbmc9InV0Zi04IikKICAgICAgICByZWNlaXB0ID0geyJyZXBvc2l0b3J5IjogImthZHV2ZXJ0L1BsYXlJbnRlZ3JpdHlTZXJ2ZXIiLCAic291cmNlX2NvbW1pdCI6IExJTktFRF9DT01NSVQsCiAgICAgICAgICAgICAgICAgICAic291cmNlX3RyZWUiOiBMSU5LRURfVFJFRSwgIm9yaWdpbmFsX2Jsb2JzIjogU09VUkNFX0JMT0JTLAogICAgICAgICAgICAgICAgICAgImV4ZWN1dGVkX2Jsb2JzIjoge3A6IGdpdF9ibG9iKChjbHMud29yayAvIHApLnJlYWRfYnl0ZXMoKSkgZm9yIHAgaW4gU09VUkNFX0JMT0JTfSwKICAgICAgICAgICAgICAgICAgICJleHBsaWNpdF9zdGFuZGFyZF9oZWFkZXJfY2FuZGlkYXRlIjogY2xzLnJlcGFpciwgImNvbXBpbGVyX2NvbW1hbmQiOiBjb21tYW5kLAogICAgICAgICAgICAgICAgICAgImNvbXBpbGVyX2V4aXQiOiBjb21waWxlZC5yZXR1cm5jb2RlLAogICAgICAgICAgICAgICAgICAgImZpeHR1cmVfYm91bmRhcnkiOiAiSG9zdCBKTkkvbG9nIGRlY2xhcmF0aW9uczsgZmFrZSBkZ19jYWxsZXJfcmVxdWVzdDsgbm8gR29vZ2xlL0FuZHJvaWQgVk0ifQogICAgICAgIChjbHMuZXZpZGVuY2UgLyAic291cmNlLWFuZC1jb21waWxlLmpzb24iKS53cml0ZV90ZXh0KGpzb24uZHVtcHMocmVjZWlwdCwgaW5kZW50PTIpICsgIlxuIiwgZW5jb2Rpbmc9InV0Zi04IikKICAgICAgICBpZiBjb21waWxlZC5yZXR1cm5jb2RlOgogICAgICAgICAgICByYWlzZSBSdW50aW1lRXJyb3IoIkFjdHVhbCBsaW5rZWQgcmVsYXkgaG9zdCBjb21waWxhdGlvbiBmYWlsZWQ7IHNlZSBjb21waWxlci5sb2ciKQoKICAgIGRlZiB0ZXN0X2xpdHRsZV9lbmRpYW5fanNvbl9yZWplY3RzX3Nlc3Npb25fb3Bjb2RlX2FuZF9jb3JyZWxhdGVzX3R3b19hdHRlc3RzKHNlbGYpOgogICAgICAgIHdpdGggc29ja2V0LnNvY2tldCgpIGFzIHJlc2VydmU6CiAgICAgICAgICAgIHJlc2VydmUuYmluZCgoIjEyNy4wLjAuMSIsIDApKQogICAgICAgICAgICBwb3J0ID0gcmVzZXJ2ZS5nZXRzb2NrbmFtZSgpWzFdCiAgICAgICAgb3V0X3BhdGggPSBzZWxmLmV2aWRlbmNlIC8gImhvc3Quc3Rkb3V0LmxvZyIKICAgICAgICBlcnJfcGF0aCA9IHNlbGYuZXZpZGVuY2UgLyAiaG9zdC5zdGRlcnIubG9nIgogICAgICAgIGV4Y2hhbmdlcyA9IFtdCiAgICAgICAgd2l0aCBvdXRfcGF0aC5vcGVuKCJ3YiIpIGFzIG91dCwgZXJyX3BhdGgub3Blbigid2IiKSBhcyBlcnI6CiAgICAgICAgICAgIGhvc3QgPSBzdWJwcm9jZXNzLlBvcGVuKFtzdHIoc2VsZi5iaW5hcnkpLCBzdHIocG9ydCldLCBzdGRpbj1zdWJwcm9jZXNzLlBJUEUsIHN0ZG91dD1vdXQsIHN0ZGVycj1lcnIpCiAgICAgICAgICAgIHRyeToKICAgICAgICAgICAgICAgIHdpdGggc2VsZi5fY29ubmVjdChob3N0LCBwb3J0KSBhcyBjbGllbnQ6CiAgICAgICAgICAgICAgICAgICAgYmFzZSA9IHsicGtnIjogImNvbS5leGFtcGxlLmFscGhhIiwgIm5vbmNlIjogImJtOXVZMlV0TVE9PSIsICJjZXJ0IjogImFiIiAqIDMyLCAidmVyIjogNDJ9CiAgICAgICAgICAgICAgICAgICAgcmVxdWVzdCA9IGRpY3QoYmFzZSwgb3A9ImJlZ2luIiwgc2lkPTEwMSkKICAgICAgICAgICAgICAgICAgICByZXNwb25zZSA9IHNlbGYuX2V4Y2hhbmdlKGNsaWVudCwgcmVxdWVzdCkKICAgICAgICAgICAgICAgICAgICBleGNoYW5nZXMuYXBwZW5kKHsicmVxdWVzdCI6IHJlcXVlc3QsICJyZXNwb25zZSI6IHJlc3BvbnNlfSkKICAgICAgICAgICAgICAgICAgICBzZWxmLmFzc2VydEVxdWFsKHsic2lkIjogMTAxLCAib2siOiBGYWxzZSwgImVyciI6ICJiYWRfcmVxdWVzdCJ9LCByZXNwb25zZSkKICAgICAgICAgICAgICAgICAgICByZXF1ZXN0ID0gZGljdChiYXNlLCBvcD0iYXR0ZXN0Iiwgc2lkPTEwMikKICAgICAgICAgICAgICAgICAgICByZXNwb25zZSA9IHNlbGYuX2V4Y2hhbmdlKGNsaWVudCwgcmVxdWVzdCkKICAgICAgICAgICAgICAgICAgICBleGNoYW5nZXMuYXBwZW5kKHsicmVxdWVzdCI6IHJlcXVlc3QsICJyZXNwb25zZSI6IHJlc3BvbnNlfSkKICAgICAgICAgICAgICAgICAgICBzZWxmLmFzc2VydEVxdWFsKHsic2lkIjogMTAyLCAib2siOiBUcnVlLCAidG9rZW4iOiAiZml4dHVyZS0xOjEwMjpibTl1WTJVdE1RPT0ifSwgcmVzcG9uc2UpCiAgICAgICAgICAgICAgICAgICAgcmVxdWVzdCA9IHsib3AiOiAiYXR0ZXN0IiwgInNpZCI6IDEwMywgInBrZyI6ICJjb20uZXhhbXBsZS5iZXRhIiwgIm5vbmNlIjogImJtOXVZMlV0TWc9PSIsICJjZXJ0IjogImNkIiAqIDMyLCAidmVyIjogNDN9CiAgICAgICAgICAgICAgICAgICAgcmVzcG9uc2UgPSBzZWxmLl9leGNoYW5nZShjbGllbnQsIHJlcXVlc3QpCiAgICAgICAgICAgICAgICAgICAgZXhjaGFuZ2VzLmFwcGVuZCh7InJlcXVlc3QiOiByZXF1ZXN0LCAicmVzcG9uc2UiOiByZXNwb25zZX0pCiAgICAgICAgICAgICAgICAgICAgc2VsZi5hc3NlcnRFcXVhbCh7InNpZCI6IDEwMywgIm9rIjogVHJ1ZSwgInRva2VuIjogImZpeHR1cmUtMjoxMDM6Ym05dVkyVXRNZz09In0sIHJlc3BvbnNlKQogICAgICAgICAgICAgICAgICAgIHNlbGYuYXNzZXJ0VHJ1ZShhbGwoInNlc3Npb25JZCIgbm90IGluIGl0ZW1bInJlc3BvbnNlIl0gZm9yIGl0ZW0gaW4gZXhjaGFuZ2VzKSkKICAgICAgICAgICAgZmluYWxseToKICAgICAgICAgICAgICAgIHRyeToKICAgICAgICAgICAgICAgICAgICBob3N0LnN0ZGluLndyaXRlKGIiUVVJVFxuIikKICAgICAgICAgICAgICAgICAgICBob3N0LnN0ZGluLmZsdXNoKCkKICAgICAgICAgICAgICAgICAgICBob3N0LnN0ZGluLmNsb3NlKCkKICAgICAgICAgICAgICAgICAgICBob3N0LndhaXQodGltZW91dD0zKQogICAgICAgICAgICAgICAgZXhjZXB0IChCcm9rZW5QaXBlRXJyb3IsIHN1YnByb2Nlc3MuVGltZW91dEV4cGlyZWQpOgogICAgICAgICAgICAgICAgICAgIGhvc3QudGVybWluYXRlKCkKICAgICAgICAgICAgICAgICAgICBob3N0LndhaXQodGltZW91dD0zKQogICAgICAgICAgICAgICAgKHNlbGYuZXZpZGVuY2UgLyAiZXhjaGFuZ2VzLmpzb24iKS53cml0ZV90ZXh0KGpzb24uZHVtcHMoZXhjaGFuZ2VzLCBpbmRlbnQ9MikgKyAiXG4iLCBlbmNvZGluZz0idXRmLTgiKQogICAgICAgICAgICBzZWxmLmFzc2VydEVxdWFsKDAsIGhvc3QucmV0dXJuY29kZSkKICAgICAgICBkaXNwYXRjaGVzID0gW2xpbmUgZm9yIGxpbmUgaW4gb3V0X3BhdGgucmVhZF90ZXh0KCkuc3BsaXRsaW5lcygpIGlmIGxpbmUuc3RhcnRzd2l0aCgiRElTUEFUQ0ggIildCiAgICAgICAgc2VsZi5hc3NlcnRFcXVhbChbCiAgICAgICAgICAgICJESVNQQVRDSCAxIDEwMiBjb20uZXhhbXBsZS5hbHBoYSBibTl1WTJVdE1RPT0gIiArICJhYiIgKiAzMiArICIgNDIiLAogICAgICAgICAgICAiRElTUEFUQ0ggMiAxMDMgY29tLmV4YW1wbGUuYmV0YSBibTl1WTJVdE1nPT0gIiArICJjZCIgKiAzMiArICIgNDMiLAogICAgICAgIF0sIGRpc3BhdGNoZXMpCiAgICAgICAgKHNlbGYuZXZpZGVuY2UgLyAiY29udHJhY3QtcmVzdWx0Lmpzb24iKS53cml0ZV90ZXh0KGpzb24uZHVtcHMoewogICAgICAgICAgICAicGFzc2VkIjogVHJ1ZSwgImZyYW1lcyI6IDMsICJjb25uZWN0aW9uX2NvdW50IjogMSwgImZha2VfZGlzcGF0Y2hfY291bnQiOiAyLAogICAgICAgICAgICAiZXhwbGljaXRfc3RhbmRhcmRfaGVhZGVyX2NhbmRpZGF0ZSI6IHNlbGYucmVwYWlyLAogICAgICAgICAgICAiYm91bmRhcnkiOiAiT25lLXNob3QgVENQIHJlbGF5IGZyYW1pbmcvcGFyc2luZy9kaXNwYXRjaDsgbm8gYXR0ZXN0YXRpb24gb3IgcmV0YWluZWQgbmF0aXZlLWhhbmRsZSByZXN1bHQiCiAgICAgICAgfSwgaW5kZW50PTIpICsgIlxuIiwgZW5jb2Rpbmc9InV0Zi04IikKCiAgICBkZWYgX2Nvbm5lY3Qoc2VsZiwgaG9zdCwgcG9ydCk6CiAgICAgICAgZGVhZGxpbmUgPSB0aW1lLm1vbm90b25pYygpICsgNQogICAgICAgIHdoaWxlIHRpbWUubW9ub3RvbmljKCkgPCBkZWFkbGluZToKICAgICAgICAgICAgaWYgaG9zdC5wb2xsKCkgaXMgbm90IE5vbmU6CiAgICAgICAgICAgICAgICBzZWxmLmZhaWwoIlRDUCBmaXh0dXJlIHByb2Nlc3MgZXhpdGVkIGJlZm9yZSBsaXN0ZW5pbmciKQogICAgICAgICAgICB0cnk6CiAgICAgICAgICAgICAgICBjbGllbnQgPSBzb2NrZXQuY3JlYXRlX2Nvbm5lY3Rpb24oKCIxMjcuMC4wLjEiLCBwb3J0KSwgdGltZW91dD0yKQogICAgICAgICAgICAgICAgY2xpZW50LnNldHRpbWVvdXQoMykKICAgICAgICAgICAgICAgIHJldHVybiBjbGllbnQKICAgICAgICAgICAgZXhjZXB0IENvbm5lY3Rpb25SZWZ1c2VkRXJyb3I6CiAgICAgICAgICAgICAgICB0aW1lLnNsZWVwKDAuMDEpCiAgICAgICAgc2VsZi5mYWlsKCJBY3R1YWwgVENQIHJlbGF5IGRpZCBub3QgYmVnaW4gbGlzdGVuaW5nIikKCiAgICBkZWYgX2V4Y2hhbmdlKHNlbGYsIGNsaWVudCwgcGF5bG9hZCk6CiAgICAgICAgIyBUaGUgbGlua2VkIGZsYXQgcGFyc2VyIHJlcXVpcmVzIGNvbXBhY3QgQVNDSUkgZmllbGRzOyBubyBIVFRQL2Zvcm0gQVBJIGlzIGltcGxpZWQuCiAgICAgICAgZGF0YSA9IGpzb24uZHVtcHMocGF5bG9hZCwgc2VwYXJhdG9ycz0oIiwiLCAiOiIpKS5lbmNvZGUoInV0Zi04IikKICAgICAgICBjbGllbnQuc2VuZGFsbChzdHJ1Y3QucGFjaygiPEkiLCBsZW4oZGF0YSkpICsgZGF0YSkKICAgICAgICBsZW5ndGggPSBzdHJ1Y3QudW5wYWNrKCI8SSIsIHNlbGYuX3JlYWRfZXhhY3QoY2xpZW50LCA0KSlbMF0KICAgICAgICBzZWxmLmFzc2VydFRydWUoMCA8IGxlbmd0aCA8PSA0MDk2LCAiVW5leHBlY3RlZCBsaXR0bGUtZW5kaWFuIGZpeHR1cmUgcmVzcG9uc2UgbGVuZ3RoIikKICAgICAgICByZXR1cm4ganNvbi5sb2FkcyhzZWxmLl9yZWFkX2V4YWN0KGNsaWVudCwgbGVuZ3RoKS5kZWNvZGUoInV0Zi04IikpCgogICAgQHN0YXRpY21ldGhvZAogICAgZGVmIF9yZWFkX2V4YWN0KGNsaWVudCwgbGVuZ3RoKToKICAgICAgICBjaHVua3MgPSBieXRlYXJyYXkoKQogICAgICAgIHdoaWxlIGxlbihjaHVua3MpIDwgbGVuZ3RoOgogICAgICAgICAgICBwYXJ0ID0gY2xpZW50LnJlY3YobGVuZ3RoIC0gbGVuKGNodW5rcykpCiAgICAgICAgICAgIGlmIG5vdCBwYXJ0OgogICAgICAgICAgICAgICAgcmFpc2UgQXNzZXJ0aW9uRXJyb3IoIlRDUCByZWxheSBjbG9zZWQgYmVmb3JlIHRoZSBjb21wbGV0ZSByZXNwb25zZSBmcmFtZSIpCiAgICAgICAgICAgIGNodW5rcy5leHRlbmQocGFydCkKICAgICAgICByZXR1cm4gYnl0ZXMoY2h1bmtzKQoKCmlmIF9fbmFtZV9fID09ICJfX21haW5fXyI6CiAgICB1bml0dGVzdC5tYWluKCkK'
+      EVIDENCE_DIR: /tmp/dott-tcp-contract-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: Start execution receipt
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import datetime,json,os,time
-          from pathlib import Path
-          out=Path(os.environ["EVIDENCE_DIR"]);out.mkdir(parents=True,exist_ok=True)
-          receipt={"started_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                   "started_monotonic_ns":time.monotonic_ns(),
-                   "workflow_commit":os.environ["GITHUB_SHA"],
-                   "workflow_ref":os.environ["GITHUB_REF"],
-                   "run_url":os.environ["GITHUB_SERVER_URL"]+"/"+os.environ["GITHUB_REPOSITORY"]+"/actions/runs/"+os.environ["GITHUB_RUN_ID"],
-                   "run_attempt":os.environ["GITHUB_RUN_ATTEMPT"]}
-          (out/"execution-start.json").write_text(json.dumps(receipt,indent=2)+"\n")
-          PY
-      - name: Checkout exact project source
+      - name: Checkout exact validation controller
         uses: actions/checkout@v7
         with:
-          ref: ${{ env.VALIDATION_SOURCE_SHA }}
+          ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
-      - name: Record source and tree
+      - name: Checkout exact issue-linked relay source
+        uses: actions/checkout@v7
+        with:
+          repository: kaduvert/PlayIntegrityServer
+          ref: 8a14fde55b52c6e2aad98f50dbb10d69d6a2f684
+          path: linked-playintegrity
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Reconstruct exact prepared contract harness
         shell: bash
         run: |
           python3 - <<'PY'
-          import json,os,subprocess
+          import base64,hashlib,os
           from pathlib import Path
-          git=lambda *args:subprocess.check_output(["git",*args],text=True).strip()
-          source={"expected_commit":os.environ["VALIDATION_SOURCE_SHA"],"expected_tree":os.environ["VALIDATION_SOURCE_TREE"],
-                  "actual_commit":git("rev-parse","HEAD"),"actual_tree":git("rev-parse","HEAD^{tree}"),
-                  "build_gradle_blob":git("hash-object","play-services-droidguard/core/build.gradle")}
-          source["matches"]=(source["expected_commit"]==source["actual_commit"] and source["expected_tree"]==source["actual_tree"]
-                             and source["build_gradle_blob"]=="04a4c63c7294ba98591fd58c15b03c391b8882d3")
-          (Path(os.environ["EVIDENCE_DIR"])/"source.json").write_text(json.dumps(source,indent=2)+"\n")
-          print(json.dumps(source))
-          if not source["matches"]:raise SystemExit("Source pin mismatch")
+          data=base64.b64decode(os.environ["HARNESS_BASE64"],validate=True)
+          if hashlib.sha256(data).hexdigest()!=os.environ["HARNESS_SHA256"]:raise SystemExit("Harness byte mismatch")
+          target=Path(os.environ["EVIDENCE_DIR"])/"test_playintegrity_tcp_contract.py"
+          target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(data)
+          with open(os.environ["GITHUB_ENV"],"a") as env:env.write("HARNESS_FILE="+str(target)+"\n")
+          print("Harness SHA256 "+hashlib.sha256(data).hexdigest())
           PY
-      - name: Set up Java
-        uses: actions/setup-java@v5.7.0
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-read-only: false
-      - name: Ensure Android 35 build components
+      - name: Record both source pins and toolchain
         shell: bash
         run: |
           set -euo pipefail
-          sdk_root="$ANDROID_HOME"
-          manager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
-          if ! test -x "$manager"; then manager="$(command -v sdkmanager)"; fi
-          if ! test -f "$sdk_root/platforms/android-35/android.jar" || ! test -x "$sdk_root/build-tools/35.0.0/aapt2"; then
-            "$manager" --sdk_root="$sdk_root" 'platforms;android-35' 'build-tools;35.0.0'
-          fi
-          test -f "$sdk_root/platforms/android-35/android.jar"
-          test -x "$sdk_root/build-tools/35.0.0/aapt2"
-      - name: Record toolchain
-        shell: bash
-        run: |
-          {
-            date -u +%Y-%m-%dT%H:%M:%SZ
-            uname -a
-            java -version
-            javac -version
-            java --list-modules
-            cat gradle/wrapper/gradle-wrapper.properties
-            cat "$ANDROID_HOME/platforms/android-35/source.properties"
-            cat "$ANDROID_HOME/build-tools/35.0.0/source.properties"
-          } > "$EVIDENCE_DIR/toolchain.log" 2>&1
-      - name: Add JDK HTTP server jar to the unit-test classpath
-        shell: bash
-        run: |
-          set -euo pipefail
-          module="$JAVA_HOME/jmods/jdk.httpserver.jmod"
-          test -f "$module"
-          module_dir="$EVIDENCE_DIR/jdk-httpserver-module"
-          mkdir -p "$module_dir"
-          "$JAVA_HOME/bin/jmod" extract --dir "$module_dir" "$module"
-          test -f "$module_dir/classes/com/sun/net/httpserver/HttpServer.class"
-          jar_file="$EVIDENCE_DIR/jdk-httpserver-test.jar"
-          "$JAVA_HOME/bin/jar" --create --file "$jar_file" -C "$module_dir/classes" com/sun/net/httpserver
-          test -s "$jar_file"
-          printf 'DOTT_JDK_HTTP_SERVER_JAR=%s\n' "$jar_file" >> "$GITHUB_ENV"
-          sha256sum "$module" "$jar_file" > "$EVIDENCE_DIR/jdk-httpserver-classpath.log"
-          cat > "$EVIDENCE_DIR/dott-test-classpath.init.gradle" <<'GRADLE'
-          gradle.projectsEvaluated {
-              def target = gradle.rootProject.findProject(':play-services-droidguard-core')
-              if (target == null) throw new GradleException('DroidGuard core project is missing.')
-              def jarPath = System.getenv('DOTT_JDK_HTTP_SERVER_JAR')
-              def jar = jarPath ? new File(jarPath) : null
-              if (jar == null || !jar.isFile()) throw new GradleException('Test-only JDK HTTP server jar is missing.')
-              target.dependencies.add('testImplementation', target.files(jar))
-              target.tasks.matching { it.name == 'compileDebugUnitTestKotlin' || it.name == 'compileDebugUnitTestJavaWithJavac' || it.name == 'testDebugUnitTest' }.configureEach {
-                  dependsOn(target.tasks.named('prepareHttpServerTestApi'))
-              }
-              target.tasks.named('testDebugUnitTest').configure {
-                  jvmArgs '--add-modules=jdk.httpserver'
-                  doFirst {
-                      println '--add-modules=jdk.httpserver'
-                      println 'DOTT_TEST_ONLY_CLASS_PATH=' + jarPath
-                  }
-              }
-          }
-          GRADLE
-      - name: Run normal DroidGuard module unit-test task
-        id: build
-        shell: bash
-        run: |
-          set -euo pipefail
-          export DOTT_BUILD_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          export DOTT_BUILD_STARTED_EPOCH="$(date +%s)"
-          set +e
-          ./gradlew --no-daemon --console=plain --max-workers=1 --no-parallel --info --stacktrace \
-            -I "$EVIDENCE_DIR/dott-test-classpath.init.gradle" \
-            '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
-            -Pkotlin.compiler.execution.strategy=in-process \
-            :play-services-droidguard-core:testDebugUnitTest \
-            2>&1 | tee "$EVIDENCE_DIR/gradle.log"
-          dott_exit="${PIPESTATUS[0]}"
-          set -e
-          export DOTT_BUILD_EXIT="$dott_exit"
+          mkdir -p "$EVIDENCE_DIR/baseline" "$EVIDENCE_DIR/header-candidate"
+          { python3 --version; g++ --version; uname -a; } > "$EVIDENCE_DIR/toolchain.log" 2>&1
           python3 - <<'PY'
-          import datetime,json,os,time
+          import datetime,hashlib,json,os,subprocess
           from pathlib import Path
-          receipt={"started_at":os.environ["DOTT_BUILD_STARTED_AT"],
-                   "ended_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                   "elapsed_seconds":round(time.time()-int(os.environ["DOTT_BUILD_STARTED_EPOCH"]),3),
-                   "exit_code":int(os.environ["DOTT_BUILD_EXIT"]),
-                   "source_commit":os.environ["VALIDATION_SOURCE_SHA"],"source_tree":os.environ["VALIDATION_SOURCE_TREE"],
-                   "tasks":[":play-services-droidguard-core:testDebugUnitTest"],
-                   "test_filters":[],"init_scripts":["dott-test-classpath.init.gradle"],"source_patch":[],"apk_assembly":False,
-                   "gradle_jvmargs":"-Xmx3g -XX:MaxMetaspaceSize=768m","max_workers":1,
-                   "kotlin_compiler_execution_strategy":"in-process",
-                   "test_classpath":"jdk.httpserver jar on testImplementation plus pinned prepareHttpServerTestApi"}
-          (Path(os.environ["EVIDENCE_DIR"])/"build.json").write_text(json.dumps(receipt,indent=2)+"\n")
+          git=lambda folder,*args:subprocess.check_output(["git","-C",folder,*args],text=True).strip()
+          receipt={"controller_commit":git(".","rev-parse","HEAD"),"controller_tree":git(".","rev-parse","HEAD^{tree}"),
+                   "harness_sha256":hashlib.sha256(Path(os.environ["HARNESS_FILE"]).read_bytes()).hexdigest(),
+                   "linked_commit":git("linked-playintegrity","rev-parse","HEAD"),
+                   "linked_tree":git("linked-playintegrity","rev-parse","HEAD^{tree}"),
+                   "workflow_commit":os.environ["GITHUB_SHA"],"workflow_ref":os.environ["GITHUB_REF"],
+                   "run_url":os.environ["GITHUB_SERVER_URL"]+"/"+os.environ["GITHUB_REPOSITORY"]+"/actions/runs/"+os.environ["GITHUB_RUN_ID"],
+                   "started_at":datetime.datetime.now(datetime.timezone.utc).isoformat()}
+          if receipt["controller_commit"]!=os.environ["GITHUB_SHA"]:raise SystemExit("Controller pin mismatch")
+          if receipt["harness_sha256"]!=os.environ["HARNESS_SHA256"]:raise SystemExit("Harness pin mismatch")
+          if receipt["linked_commit"]!="8a14fde55b52c6e2aad98f50dbb10d69d6a2f684":raise SystemExit("Linked commit mismatch")
+          if receipt["linked_tree"]!="7f18af46f23a58e82474734b2ea47f5d2a78185e":raise SystemExit("Linked tree mismatch")
+          (Path(os.environ["EVIDENCE_DIR"])/"source.json").write_text(json.dumps(receipt,indent=2)+"\n")
           print(json.dumps(receipt))
           PY
-          exit "$dott_exit"
-      - name: Retain all test XML and source-bound evidence
+      - name: Clean-source host probe and explicit header candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PLAYINTEGRITY_SOURCE_DIR="$GITHUB_WORKSPACE/linked-playintegrity"
+          export PLAYINTEGRITY_PROTOCOL_EVIDENCE="$EVIDENCE_DIR/baseline"
+          export PLAYINTEGRITY_HEADER_REPAIR=0
+          set +e
+          python3 "$HARNESS_FILE" -v \
+            2>&1 | tee "$EVIDENCE_DIR/baseline/unittest.log"
+          baseline_exit="${PIPESTATUS[0]}"
+          set -e
+          export TCP_BASELINE_EXIT="$baseline_exit"
+          if test "$baseline_exit" -eq 0; then
+            echo "TCP_ACTUAL_EVIDENCE=baseline" >> "$GITHUB_ENV"
+            echo "TCP_ACTUAL_EXIT=0" >> "$GITHUB_ENV"
+          else
+            grep -q 'PRIu64' "$EVIDENCE_DIR/baseline/compiler.log"
+            export PLAYINTEGRITY_PROTOCOL_EVIDENCE="$EVIDENCE_DIR/header-candidate"
+            export PLAYINTEGRITY_HEADER_REPAIR=1
+            set +e
+            python3 "$HARNESS_FILE" -v \
+              2>&1 | tee "$EVIDENCE_DIR/header-candidate/unittest.log"
+            candidate_exit="${PIPESTATUS[0]}"
+            set -e
+            echo "TCP_ACTUAL_EVIDENCE=header-candidate" >> "$GITHUB_ENV"
+            echo "TCP_ACTUAL_EXIT=$candidate_exit" >> "$GITHUB_ENV"
+          fi
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          (Path(os.environ["EVIDENCE_DIR"])/"baseline-exit.json").write_text(
+              json.dumps({"exit_code":int(os.environ["TCP_BASELINE_EXIT"]),"source_patch":False},indent=2)+"\n")
+          PY
+      - name: Retain actual contract result and source profiles
         if: always()
         shell: bash
         run: |
           python3 - <<'PY'
-          import datetime,hashlib,json,os,shutil,subprocess,time
-          import xml.etree.ElementTree as ET
+          import datetime,hashlib,json,os,subprocess
           from pathlib import Path
           out=Path(os.environ["EVIDENCE_DIR"]);out.mkdir(parents=True,exist_ok=True)
-          problems=[];files=[]
-          def retain(path):
-            target=out/"files"/path;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(path,target)
-            item={"path":str(Path("files")/path),"bytes":target.stat().st_size,
-                  "sha256":hashlib.sha256(target.read_bytes()).hexdigest()}
-            files.append(item);return item
-          counts={};totals={"tests":0,"failures":0,"errors":0,"skipped":0,"report_files":0}
-          for report in sorted(Path("play-services-droidguard/core/build/test-results/testDebugUnitTest").glob("TEST-*.xml")):
-            retain(report);totals["report_files"]+=1
-            try:root=ET.parse(report).getroot()
-            except ET.ParseError:problems.append("Invalid XML: "+str(report));continue
-            for case in root.iter("testcase"):
-              name=case.get("classname");counts[name]=counts.get(name,0)+1;totals["tests"]+=1
-              for kind in ("failure","error","skipped"):
-                totals[{"failure":"failures","error":"errors","skipped":"skipped"}[kind]]+=len(case.findall(kind))
-          for name in ("RemoteDroidGuardInitializationTest","RemoteDroidGuardSessionTest","RemoteDroidGuardHttpClientTest","RemoteDroidGuardHandleInteropTest"):
-            if not counts.get("org.microg.gms.droidguard.core."+name):problems.append("No executed maintained class: "+name)
-          if totals["failures"] or totals["errors"] or totals["skipped"]:problems.append("Unit tests failed, errored or skipped")
-          if totals["tests"]==0:problems.append("No executed cases")
-          api=Path("play-services-droidguard/core/build/jdk-httpserver-test/api")
-          api_files=sorted(api.rglob("*.class"))
-          if not (api/"com/sun/net/httpserver/HttpServer.class").is_file():problems.append("Generated test API missing")
-          if any(not str(p.relative_to(api)).startswith("com/sun/net/httpserver/") for p in api_files):problems.append("Non-public package in test compile-only API")
-          api_manifest=[{"path":str(p.relative_to(api)),"sha256":hashlib.sha256(p.read_bytes()).hexdigest()} for p in api_files]
-          (out/"test-api-classes.json").write_text(json.dumps(api_manifest,indent=2)+"\n")
-          retain(Path("play-services-droidguard/core/build.gradle"))
+          problems=[];selected=os.environ.get("TCP_ACTUAL_EVIDENCE")
+          def read(path):return json.loads(path.read_text()) if path.is_file() else None
+          result=read(out/selected/"contract-result.json") if selected else None
+          baseline=read(out/"baseline/source-and-compile.json")
+          candidate=read(out/"header-candidate/source-and-compile.json")
+          if os.environ.get("TCP_ACTUAL_EXIT")!="0":problems.append("Contract process did not exit zero")
+          if not result or not result.get("passed") or result.get("frames")!=3 or result.get("fake_dispatch_count")!=2:
+            problems.append("No complete three-frame/two-dispatch result")
           changed=subprocess.check_output(["git","diff","--name-only"],text=True).splitlines()
-          if changed:problems.append("Unexpected source delta after build: "+repr(changed))
-          source=json.loads((out/"source.json").read_text()) if (out/"source.json").is_file() else {}
-          build=json.loads((out/"build.json").read_text()) if (out/"build.json").is_file() else {}
-          start=json.loads((out/"execution-start.json").read_text()) if (out/"execution-start.json").is_file() else {}
-          if not source.get("matches"):problems.append("Source pin unconfirmed")
-          if build.get("exit_code")!=0:problems.append("Gradle exit not zero")
-          log=(out/"gradle.log").read_text(errors="replace") if (out/"gradle.log").is_file() else ""
-          runtime_module_arg="--add-modules=jdk.httpserver" in log
-          if not runtime_module_arg:problems.append("Test JVM module argument missing from --info log")
-          summary={"source":source,"build":build,"junit":totals,"class_counts":counts,
-                   "generated_api_class_count":len(api_files),"test_jvm_module_argument_observed":runtime_module_arg,
-                   "source_delta_after_build":changed,"problems":problems,
-                   "execution":{**start,"ended_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                                "elapsed_seconds":round((time.monotonic_ns()-start["started_monotonic_ns"])/1e9,3) if "started_monotonic_ns" in start else None},
-                   "device_result":"not executed"}
+          linked_changed=subprocess.check_output(["git","-C","linked-playintegrity","diff","--name-only"],text=True).splitlines()
+          if changed or linked_changed:problems.append("Checkout source changed")
+          summary={"sources":read(out/"source.json"),"baseline_compile":baseline,"candidate_compile":candidate,
+                   "selected_profile":selected,"actual_exit":os.environ.get("TCP_ACTUAL_EXIT"),"contract":result,
+                   "problems":problems,"ended_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                   "boundary":"Actual one-shot C++ TCP relay, host logging/JNI declarations and fake dispatch; no Android/Google VM or attestation"}
           (out/"summary.json").write_text(json.dumps(summary,indent=2)+"\n")
-          for p in sorted(out.glob("*.json"))+sorted(out.glob("*.log")):
-            files.append({"path":p.name,"bytes":p.stat().st_size,"sha256":hashlib.sha256(p.read_bytes()).hexdigest()})
-          (out/"SHA256SUMS").write_text("".join(f"{x['sha256']}  {x['path']}\n" for x in files))
+          files=[p for p in out.rglob("*") if p.is_file()]
+          (out/"SHA256SUMS").write_text("".join(hashlib.sha256(p.read_bytes()).hexdigest()+"  "+str(p.relative_to(out))+"\n" for p in sorted(files)))
           print(json.dumps(summary,indent=2))
           if problems:raise SystemExit(1)
           PY
-      - name: Upload execution evidence
+      - name: Upload complete source and execution evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dott3841-project-jdkmodule-${{ env.VALIDATION_SOURCE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: dott3841-linked-tcp-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.EVIDENCE_DIR }}
           if-no-files-found: error
           retention-days: 30
