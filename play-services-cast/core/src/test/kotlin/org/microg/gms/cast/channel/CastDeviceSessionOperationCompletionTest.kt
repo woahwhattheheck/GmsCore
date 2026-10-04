@@ -14,6 +14,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
+import java.io.IOException
 import java.lang.reflect.Proxy
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ScheduledThreadPoolExecutor
@@ -129,6 +130,59 @@ class CastDeviceSessionPendingCloseControlTest {
             assertTrue(pending.isEmpty())
             session.onClosed(null)
             assertEquals(3, completions.size)
+        } finally {
+            session.disconnect()
+            executor.shutdown()
+            assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun callbackFailureDoesNotInterruptRemoteCloseCleanup() {
+        val completions = CopyOnWriteArrayList<Pair<String, Int>>()
+        val pendingSizes = CopyOnWriteArrayList<Int>()
+        val pendingField = CastDeviceSession::class.java.getDeclaredField("pendingRequests").apply { isAccessible = true }
+        lateinit var session: CastDeviceSession
+        var failNextCompletion = true
+        val callbackType = CastDeviceSession.Callbacks::class.java
+        val callbacks = Proxy.newProxyInstance(callbackType.classLoader, arrayOf(callbackType)) { _, method, args ->
+            if (method.name in setOf("onApplicationConnectionFailed", "onStopApplicationResult", "onDisconnected")) {
+                completions.add(method.name to (args!![0] as Int))
+                pendingSizes.add((pendingField.get(session) as Map<*, *>).size)
+                if (failNextCompletion) {
+                    failNextCompletion = false
+                    throw IllegalStateException("Client callback failed")
+                }
+            }
+            null
+        } as CastDeviceSession.Callbacks
+        session = CastDeviceSession("127.0.0.1", CastChannel.DEFAULT_PORT, callbacks)
+        val executor = CastDeviceSession::class.java.getDeclaredField("executor").apply { isAccessible = true }
+            .get(session) as ScheduledThreadPoolExecutor
+        val channel = CastChannel("127.0.0.1", CastChannel.DEFAULT_PORT, session, "sender-under-test")
+        CastChannel::class.java.getDeclaredField("output").apply { isAccessible = true }
+            .set(channel, DataOutputStream(ByteArrayOutputStream()))
+        CastDeviceSession::class.java.getDeclaredField("channel").apply { isAccessible = true }.set(session, channel)
+        try {
+            session.launchApplication("app-id", true, null)
+            session.joinApplication("app-id", "session-id")
+            session.stopApplication("session-id")
+            executor.submit {}.get(2, TimeUnit.SECONDS)
+            val pending = (pendingField.get(session) as Map<*, *>).values.toList()
+            assertEquals(3, pending.size)
+            val timeouts = pending.map { request ->
+                request!!.javaClass.getDeclaredField("timeout").apply { isAccessible = true }
+                    .get(request) as java.util.concurrent.ScheduledFuture<*>
+            }
+            session.onClosed(IOException("Receiver disconnected"))
+            executor.submit {}.get(2, TimeUnit.SECONDS)
+            assertEquals(2, completions.count { it == ("onApplicationConnectionFailed" to CastDeviceSession.STATUS_TIMEOUT) })
+            assertEquals(1, completions.count { it == ("onStopApplicationResult" to CastDeviceSession.STATUS_TIMEOUT) })
+            assertEquals(1, completions.count { it == ("onDisconnected" to CastDeviceSession.STATUS_NETWORK_ERROR) })
+            assertEquals(4, completions.size)
+            assertEquals(listOf(0, 0, 0, 0), pendingSizes.toList())
+            assertTrue(timeouts.all { it.isCancelled })
+            assertTrue((pendingField.get(session) as Map<*, *>).isEmpty())
         } finally {
             session.disconnect()
             executor.shutdown()

@@ -392,11 +392,18 @@ class CastDeviceSession(
         channel = null
         application = null
         receiverStatus = null
-        for (pending in pendingRequests.values) {
-            pending.timeout?.cancel(false)
-            pending.onReply(null)
-        }
+        // Detach and cancel all requests before notifying client code. A failed
+        // callback must not strand other requests or suppress disconnection.
+        val pending = pendingRequests.values.toList()
         pendingRequests.clear()
+        for (request in pending) request.timeout?.cancel(false)
+        for (request in pending) {
+            try {
+                request.onReply(null)
+            } catch (e: RuntimeException) {
+                Log.log(Level.WARNING, "Cast request completion callback failed", e)
+            }
+        }
         if (!disconnectRequested) callbacks.onDisconnected(if (error == null) STATUS_SUCCESS else STATUS_NETWORK_ERROR)
     }
 
