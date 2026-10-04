@@ -294,6 +294,8 @@ class CastDeviceSession(
 
     // Called on the channel reader thread
     override fun onMessage(message: CastMessage) = post {
+        // Receiver replies must be routed before they can update state or complete a request.
+        if (message.destination_id != channel?.senderId && message.destination_id != BROADCAST_ID) return@post
         if (message.namespace == NAMESPACE_RECEIVER && message.source_id == RECEIVER_ID) {
             val json = try {
                 JSONObject(message.payload_utf8 ?: return@post)
@@ -312,7 +314,6 @@ class CastDeviceSession(
         }
         val app = application ?: return@post
         if (message.source_id != app.transportId) return@post
-        if (message.destination_id != channel?.senderId && message.destination_id != BROADCAST_ID) return@post
         // Like Play services, only deliver namespaces the client registered a callback for
         if (message.namespace !in namespaces) return@post
         when (message.payload_type) {

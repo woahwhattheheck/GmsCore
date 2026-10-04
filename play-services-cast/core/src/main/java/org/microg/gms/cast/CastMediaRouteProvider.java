@@ -103,10 +103,9 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
     private final Map<String, CastRoute> routes = new LinkedHashMap<String, CastRoute>();
     private final Map<String, String> serviceCastIds = new HashMap<String, String>();
     private final Set<String> customCategories = new LinkedHashSet<String>();
-    private final Queue<NsdServiceInfo> resolveQueue = new ArrayDeque<NsdServiceInfo>();
+    private final CastDiscoveryState<NsdServiceInfo> discoveryState = new CastDiscoveryState<>();
+    private final Queue<CastDiscoveryState.Service<NsdServiceInfo>> resolveQueue = new ArrayDeque<>();
     private boolean resolving = false;
-    // Incremented when discovery ends, see onDiscoveryEnded()
-    private int discoveryRun;
     private NsdManager.ResolveListener activeResolve;
     private final Runnable resolveTimeout = this::onResolveTimeout;
 
@@ -251,12 +250,14 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
         handler.removeCallbacks(retryDiscovery);
         if (discoveryWanted && discoveryListener == null) {
             discoveryListener = new DiscoveryListener();
+            discoveryState.start(discoveryListener);
             Log.d(TAG, "Starting discovery of " + SERVICE_TYPE);
             try {
                 mNsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener);
             } catch (RuntimeException e) {
                 Log.w(TAG, "Failed to start discovery", e);
                 discoveryListener = null;
+                discoveryState.stop();
                 scheduleDiscoveryRetry();
             }
         } else if (!discoveryWanted && discoveryListener != null && discoveryListener.state == DiscoveryListener.STARTED) {
@@ -304,6 +305,7 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
             handler.post(() -> {
                 if (discoveryListener != this) return;
                 discoveryListener = null;
+                discoveryState.stop();
                 // E.g. while the network is changing: discovery stays wanted, so try again.
                 scheduleDiscoveryRetry();
             });
@@ -330,7 +332,10 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
         @Override
         public void onServiceFound(NsdServiceInfo serviceInfo) {
             handler.post(() -> {
-                queueResolve(serviceInfo);
+                CastDiscoveryState.Service<NsdServiceInfo> service =
+                        discoveryState.found(this, serviceInfo.getServiceName(), serviceInfo);
+                if (service == null) return;
+                queueResolve(service);
                 resolveNext();
             });
         }
@@ -339,7 +344,8 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
         public void onServiceLost(NsdServiceInfo serviceInfo) {
             String name = serviceInfo.getServiceName();
             handler.post(() -> {
-                // A resolve of a service that is gone never completes.
+                if (!discoveryState.lost(this, name)) return;
+                // An in-flight resolve may finish late; its observation is no longer current.
                 dropQueuedResolve(name);
                 onChromeCastLost(name);
             });
@@ -351,8 +357,8 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
      * are still present is unknown. A new run finds those that are.
      */
     private void onDiscoveryEnded() {
-        // Results of resolves that were started in the ended discovery run are ignored.
-        discoveryRun++;
+        // Results and queued callbacks from the ended discovery run are ignored.
+        discoveryState.stop();
         resolveQueue.clear();
         serviceCastIds.clear();
         boolean removed = false;
@@ -366,14 +372,14 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
         if (removed) publishRoutes();
     }
 
-    private void queueResolve(NsdServiceInfo serviceInfo) {
-        dropQueuedResolve(serviceInfo.getServiceName());
-        resolveQueue.add(serviceInfo);
+    private void queueResolve(CastDiscoveryState.Service<NsdServiceInfo> service) {
+        dropQueuedResolve(service.name);
+        resolveQueue.add(service);
     }
 
     private void dropQueuedResolve(String name) {
-        for (Iterator<NsdServiceInfo> it = resolveQueue.iterator(); it.hasNext(); ) {
-            if (TextUtils.equals(name, it.next().getServiceName())) it.remove();
+        for (Iterator<CastDiscoveryState.Service<NsdServiceInfo>> it = resolveQueue.iterator(); it.hasNext(); ) {
+            if (TextUtils.equals(name, it.next().name)) it.remove();
         }
     }
 
@@ -384,9 +390,13 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
     @SuppressLint("NewApi")
     private void resolveNext() {
         if (resolving || mNsdManager == null) return;
-        final NsdServiceInfo serviceInfo = resolveQueue.poll();
-        if (serviceInfo == null) return;
-        final int run = discoveryRun;
+        CastDiscoveryState.Service<NsdServiceInfo> next;
+        do {
+            next = resolveQueue.poll();
+            if (next == null) return;
+        } while (!discoveryState.isCurrent(next));
+        final CastDiscoveryState.Service<NsdServiceInfo> service = next;
+        final NsdServiceInfo serviceInfo = service.info;
         resolving = true;
         NsdManager.ResolveListener listener = new NsdManager.ResolveListener() {
             @Override
@@ -396,7 +406,7 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
                     finishResolve();
                     if (errorCode == NsdManager.FAILURE_ALREADY_ACTIVE) {
                         // A resolve for another listener in this process is still running.
-                        if (run == discoveryRun) queueResolve(serviceInfo);
+                        if (discoveryState.isCurrent(service)) queueResolve(service);
                         handler.postDelayed(CastMediaRouteProvider.this::resolveNext, RESOLVE_RETRY_DELAY_MS);
                         return;
                     }
@@ -410,8 +420,8 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
                 handler.post(() -> {
                     if (activeResolve != this) return;
                     finishResolve();
-                    // A device resolved after discovery stopped would never be reported lost.
-                    if (discoveryListener != null && run == discoveryRun) onServiceResolvedInternal(info);
+                    // Lost, replaced and previous-run observations must not republish a route.
+                    if (discoveryState.isCurrent(service)) onServiceResolvedInternal(info);
                     resolveNext();
                 });
             }
