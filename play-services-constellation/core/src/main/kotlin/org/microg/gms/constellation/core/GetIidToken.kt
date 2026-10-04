@@ -9,6 +9,7 @@ import com.google.android.gms.constellation.GetIidTokenResponse
 import com.google.android.gms.constellation.internal.IConstellationCallbacks
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 private const val TAG = "GetIidToken"
@@ -48,10 +49,13 @@ internal suspend fun handleGetIidToken(
 ) = withContext(Dispatchers.IO) {
     try {
         val iidToken = credentialProvider.getIidToken(request.projectNumber?.toString())
+        // Credential calls are synchronous, so cancellation may arrive while they block.
+        ensureActive()
         require(iidToken.isNotEmpty()) { "Instance ID token is empty" }
         val fid = credentialProvider.getFid()
         val (signature, timestamp) = credentialProvider.signIidToken(iidToken)
 
+        ensureActive()
         callbacks.onIidTokenGenerated(
             Status.SUCCESS,
             GetIidTokenResponse(iidToken, fid, signature, timestamp),
@@ -61,6 +65,7 @@ internal suspend fun handleGetIidToken(
         // Cancelled (e.g. caller process died): do not deliver a result to a dead caller.
         throw e
     } catch (e: Exception) {
+        ensureActive()
         Log.e(TAG, "getIidToken failed", e)
         callbacks.onIidTokenGenerated(Status.INTERNAL_ERROR, null, ApiMetadata.DEFAULT)
     }
