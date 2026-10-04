@@ -18,6 +18,7 @@ package org.microg.gms.wearable;
 
 import android.content.Context;
 import android.net.Uri;
+import android.util.Log;
 
 import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.common.data.DataHolder;
@@ -27,16 +28,21 @@ import com.google.android.gms.wearable.internal.NodeParcelable;
 
 import org.microg.gms.common.PackageUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
 
 public class CapabilityManager {
+    private static final String TAG = "CapabilityManager";
+
     private static final Uri ROOT = Uri.parse("wear:/capabilities/");
     private final Context context;
     private final WearableImpl wearable;
     private final String packageName;
 
-    private Set<String> capabilities = new HashSet<String>();
+    private final Object lock = new Object();
+
+    private final Set<String> capabilities = new HashSet<String>();
 
     public CapabilityManager(Context context, WearableImpl wearable, String packageName) {
         this.context = context;
@@ -44,7 +50,36 @@ public class CapabilityManager {
         this.packageName = packageName;
     }
 
-    private Uri buildCapabilityUri(String capability, boolean withAuthority) {
+    public enum CapabilityType {
+        STATIC("s", "+", "+#"),
+        DYNAMIC("d", "-", "-#");
+
+        public final String typeCode;
+        public final String addSymbol;
+        public final String addSymbolWithHash;
+
+        CapabilityType(String typeCode, String addSymbol, String addSymbolWithHash) {
+            this.typeCode = typeCode;
+            this.addSymbol = addSymbol;
+            this.addSymbolWithHash = addSymbolWithHash;
+        }
+
+        public static CapabilityType fromBytes(byte[] data) {
+            if (data == null || data.length == 0) return DYNAMIC;
+
+            String code = new String(data, 0, 1, StandardCharsets.UTF_8);
+
+            if (STATIC.typeCode.equals(code)) return STATIC;
+
+            return DYNAMIC;
+        }
+
+        public byte[] toBytes() {
+            return typeCode.getBytes(StandardCharsets.UTF_8);
+        }
+    }
+
+    Uri buildCapabilityUri(String capability, boolean withAuthority) {
         Uri.Builder builder = ROOT.buildUpon();
         if (withAuthority) builder.authority(wearable.getLocalNodeId());
         builder.appendPath(packageName);
@@ -54,32 +89,121 @@ public class CapabilityManager {
     }
 
     public Set<String> getNodesForCapability(String capability) {
-        DataHolder dataHolder = wearable.getDataItemsByUriAsHolder(buildCapabilityUri(capability, false), packageName);
+        // Read only rows owned by this app and signing certificate, then compare paths
+        // literally. The URI query uses SQL LIKE internally, and the legacy global
+        // capability-name query also treats '%' and '_' as LIKE wildcards.
+        DataHolder capabilityData = wearable.getDataItemsAsHolder(packageName);
         Set<String> nodes = new HashSet<>();
-        for (int i = 0; i < dataHolder.getCount(); i++) {
-            nodes.add(dataHolder.getString("host", i, 0));
+        String expectedPath = buildCapabilityUri(capability, false).getPath();
+        try {
+            for (int i = 0; i < capabilityData.getCount(); i++) {
+                if (expectedPath.equals(capabilityData.getString("path", i, 0))) {
+                    String host = capabilityData.getString("host", i, 0);
+                    if (host != null) nodes.add(host);
+                }
+            }
+        } finally {
+            capabilityData.close();
         }
-        dataHolder.close();
         return nodes;
     }
 
     public int add(String capability) {
-        if (this.capabilities.contains(capability)) {
-            return WearableStatusCodes.DUPLICATE_CAPABILITY;
+        return addWithType(capability, CapabilityType.DYNAMIC);
+//        if (this.capabilities.contains(capability)) {
+//            return WearableStatusCodes.DUPLICATE_CAPABILITY;
+//        }
+//        DataItemInternal dataItem = new DataItemInternal(buildCapabilityUri(capability, true));
+//        DataItemRecord record = wearable.putDataItem(packageName, PackageUtils.firstSignatureDigest(context, packageName), wearable.getLocalNodeId(), dataItem);
+//        this.capabilities.add(capability);
+//        wearable.syncRecordToAll(record);
+//        return CommonStatusCodes.SUCCESS;
+    }
+
+    public int addWithType(String capability, CapabilityType type) {
+        synchronized (lock) {
+            Uri uri = buildCapabilityUri(capability, true);
+            DataHolder existingData = wearable.getDataItemsByUriAsHolder(uri, packageName);
+
+            try {
+                if (existingData.getCount() > 0) {
+                    byte[] data = existingData.getByteArray("data", 0, 0);
+                    CapabilityType existingType = CapabilityType.fromBytes(data);
+
+                    if (existingType == type)
+                        return CommonStatusCodes.SUCCESS;
+
+                    if (existingType == CapabilityType.STATIC)
+                        return WearableStatusCodes.DUPLICATE_CAPABILITY;
+                }
+            } finally {
+                existingData.close();
+            }
+
+            DataItemInternal dataItem = new DataItemInternal(uri);
+            dataItem.data = type.toBytes();
+
+            DataItemRecord record = wearable.putDataItem(
+                    packageName,
+                    PackageUtils.firstSignatureDigest(context, packageName),
+                    wearable.getLocalNodeId(),
+                    dataItem
+            );
+
+            if (record != null) {
+                capabilities.add(capability);
+                wearable.syncRecordToAll(record);
+                Log.d(TAG, "Added capability: " + capability + " (type=" + type + ")");
+                return CommonStatusCodes.SUCCESS;
+            } else {
+                Log.e(TAG, "Failed to add capability: " + capability);
+                return CommonStatusCodes.ERROR;
+            }
         }
-        DataItemInternal dataItem = new DataItemInternal(buildCapabilityUri(capability, true));
-        DataItemRecord record = wearable.putDataItem(packageName, PackageUtils.firstSignatureDigest(context, packageName), wearable.getLocalNodeId(), dataItem);
-        this.capabilities.add(capability);
-        wearable.syncRecordToAll(record);
-        return CommonStatusCodes.SUCCESS;
     }
 
     public int remove(String capability) {
-        if (!this.capabilities.contains(capability)) {
-            return WearableStatusCodes.UNKNOWN_CAPABILITY;
+        synchronized (lock) {
+            if (!capabilities.contains(capability)) {
+                Uri uri = buildCapabilityUri(capability, true);
+                DataHolder existingData = wearable.getDataItemsByUriAsHolder(uri, packageName);
+                try {
+                    if (existingData.getCount() == 0) {
+                        Log.w(TAG, "Capability not found: " + capability);
+                        return WearableStatusCodes.UNKNOWN_CAPABILITY;
+                    }
+                } finally {
+                    existingData.close();
+                }
+            }
+
+//        if (!this.capabilities.contains(capability)) {
+//            return WearableStatusCodes.UNKNOWN_CAPABILITY;
+//        }
+            wearable.deleteDataItems(buildCapabilityUri(capability, true), packageName);
+            capabilities.remove(capability);
+            Log.d(TAG, "Removed capability: " + capability);
+            return CommonStatusCodes.SUCCESS;
         }
-        wearable.deleteDataItems(buildCapabilityUri(capability, true), packageName);
-        capabilities.remove(capability);
-        return CommonStatusCodes.SUCCESS;
+    }
+
+    public Set<String> getLocalCapabilities() {
+        synchronized (lock) {
+            return new HashSet<>(capabilities);
+        }
+    }
+
+    public boolean hasCapability(String capability) {
+        synchronized (lock) {
+            return capabilities.contains(capability);
+        }
+    }
+
+    public void clearAll() {
+        synchronized (lock) {
+            for (String capability: new HashSet<>(capabilities)) {
+                remove(capability);
+            }
+        }
     }
 }
