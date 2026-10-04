@@ -26,8 +26,8 @@ suspend operator fun GaiaSignals.Companion.invoke(context: Context): GaiaSignals
             val accounts = accountManager.getAccountsByType("com.google")
 
             for (account in accounts) {
-                var id = accountManager.getUserData(account, "GoogleUserId")
-                if (id == "") {
+                var id: String? = accountManager.getUserData(account, "GoogleUserId")
+                if (id.isNullOrEmpty()) {
                     try {
                         val future = accountManager.getAuthToken(
                             account,
@@ -38,11 +38,15 @@ suspend operator fun GaiaSignals.Companion.invoke(context: Context): GaiaSignals
                             null
                         )
                         id = future.result?.getString(AccountManager.KEY_AUTHTOKEN)
-                        accountManager.setUserData(account, "GoogleUserId", id)
                     } catch (e: Exception) {
                         Log.w(TAG, "Could not retrieve Gaia ID for account ${account.name}", e)
                         continue
                     }
+                    if (id.isNullOrEmpty()) {
+                        Log.w(TAG, "No Gaia ID for account ${account.name}")
+                        continue
+                    }
+                    accountManager.setUserData(account, "GoogleUserId", id)
                 }
                 entries.add(
                     GaiaSignalEntry(
