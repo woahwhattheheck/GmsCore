@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.pm.ProviderInfo
 import androidx.test.core.app.ApplicationProvider
 import com.google.android.gms.droidguard.internal.DroidGuardResultsRequest
-import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -128,10 +127,9 @@ class RemoteHandleImplSnapshotTransportTest {
         ShadowContentResolver.registerProviderInternal(authority, provider)
     }
 
-    @After
-    fun clearSettings() {
-        DroidGuardPreferences.setNetworkServerUrl(context, null)
-    }
+    // Note: SettingsProvider.updateDroidGuard cannot clear NETWORK_SERVER_URL with a
+    // null value (null as String -> NPE), so there is no @After reset. Every test sets
+    // its own URL through `handle()` before use.
 
     private fun handle(serverUrl: String): RemoteHandleImpl {
         DroidGuardPreferences.setNetworkServerUrl(context, serverUrl)
