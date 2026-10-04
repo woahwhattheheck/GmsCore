@@ -30,6 +30,16 @@ jobs:
           set -eu
           test "$(git rev-parse HEAD)" = db0209b5241e9da4b28e5332d8ec96d8c8ebe1f7
           python ../carrier/work/cast580-idle-outcome/prepare.py
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          p = Path('play-services-cast/core/src/main/java/org/microg/gms/cast/CastMediaRouteController.java')
+          original = subprocess.check_output(['git', 'show', 'HEAD:' + str(p)])
+          assert original.count(b'\r\n') == original.count(b'\n') > 0
+          current = p.read_bytes()
+          assert b'\r' not in current
+          p.write_bytes(current.replace(b'\n', b'\r\n'))
+          PY
           git config user.name woahwhattheheck
           git config user.email brycembusiness2@gmail.com
           git add play-services-cast/core/src/main/java/org/microg/gms/cast/CastMediaRouteController.java play-services-cast/core/src/test/java/org/microg/gms/cast/RemotePlaybackIdleOutcomeTest.java docs/validation/cast-idle-outcomes.md
@@ -40,7 +50,7 @@ jobs:
           git rev-parse HEAD HEAD^{tree} HEAD^ > ../source-result/identity.txt
           git ls-files -s play-services-cast/core/src/main/java/org/microg/gms/cast/CastMediaRouteController.java play-services-cast/core/src/test/java/org/microg/gms/cast/RemotePlaybackIdleOutcomeTest.java docs/validation/cast-idle-outcomes.md > ../source-result/blobs.txt
           git archive --format=tar HEAD play-services-cast/core/src/main/java/org/microg/gms/cast/CastMediaRouteController.java play-services-cast/core/src/test/java/org/microg/gms/cast/RemotePlaybackIdleOutcomeTest.java docs/validation/cast-idle-outcomes.md > ../source-result/source.tar
-          git push origin HEAD:refs/heads/delivery/cast580-idle-outcome-delta-result
+          git push origin HEAD:refs/heads/delivery/cast580-idle-outcome-delta-crlf
       - uses: actions/upload-artifact@v4
         with:
           name: cast580-idle-outcome-source
