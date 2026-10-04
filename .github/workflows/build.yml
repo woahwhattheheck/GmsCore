@@ -7,7 +7,7 @@ permissions:
   contents: write
 concurrency:
   group: cast580-media-replies-keystone1004
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   focused:
     runs-on: ubuntu-latest
@@ -18,11 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 2
+          fetch-depth: 3
       - name: Prepare exact two-file repair
         run: |
           git cat-file -e "$BASE^{commit}"
           python work/cast580-media-replies/apply.py
+          python work/cast580-media-replies/amend.py
           git diff -- play-services-cast/core/src > cast580-evidence/source.patch
       - uses: actions/setup-java@v6
         with:
@@ -45,7 +46,7 @@ jobs:
           from pathlib import Path
           import xml.etree.ElementTree as ET
           result = []
-          for name, count in [('RemotePlaybackControlTest', 15), ('RemotePlaybackResponseOwnershipTest', 11)]:
+          for name, count in [('RemotePlaybackControlTest', 15), ('RemotePlaybackResponseOwnershipTest', 13)]:
               p = Path('play-services-cast/core/build/test-results/testDebugUnitTest') / ('TEST-org.microg.gms.cast.' + name + '.xml')
               e = ET.parse(p).getroot()
               assert int(e.get('tests')) == count, e.attrib
@@ -60,13 +61,13 @@ jobs:
           git read-tree "$BASE"
           git add play-services-cast/core/src/main/java/org/microg/gms/cast/CastMediaRouteController.java play-services-cast/core/src/test/java/org/microg/gms/cast/RemotePlaybackResponseOwnershipTest.java
           TREE=$(git write-tree)
-          COMMIT=$(printf '%s\n\n%s\n' 'Cast: isolate late media replies and allow omitted result callbacks [skip ci]' 'Ignore completed or expired request replies and reject old-item replies before mutating the replacement playback state. Preserve unsolicited notifications and current-item results. Normalize the optional MediaRouter result callback without changing requested actions. Existing focused module checks passed: 15 prior cases plus 11 real Android/Robolectric regression and control cases. No APK, physical receiver or bounty award is asserted.' | git commit-tree "$TREE" -p "$BASE")
-          git push origin "$COMMIT:refs/heads/bounty/cast580-media-replies-keystone1004"
+          COMMIT=$(printf '%s\n\n%s\n' 'Cast: isolate late media replies and allow omitted result callbacks [skip ci]' 'Ignore only our completed or expired request replies, preserving other senders broadcasts and spontaneous status. Randomize the initial request id per the media protocol. Reject old-item replies before changing replacement playback state, while allowing STOP acknowledgement after spontaneous completion. Normalize the optional MediaRouter callback without changing actions. Existing focused module checks passed: 15 prior cases plus 13 Android/Robolectric regression and control cases. No APK, physical receiver or bounty award is asserted.' | git commit-tree "$TREE" -p "$BASE")
+          git push origin "$COMMIT:refs/heads/bounty/cast580-media-replies-keystone1004-v2"
           printf '%s\n' "$COMMIT" > cast580-evidence/product-commit.txt
           printf '%s\n' "$TREE" > cast580-evidence/product-tree.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cast580-media-replies-keystone1004
+          name: cast580-media-replies-keystone1004-v2
           path: cast580-evidence/
           retention-days: 7
