@@ -162,6 +162,32 @@ class VerifyPhoneNumberRecordBoundaryTest {
     }
 
     @Test
+    fun nullParcelableFields_areNormalized_beforeTheHandlerBoundary() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val provider = RecordingSettingsProvider(onQuery = { enabledCursor(0) })
+        ShadowContentResolver.registerProviderInternal(SettingsContract.getAuthority(context), provider)
+
+        val callbacks = RecordingCallbacks()
+        val request = VerifyPhoneNumberRequest(
+            /* policyId */ null,
+            /* timeout */ 300L,
+            /* idTokenRequest */ null,
+            /* extras */ null,
+            /* targetedSims */ null,
+            /* includeUnverified */ false,
+            /* apiVersion */ 0,
+            /* verificationMethodsValues */ null
+        )
+
+        runBlocking {
+            handleVerifyPhoneNumberRequest(context, callbacks, request, "com.example.caller")
+        }
+
+        assertEquals("a nullable request still records exactly one terminal outcome", 1, provider.updateCount)
+        assertEquals("a nullable request still delivers exactly once", 1, callbacks.deliveries)
+    }
+
+    @Test
     fun normalTerminalPath_recordsOutcome_andDelivers() {
         // Control: verification disabled -> a genuine (non-cancellation) terminal outcome.
         val context = ApplicationProvider.getApplicationContext<Context>()
