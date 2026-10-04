@@ -304,7 +304,7 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
                 callback.onError("Unknown remote playback session", null);
                 return true;
             }
-            if (itemId == null || (remotePlaybackItemId != null && !itemId.equals(remotePlaybackItemId))) {
+            if (itemId == null) {
                 callback.onError("Unknown remote playback item", null);
                 return true;
             }
