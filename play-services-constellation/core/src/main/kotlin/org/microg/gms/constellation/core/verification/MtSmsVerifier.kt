@@ -142,6 +142,22 @@ internal data class ReceivedSms(
     val sender: String
 )
 
+/**
+ * Joins the parts of one received broadcast into a single message.
+ *
+ * A concatenated SMS arrives as one [SmsMessage] per PDU part, so buffering the parts separately
+ * loses any challenge string that spans a part boundary. Takes (sender, body) pairs rather than
+ * [SmsMessage] so the joining can be tested without manufacturing Android PDU bytes.
+ */
+internal fun joinParts(parts: List<Pair<String?, String?>>): ReceivedSms? {
+    val bodies = parts.mapNotNull { it.second }
+    if (bodies.isEmpty()) return null
+    return ReceivedSms(
+        body = bodies.joinToString(separator = ""),
+        sender = parts.firstNotNullOfOrNull { it.first } ?: ""
+    )
+}
+
 private data class PendingMatch(
     val expectedBody: String,
     val continuation: CancellableContinuation<ReceivedSms?>
@@ -220,14 +236,9 @@ internal class MtSmsInbox(
     }
 
     private fun onMessagesReceived(messages: Array<SmsMessage>) {
-        val receivedMessages = messages.mapNotNull { message ->
-            val body = message.messageBody ?: return@mapNotNull null
-            ReceivedSms(
-                body = body,
-                sender = message.originatingAddress ?: ""
-            )
-        }
-        onReceivedMessages(receivedMessages)
+        onReceivedMessages(
+            listOfNotNull(joinParts(messages.map { it.originatingAddress to it.messageBody }))
+        )
     }
 
     /**
