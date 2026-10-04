@@ -169,17 +169,7 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
         }
         BASE_CONTROL_FILTERS.add(filter);
 
-        String[] remotePlaybackActions = {
-            MediaControlIntent.ACTION_PAUSE,
-            MediaControlIntent.ACTION_RESUME,
-            MediaControlIntent.ACTION_STOP,
-            MediaControlIntent.ACTION_SEEK,
-            MediaControlIntent.ACTION_GET_STATUS,
-            MediaControlIntent.ACTION_START_SESSION,
-            MediaControlIntent.ACTION_GET_SESSION_STATUS,
-            MediaControlIntent.ACTION_END_SESSION,
-        };
-        for (String action : remotePlaybackActions) {
+        for (String action : RemotePlaybackControlActions.advertisedAdditionalActions()) {
             filter = new IntentFilter();
             filter.addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK);
             filter.addAction(action);
