@@ -19,6 +19,7 @@ import com.google.android.gms.constellation.internal.IConstellationCallbacks
 import com.google.android.gms.constellation.verificationCapability
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 
@@ -92,6 +93,8 @@ suspend fun handleGetPnvCapabilities(
                 )
             }
 
+        // Telephony queries are synchronous, so cancellation may arrive while they block.
+        ensureActive()
         callbacks.onGetPnvCapabilitiesCompleted(
             Status.SUCCESS,
             GetPnvCapabilitiesResponse(simCapabilities),
@@ -101,6 +104,7 @@ suspend fun handleGetPnvCapabilities(
         // Cancelled (e.g. caller process died): do not deliver a result to a dead caller.
         throw e
     } catch (e: SecurityException) {
+        ensureActive()
         Log.e(TAG, "getPnvCapabilities missing permission", e)
         callbacks.onGetPnvCapabilitiesCompleted(
             Status(5000),
@@ -108,6 +112,7 @@ suspend fun handleGetPnvCapabilities(
             ApiMetadata.DEFAULT
         )
     } catch (e: Exception) {
+        ensureActive()
         Log.e(TAG, "getPnvCapabilities failed", e)
         callbacks.onGetPnvCapabilitiesCompleted(
             Status.INTERNAL_ERROR,

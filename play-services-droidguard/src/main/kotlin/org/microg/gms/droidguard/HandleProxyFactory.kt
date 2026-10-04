@@ -83,8 +83,8 @@ open class HandleProxyFactory(private val context: Context) {
         } catch (e: Exception) {
             null
         } ?: return null
-        val signingInfo = if (SDK_INT >= 28) info.signingInfo else null
-        val signers = if (signingInfo != null) {
+        val signers = if (SDK_INT >= 28) {
+            val signingInfo = info.signingInfo ?: return null
             if (signingInfo.hasMultipleSigners()) return null
             signingInfo.apkContentsSigners
         } else {

@@ -58,6 +58,58 @@ class MtSmsInboxScopeTest {
     }
 
     @Test
+    fun prepare_failureCleansNewInboxesAndPreservesExistingInboxes() {
+        for (hasExistingInbox in listOf(false, true)) {
+            val existingInbox = FakeInbox(7)
+            val failure = IllegalStateException("Receiver registration failed")
+            val cleanupFailure = IllegalArgumentException("Receiver cleanup failed")
+            val disposedSubIds = mutableListOf<Int>()
+            val scope = MtSmsInboxScope { _, subId ->
+                when (subId) {
+                    7 -> existingInbox
+                    3 -> throw failure
+                    else -> object : MtSmsInboxHandle {
+                        override suspend fun awaitMatch(expectedBody: String): ReceivedSms? = null
+
+                        override fun dispose() {
+                            disposedSubIds += subId
+                            // Exercise both a distinct cleanup failure and self-suppression.
+                            throw if (subId == 1) cleanupFailure else failure
+                        }
+                    }
+                }
+            }
+            if (hasExistingInbox) scope.prepare(context, listOf(7))
+
+            try {
+                scope.prepare(context, listOf(1, 2, 3))
+                fail("Expected receiver registration to fail")
+            } catch (e: IllegalStateException) {
+                assertSame(failure, e)
+            }
+
+            assertEquals(setOf(1, 2), disposedSubIds.toSet())
+            assertEquals(2, disposedSubIds.size)
+            assertEquals(listOf(cleanupFailure), failure.suppressed.toList())
+            for (subId in listOf(1, 2)) {
+                try {
+                    scope.get(subId)
+                    fail("Partially constructed inbox must not be installed")
+                } catch (_: IllegalStateException) {
+                    // expected
+                }
+            }
+            if (hasExistingInbox) {
+                assertSame(existingInbox, scope.get(7))
+                assertFalse(existingInbox.disposed)
+            }
+            scope.dispose()
+            if (hasExistingInbox) assertTrue(existingInbox.disposed)
+            assertEquals(2, disposedSubIds.size)
+        }
+    }
+
+    @Test
     fun get_beforePrepare_throws() {
         val (scope, _) = recordingScope()
         try {
