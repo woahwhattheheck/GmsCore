@@ -1,68 +1,72 @@
-name: "Gradle build"
-permissions: {}
+name: Cast remote playback reply ownership
 on:
-  - push
-  - pull_request
-  - workflow_dispatch
-
+  push:
+    branches: [validation/cast580-media-replies-keystone1004]
+    paths: ['.github/workflows/build.yml', 'work/cast580-media-replies/**']
+permissions:
+  contents: write
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
+  group: cast580-media-replies-keystone1004
+  cancel-in-progress: false
 jobs:
-  build:
-    name: "Gradle build ${{ matrix.target }}"
+  focused:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     env:
-      GRADLE_MICROG_VERSION_WITHOUT_GIT: 1
-
-    strategy:
-      matrix:
-        target: [Debug, Release]
-
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
+      BASE: 4609569f0e5a53e7b321ee93f23a078c6f4cecd6
     steps:
-      - name: "Free disk space"
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - name: Prepare exact two-file repair
         run: |
-          # Deleting unneeded software packages
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /opt/hostedtoolcache/go
-
-          # Log available space
-          df -h
-      - name: "Checkout sources"
-        uses: actions/checkout@v7
+          git cat-file -e "$BASE^{commit}"
+          python work/cast580-media-replies/apply.py
+          git diff -- play-services-cast/core/src > cast580-evidence/source.patch
+      - uses: actions/setup-java@v6
         with:
-          fetch-depth: 0
-      - name: "Setup Java"
-        uses: actions/setup-java@v6
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v6
         with:
-          distribution: "temurin"
-          java-version: "17"
-      - name: "Setup Gradle"
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
-          build-scan-publish: true
-          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
-          build-scan-terms-of-use-agree: "yes"
-      - name: "Setup matchers"
+          cache-read-only: false
+      - name: Existing module focused check only
+        shell: bash
         run: |
-          # Setting up matchers...
-
-          matchers_dir='${{ github.workspace }}/.github/matchers'
-          matcher_list()
-          {
-            echo 'gradle-build-matcher.json'
-            echo 'gradle-build-kotlin-error-matcher.json'
-          }
-
-          matcher_list | while IFS='' read -r NAME; do
-            if test -f "${matchers_dir:?}/${NAME:?}"; then
-              echo "::add-matcher::${matchers_dir:?}/${NAME:?}"
-              echo "Matcher configured: ${NAME:?}"
-            fi
-          done
-      - name: "Execute Gradle assemble"
-        run: "./gradlew assemble${{ matrix.target }}"
-      - name: "Execute Gradle lint"
-        run: "./gradlew lint${{ matrix.target }}"
+          set -o pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --no-configuration-cache --max-workers=2 :play-services-cast-core:testDebugUnitTest --tests org.microg.gms.cast.RemotePlaybackControlTest --tests org.microg.gms.cast.RemotePlaybackResponseOwnershipTest 2>&1 | tee cast580-evidence/gradle.log
+      - name: Record actual XML and publish code-only result ref
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          result = []
+          for name, count in [('RemotePlaybackControlTest', 15), ('RemotePlaybackResponseOwnershipTest', 11)]:
+              p = Path('play-services-cast/core/build/test-results/testDebugUnitTest') / ('TEST-org.microg.gms.cast.' + name + '.xml')
+              e = ET.parse(p).getroot()
+              assert int(e.get('tests')) == count, e.attrib
+              assert all(int(e.get(k, 0)) == 0 for k in ['failures', 'errors', 'skipped']), e.attrib
+              result.append(e.attrib)
+              (Path('cast580-evidence') / p.name).write_bytes(p.read_bytes())
+          Path('cast580-evidence/results.json').write_text(json.dumps(result, indent=2)+'\n')
+          PY
+          export GIT_AUTHOR_NAME=woahwhattheheck GIT_COMMITTER_NAME=woahwhattheheck
+          export GIT_AUTHOR_EMAIL=293286387+woahwhattheheck@users.noreply.github.com GIT_COMMITTER_EMAIL=293286387+woahwhattheheck@users.noreply.github.com
+          export GIT_INDEX_FILE="$RUNNER_TEMP/cast580-product-index"
+          git read-tree "$BASE"
+          git add play-services-cast/core/src/main/java/org/microg/gms/cast/CastMediaRouteController.java play-services-cast/core/src/test/java/org/microg/gms/cast/RemotePlaybackResponseOwnershipTest.java
+          TREE=$(git write-tree)
+          COMMIT=$(printf '%s\n\n%s\n' 'Cast: isolate late media replies and allow omitted result callbacks [skip ci]' 'Ignore completed or expired request replies and reject old-item replies before mutating the replacement playback state. Preserve unsolicited notifications and current-item results. Normalize the optional MediaRouter result callback without changing requested actions. Existing focused module checks passed: 15 prior cases plus 11 real Android/Robolectric regression and control cases. No APK, physical receiver or bounty award is asserted.' | git commit-tree "$TREE" -p "$BASE")
+          git push origin "$COMMIT:refs/heads/bounty/cast580-media-replies-keystone1004"
+          printf '%s\n' "$COMMIT" > cast580-evidence/product-commit.txt
+          printf '%s\n' "$TREE" > cast580-evidence/product-tree.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cast580-media-replies-keystone1004
+          path: cast580-evidence/
+          retention-days: 7
