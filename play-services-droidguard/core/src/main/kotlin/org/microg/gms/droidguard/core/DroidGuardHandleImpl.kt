@@ -62,18 +62,19 @@ class DroidGuardHandleImpl(private val context: Context, private val packageName
         }
         this.condition.open()
         if (handleInitError == null) {
+            val initializedProxy = handleProxy!!
             // rb() is optional: VM builds may omit it. An absent method is not an error —
             // probe it separately so the init'd handle survives a missing rb.
             val rbMethod = try {
-                handleProxy!!.handle.javaClass.getDeclaredMethod("rb")
+                initializedProxy.handle.javaClass.getDeclaredMethod("rb")
             } catch (e: NoSuchMethodException) {
                 null
             }
             if (rbMethod != null) {
                 try {
-                    val `object` = rbMethod.invoke(handleProxy.handle) as? Parcelable?
+                    val `object` = rbMethod.invoke(initializedProxy.handle) as? Parcelable?
                     if (`object` != null) {
-                        val vmKey = handleProxy.vmKey
+                        val vmKey = initializedProxy.vmKey
                         val theApk = factory.getTheApkFile(vmKey)
                         try {
                             theApk.setReadable(true, false)
