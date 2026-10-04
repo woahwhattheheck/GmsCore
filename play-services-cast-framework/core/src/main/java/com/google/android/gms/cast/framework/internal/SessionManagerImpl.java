@@ -59,6 +59,8 @@ public class SessionManagerImpl extends ISessionManager.Stub {
     private final Map<Object, ICastStateListener> castStateListeners = new IdentityHashMap<>();
 
     private SessionImpl currentSession;
+    // Only the newest route selection may install a session after a client callback.
+    private Object routeSelectionToken;
     // A replaced session may still own the saved record until its end callback arrives.
     private SessionImpl savedSession;
 
@@ -173,6 +175,8 @@ public class SessionManagerImpl extends ISessionManager.Stub {
             Log.w(TAG, "No session provider for " + category);
             return;
         }
+        Object selectionToken = new Object();
+        routeSelectionToken = selectionToken;
         if (currentSession != null && !currentSession.isDisconnected()) {
             if (TextUtils.equals(currentSession.getRouteId(), routeId)) {
                 // Also reached when the route matches the categories of multiple session providers.
@@ -181,6 +185,8 @@ public class SessionManagerImpl extends ISessionManager.Stub {
             }
             endCurrentSessionInternal(castContext.getOptions().getStopReceiverApplicationWhenEndingSession());
         }
+        // An ending listener may synchronously select another route.
+        if (routeSelectionToken != selectionToken) return;
         // Ending listeners can remove the provider, so look it up again after teardown.
         ISessionProvider provider = castContext.getSessionProvider(category);
         if (provider == null) {
@@ -192,6 +198,8 @@ public class SessionManagerImpl extends ISessionManager.Stub {
         clearPendingResume();
         try {
             SessionImpl session = (SessionImpl) ObjectWrapper.unwrap(provider.getSession(sessionId));
+            // Session providers can re-enter route selection while constructing a session.
+            if (routeSelectionToken != selectionToken) return;
             if (session == null) {
                 Log.w(TAG, "Session provider did not create a session");
                 return;
