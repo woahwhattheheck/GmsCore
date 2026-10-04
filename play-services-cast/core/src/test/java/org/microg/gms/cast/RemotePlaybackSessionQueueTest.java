@@ -74,6 +74,34 @@ public class RemotePlaybackSessionQueueTest {
     }
 
     @Test
+    public void removeCanTargetANonCurrentQueueItem() throws Exception {
+        try (ConnectedReceiver receiver = new ConnectedReceiver()) {
+            CastMediaRouteController controller = receiver.controller;
+            field("remotePlaybackSessionId").set(controller, "session-1");
+            field("remotePlaybackItemId").set(controller, "7");
+            field("mediaSessionId").setLong(controller, 42);
+            member(CastDeviceSession.class, "application").set(receiver.session,
+                    new org.microg.gms.cast.channel.ReceiverApplication("CC1AD845", null,
+                            "receiver-session", "transport-1", null, null, java.util.Collections.emptyList()));
+
+            RecordingCallback result = new RecordingCallback();
+            Intent request = new Intent(MediaControlIntent.ACTION_REMOVE)
+                    .addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK)
+                    .putExtra(MediaControlIntent.EXTRA_SESSION_ID, "session-1")
+                    .putExtra(MediaControlIntent.EXTRA_ITEM_ID, "8");
+
+            assertTrue(controller.onControlRequest(request, result));
+            receiver.drain();
+            assertEquals(0, result.errors);
+            assertEquals(0, result.successes);
+            JSONObject command = receiver.lastRequest("urn:x-cast:com.google.cast.media");
+            assertEquals("QUEUE_REMOVE", command.getString("type"));
+            assertEquals(42, command.getLong("mediaSessionId"));
+            assertEquals(8, command.getJSONArray("itemIds").getInt(0));
+        }
+    }
+
+    @Test
     public void parseMediaStatusReadsQueueItemId() throws Exception {
         JSONObject status = new JSONObject(
                 "{\"mediaSessionId\":77,\"playerState\":\"PLAYING\",\"currentTime\":1,"
@@ -276,19 +304,23 @@ public class RemotePlaybackSessionQueueTest {
             executor.submit(() -> {}).get(2, TimeUnit.SECONDS);
         }
 
-        JSONObject lastReceiverRequest() throws Exception {
+        JSONObject lastRequest(String namespace) throws Exception {
             DataInputStream input = new DataInputStream(new ByteArrayInputStream(output.toByteArray()));
             JSONObject request = null;
             while (input.available() > 0) {
                 byte[] frame = new byte[input.readInt()];
                 input.readFully(frame);
                 CastMessage message = CastMessage.ADAPTER.decode(frame);
-                if (RECEIVER_NAMESPACE.equals(message.getNamespace())) {
+                if (namespace.equals(message.getNamespace())) {
                     request = new JSONObject(message.getPayload_utf8());
                 }
             }
-            if (request == null) throw new AssertionError("No receiver request was sent");
+            if (request == null) throw new AssertionError("No request was sent on " + namespace);
             return request;
+        }
+
+        JSONObject lastReceiverRequest() throws Exception {
+            return lastRequest(RECEIVER_NAMESPACE);
         }
 
         void reply(JSONObject reply) throws Exception {
