@@ -6,6 +6,7 @@ on:
       - 'validation/rcs-2994-sigverify-swe7-20261004'
     paths:
       - '.github/workflows/build.yml'
+      - 'play-services-droidguard/**'
 
 permissions:
   contents: read
