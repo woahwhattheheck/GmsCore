@@ -62,6 +62,8 @@ public class SessionImpl extends ISession.Stub {
 
     private int state = STATE_IDLE;
     private int startType = START_TYPE_NEW;
+    // Preserve the origin of the current resume after state changes to RESUMING.
+    private boolean resumeWasSuspended;
 
     public SessionImpl(String category, String sessionId, ISessionProxy proxy) {
         this.category = category;
@@ -71,6 +73,7 @@ public class SessionImpl extends ISession.Stub {
 
     public void start(CastContextImpl castContext, CastDevice castDevice, String routeId, Bundle routeInfoExtra) throws RemoteException {
         attach(castContext, castDevice, routeId, routeInfoExtra);
+        this.resumeWasSuspended = false;
         this.state = STATE_STARTING;
         this.startType = START_TYPE_NEW;
         try {
@@ -90,6 +93,7 @@ public class SessionImpl extends ISession.Stub {
     }
 
     public void resume(CastContextImpl castContext, CastDevice castDevice, String routeId, Bundle routeInfoExtra) throws RemoteException {
+        this.resumeWasSuspended = this.state == STATE_SUSPENDED;
         attach(castContext, castDevice, routeId, routeInfoExtra);
         this.state = STATE_RESUMING;
         this.startType = START_TYPE_RESUMED;
@@ -232,6 +236,10 @@ public class SessionImpl extends ISession.Stub {
     @Override
     public boolean isSuspended() {
         return state == STATE_SUSPENDED;
+    }
+
+    boolean wasSuspendedBeforeResume() {
+        return resumeWasSuspended;
     }
 
     @Override
