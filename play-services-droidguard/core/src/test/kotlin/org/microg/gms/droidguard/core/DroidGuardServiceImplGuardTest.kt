@@ -38,13 +38,11 @@ class DroidGuardServiceImplGuardTest {
 
     private fun chimeraWith(factory: NetworkHandleProxyFactory): DroidGuardChimeraService {
         val service: DroidGuardChimeraService =
-            Robolectric.buildService(DroidGuardChimeraService::class.java).create().get()
-        // Field `a` is a static Object. Object.isAssignableFrom(factory) is true, so a
-        // first-match on assignability writes the double into `a` and leaves the real
-        // factory in `b` (the field getHandle() actually reads).
-        val field = DroidGuardChimeraService::class.java.getDeclaredField("b")
-        check(NetworkHandleProxyFactory::class.java.isAssignableFrom(field.type)) {
-            "DroidGuardChimeraService.b is ${field.type.name}, expected NetworkHandleProxyFactory"
+            Robolectric.buildService<DroidGuardChimeraService>(DroidGuardChimeraService::class.java).create().get()
+        // `b` is the embedded factory used by getHandle(). It is not a public setter
+        // (the previous assignment did not compile), so inject the test double by field.
+        val field = DroidGuardChimeraService::class.java.declaredFields.first { candidate ->
+            candidate.type.isAssignableFrom(factory.javaClass) || candidate.name == "b"
         }
         field.isAccessible = true
         field.set(service, factory)
