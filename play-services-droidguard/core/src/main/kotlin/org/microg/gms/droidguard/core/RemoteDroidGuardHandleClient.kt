@@ -93,7 +93,7 @@ class RemoteDroidGuardHandleClient(
 
         override fun snapshot(data: Map<String, String>): String {
             check(opened) { "Remote DroidGuard handle is closed" }
-            return session.snapshot(data)
+            return session.snapshot(LinkedHashMap<Any?, Any?>(data))
         }
 
         override fun isOpened(): Boolean = opened
