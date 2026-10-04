@@ -236,6 +236,52 @@ jobs:
           } > "$EVIDENCE_DIR/toolchain.log" 2>&1
           cat "$EVIDENCE_DIR/toolchain.log"
 
+      - name: Prepare test-only JDK HTTP server classpath
+        shell: bash
+        run: |
+          set -euo pipefail
+          module="$JAVA_HOME/jmods/jdk.httpserver.jmod"
+          test -f "$module"
+          module_dir="$EVIDENCE_DIR/jdk-httpserver-module"
+          mkdir -p "$module_dir"
+          "$JAVA_HOME/bin/jmod" extract --dir "$module_dir" "$module"
+          test -d "$module_dir/classes/com/sun/net/httpserver"
+          jar_file="$EVIDENCE_DIR/jdk-httpserver-test.jar"
+          "$JAVA_HOME/bin/jar" --create --file "$jar_file" -C "$module_dir/classes" .
+          test -s "$jar_file"
+          printf 'DOTT_JDK_HTTP_SERVER_JAR=%s\n' "$jar_file" >> "$GITHUB_ENV"
+          {
+            printf 'JDK_HTTP_SERVER_MODULE=%s\n' "$module"
+            sha256sum "$module" "$jar_file"
+            "$JAVA_HOME/bin/jar" --list --file "$jar_file" | grep '^com/sun/net/httpserver/HttpServer.class$'
+          } > "$EVIDENCE_DIR/jdk-httpserver-classpath.log" 2>&1
+          cat "$EVIDENCE_DIR/jdk-httpserver-classpath.log"
+          cat > "$EVIDENCE_DIR/dott-test-classpath.init.gradle" <<'GRADLE'
+          gradle.projectsEvaluated {
+              def target = gradle.rootProject.findProject(':play-services-droidguard-core')
+              if (target == null) throw new GradleException('DroidGuard core project is missing.')
+              def jarPath = System.getenv('DOTT_JDK_HTTP_SERVER_JAR')
+              if (!jarPath || !new File(jarPath).isFile()) throw new GradleException('Test-only JDK HTTP server jar is missing.')
+              target.dependencies.add('testImplementation', target.files(jarPath))
+              def task = target.tasks.findByName('compileDebugUnitTestKotlin')
+              if (task == null) throw new GradleException('Focused Android unit-test compile task is missing.')
+              task.doFirst {
+                  def options = task.hasProperty('kotlinOptions') ? task.property('kotlinOptions') : null
+                  def value = { object, property ->
+                      try {
+                          return object != null && object.metaClass.hasProperty(object, property)
+                              ? String.valueOf(object.property(property)) : '<not-exposed>'
+                      } catch (Throwable ignored) {
+                          return '<unavailable>'
+                      }
+                  }
+                  println 'DOTT_KOTLIN_COMPILE_TASK_CLASS=' + task.class.name
+                  println 'DOTT_KOTLIN_NO_JDK=' + value(options, 'noJdk')
+                  println 'DOTT_KOTLIN_JDK_HOME=' + value(options, 'jdkHome')
+                  println 'DOTT_TEST_ONLY_CLASS_PATH=' + jarPath
+              }
+          }
+          GRADLE
       - name: Run the three DroidGuard test classes and one APK variant
         id: build
         shell: bash
@@ -245,6 +291,7 @@ jobs:
           export DOTT_BUILD_STARTED_EPOCH="$(date +%s)"
           set +e
           ./gradlew --no-daemon --console=plain --max-workers=1 --no-parallel \
+            -I "$EVIDENCE_DIR/dott-test-classpath.init.gradle" \
             '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pkotlin.compiler.execution.strategy=in-process \
             :play-services-droidguard-core:testDebugUnitTest \
@@ -270,6 +317,7 @@ jobs:
               "gradle_jvmargs": "-Xmx3g -XX:MaxMetaspaceSize=768m",
               "max_workers": 1,
               "kotlin_compiler_execution_strategy": "in-process",
+              "test_only_jdk_module": "jdk.httpserver via runner-module-derived testImplementation JAR",
               "tasks": [
                   ":play-services-droidguard-core:testDebugUnitTest",
                   "assembleVtmDefaultDebug",
