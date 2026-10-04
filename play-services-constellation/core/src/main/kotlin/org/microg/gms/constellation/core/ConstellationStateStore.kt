@@ -22,6 +22,7 @@ import org.microg.gms.settings.SettingsContract.Constellation
 private const val STATE_PREFS_NAME = "constellation_prefs"
 private const val TOKEN_PREFS_NAME = "com.google.android.gms.constellation"
 private const val KEY_VERIFICATION_TOKENS = "verification_tokens_v1"
+private const val KEY_VERIFIED_NUMBERS = "verified_phone_numbers_v1"
 private const val KEY_DROIDGUARD_TOKEN = "droidguard_token"
 private const val KEY_DROIDGUARD_TOKEN_TTL = "droidguard_token_ttl"
 private const val KEY_NEXT_SYNC_TIMESTAMP_MS = "next_sync_timestamp_in_millis"
@@ -34,6 +35,20 @@ data class PhoneNumberVerificationRecord(
     val packageName: String,
     val usedAtMillis: Long,
     val successful: Boolean
+)
+
+/**
+ * A verified phone number kept in local state so that a local-read request can be answered
+ * without a network round trip. [expirationMillis] is the absolute wall-clock deadline after
+ * which the record must not be served, taken from the sync response that produced it.
+ */
+data class StoredVerifiedNumber(
+    val imsi: String,
+    val phoneNumber: String,
+    val verificationTimeMillis: Long,
+    val idToken: String?,
+    val rcsState: Int,
+    val expirationMillis: Long
 )
 
 object ConstellationStateStore {
@@ -177,6 +192,85 @@ object ConstellationStateStore {
         }
     }
 
+    /**
+     * Merges [entries] into the locally stored verified numbers, keyed by IMSI. Expired and
+     * incomplete entries are dropped, and records for SIMs that [entries] does not mention are
+     * kept as long as they are still valid.
+     */
+    fun storeVerifiedNumbers(context: Context, entries: List<StoredVerifiedNumber>) {
+        val now = System.currentTimeMillis()
+        val fresh = entries.filter {
+            it.imsi.isNotEmpty() && it.phoneNumber.isNotEmpty() && it.expirationMillis > now
+        }
+        if (fresh.isEmpty()) return
+        val replaced = fresh.map { it.imsi }.toSet()
+        val retained = loadVerifiedNumbers(context).filterNot { it.imsi in replaced }
+        writeVerifiedNumbers(context, retained + fresh)
+    }
+
+    /** Locally stored verified numbers that have not expired yet. */
+    fun loadVerifiedNumbers(context: Context): List<StoredVerifiedNumber> {
+        val serialized = tokenPrefs(context).getString(KEY_VERIFIED_NUMBERS, null) ?: return emptyList()
+        val now = System.currentTimeMillis()
+        return serialized.split(",").mapNotNull { entry ->
+            val parts = entry.split("|")
+            if (parts.size != 6) return@mapNotNull null
+            val imsi = parts[0].decodeField() ?: return@mapNotNull null
+            val phoneNumber = parts[1].decodeField() ?: return@mapNotNull null
+            val verificationTimeMillis = parts[2].toLongOrNull() ?: return@mapNotNull null
+            val idToken = parts[3].decodeField() ?: return@mapNotNull null
+            val rcsState = parts[4].toIntOrNull() ?: return@mapNotNull null
+            val expirationMillis = parts[5].toLongOrNull() ?: return@mapNotNull null
+            if (imsi.isEmpty() || phoneNumber.isEmpty() || expirationMillis <= now) {
+                return@mapNotNull null
+            }
+            StoredVerifiedNumber(
+                imsi,
+                phoneNumber,
+                verificationTimeMillis,
+                idToken.takeIf { it.isNotEmpty() },
+                rcsState,
+                expirationMillis
+            )
+        }
+    }
+
+    /**
+     * The absolute wall-clock deadline described by a server-provided next-sync [timestamp], or
+     * null when the server did not send one. Local state has no established freshness without it.
+     */
+    fun nextSyncDeadlineMillis(timestamp: ServerTimestamp?): Long? {
+        val serverMillis = timestamp?.timestamp?.toEpochMilli() ?: return null
+        val localMillis = timestamp.now?.toEpochMilli() ?: return null
+        // GMS stores the next sync deadline as an absolute wall-clock timestamp
+        return System.currentTimeMillis() + serverMillis - localMillis
+    }
+
+    private fun writeVerifiedNumbers(context: Context, entries: List<StoredVerifiedNumber>) {
+        if (entries.isEmpty()) {
+            tokenPrefs(context).edit { remove(KEY_VERIFIED_NUMBERS) }
+            return
+        }
+        val serialized = entries.joinToString(",") { entry ->
+            listOf(
+                entry.imsi.encodeField(),
+                entry.phoneNumber.encodeField(),
+                entry.verificationTimeMillis.toString(),
+                entry.idToken.orEmpty().encodeField(),
+                entry.rcsState.toString(),
+                entry.expirationMillis.toString()
+            ).joinToString("|")
+        }
+        tokenPrefs(context).edit { putString(KEY_VERIFIED_NUMBERS, serialized) }
+    }
+
+    private fun String.encodeField(): String =
+        Base64.encodeToString(toByteArray(), Base64.NO_WRAP)
+
+    private fun String.decodeField(): String? = runCatching {
+        String(Base64.decode(this, Base64.DEFAULT))
+    }.getOrNull()
+
     @RequiresApi(Build.VERSION_CODES.O)
     private fun storeVerificationTokens(context: Context, tokens: List<VerificationToken>) {
         if (tokens.isEmpty()) return
@@ -206,14 +300,9 @@ object ConstellationStateStore {
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun storeNextSyncTime(context: Context, timestamp: ServerTimestamp?) {
-        val serverMillis = timestamp?.timestamp?.toEpochMilli() ?: return
-        val localMillis = timestamp.now?.toEpochMilli() ?: return
+        val deadline = nextSyncDeadlineMillis(timestamp) ?: return
         statePrefs(context).edit {
-            // GMS stores the next sync deadline as an absolute wall-clock timestamp
-            putLong(
-                KEY_NEXT_SYNC_TIMESTAMP_MS,
-                System.currentTimeMillis() + serverMillis - localMillis
-            )
+            putLong(KEY_NEXT_SYNC_TIMESTAMP_MS, deadline)
         }
     }
 

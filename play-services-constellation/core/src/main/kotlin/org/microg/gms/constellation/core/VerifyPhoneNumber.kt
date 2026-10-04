@@ -30,10 +30,12 @@ import org.microg.gms.constellation.core.proto.GetConsentRequest
 import org.microg.gms.constellation.core.proto.GetConsentResponse
 import org.microg.gms.constellation.core.proto.Param
 import org.microg.gms.constellation.core.proto.RcsConsent
+import org.microg.gms.constellation.core.proto.RcsState
 import org.microg.gms.constellation.core.proto.RequestHeader
 import org.microg.gms.constellation.core.proto.SetConsentRequest
 import org.microg.gms.constellation.core.proto.SyncRequest
 import org.microg.gms.constellation.core.proto.Verification
+import org.microg.gms.constellation.core.proto.VerifiedPhoneNumber
 import org.microg.gms.constellation.core.proto.builder.RequestBuildContext
 import org.microg.gms.constellation.core.proto.builder.buildImsiToSubscriptionInfoMap
 import org.microg.gms.constellation.core.proto.builder.buildRequestContext
@@ -45,7 +47,7 @@ import java.util.UUID
 
 private const val TAG = "VerifyPhoneNumber"
 
-private enum class ReadCallbackMode {
+internal enum class ReadCallbackMode {
     NONE,
     LEGACY,
     TYPED
@@ -170,14 +172,17 @@ suspend fun handleVerifyPhoneNumberRequest(
     )
 }
 
-private suspend fun handleVerifyPhoneNumberRequest(
+internal suspend fun handleVerifyPhoneNumberRequest(
     context: Context,
     callbacks: IConstellationCallbacks,
     request: VerifyPhoneNumberRequest,
     callingPackage: String,
     readCallbackMode: ReadCallbackMode,
     localReadFallback: Boolean = false,
-    legacyCallbackOnFullFlow: Boolean = false
+    legacyCallbackOnFullFlow: Boolean = false,
+    readRemoteVerifiedNumbers: suspend () -> List<VerifiedPhoneNumber> = {
+        fetchVerifiedPhoneNumbers(context, request.extras, callingPackage)
+    }
 ) {
     var phoneNumbers = emptyList<PhoneNumberInfo>()
     var verifications = emptyArray<PhoneNumberVerification>()
@@ -195,14 +200,24 @@ private suspend fun handleVerifyPhoneNumberRequest(
             }
 
             ReadCallbackMode.TYPED -> {
-                if (localReadFallback) {
-                    Log.w(TAG, "Local-read mode not implemented, falling back to read-only RPC")
+                val localVerifications =
+                    if (localReadFallback) loadLocalVerifications(context, request) else null
+                if (localVerifications != null) {
+                    Log.d(
+                        TAG,
+                        "Using local-read mode, answering ${localVerifications.size} verification(s) from local state"
+                    )
+                    verifications = localVerifications
                 } else {
-                    Log.d(TAG, "Using typed read-only mode")
+                    if (localReadFallback) {
+                        Log.d(TAG, "No valid local state for local-read mode, using read-only RPC")
+                    } else {
+                        Log.d(TAG, "Using typed read-only mode")
+                    }
+                    verifications = readRemoteVerifiedNumbers()
+                        .map { it.toPhoneNumberVerification() }
+                        .toTypedArray()
                 }
-                verifications = fetchVerifiedPhoneNumbers(context, request.extras, callingPackage)
-                    .map { it.toPhoneNumberVerification() }
-                    .toTypedArray()
                 Status.SUCCESS
             }
 
@@ -256,6 +271,49 @@ private suspend fun handleVerifyPhoneNumberRequest(
             Bundle()
         ),
         ApiMetadata.DEFAULT
+    )
+}
+
+/**
+ * The locally stored verifications that answer [request], or null when local state cannot answer
+ * it and the read-only RPC has to run instead. Every SIM the caller targeted must have a stored,
+ * unexpired verification: a partial answer would hide SIMs the caller asked about.
+ */
+private fun loadLocalVerifications(
+    context: Context,
+    request: VerifyPhoneNumberRequest
+): Array<PhoneNumberVerification>? {
+    val stored = ConstellationStateStore.loadVerifiedNumbers(context)
+    if (stored.isEmpty()) return null
+
+    val requestedImsis = request.targetedSims
+        .mapNotNull { it.imsi?.takeIf(String::isNotEmpty) }
+        .toSet()
+    if (requestedImsis.isEmpty()) {
+        return stored.map { it.toPhoneNumberVerification() }.toTypedArray()
+    }
+
+    val byImsi = stored.associateBy { it.imsi }
+    val matching = requestedImsis.map { imsi -> byImsi[imsi] ?: return null }
+    return matching.map { it.toPhoneNumberVerification() }.toTypedArray()
+}
+
+/** Mirrors the shape the read-only RPC path returns for a verified number. */
+private fun StoredVerifiedNumber.toPhoneNumberVerification(): PhoneNumberVerification {
+    val extras = Bundle().apply {
+        putInt("rcs_state", rcsState)
+    }
+
+    // Like read-only V2, a read answer leaves method/slot unset and reports a verified record.
+    return PhoneNumberVerification(
+        phoneNumber,
+        verificationTimeMillis,
+        0,
+        -1,
+        idToken,
+        extras,
+        1,
+        -1L
     )
 }
 
@@ -410,6 +468,9 @@ private suspend fun executeSyncFlow(
     val imsiToSlotMap = imsiToInfoMap.mapValues { it.value.simSlotIndex }
     val requestedImsis = request.targetedSims.map { it.imsi }.toSet()
 
+    val localRecords = mutableListOf<StoredVerifiedNumber>()
+    val localStateDeadline = ConstellationStateStore.nextSyncDeadlineMillis(syncResponse.next_sync_time)
+
     val verifications = syncResponse.responses.mapNotNull { result ->
         val verification = result.verification ?: Verification()
         val verificationImsis = verification.association?.sim?.sim_info?.imsi.orEmpty()
@@ -443,8 +504,33 @@ private suspend fun executeSyncFlow(
             }
         }
 
+        if (localStateDeadline != null && finalVerification.state == Verification.State.VERIFIED) {
+            val info = finalVerification.verification_info
+            val verifiedNumber = info?.phone_number
+            if (!verifiedNumber.isNullOrEmpty()) {
+                val idToken = finalVerification.api_params
+                    .firstOrNull { it.key == "id_token" }
+                    ?.value_
+                    ?.takeIf { it.isNotEmpty() }
+                for (imsi in verificationImsis) {
+                    if (imsi.isEmpty()) continue
+                    localRecords += StoredVerifiedNumber(
+                        imsi,
+                        verifiedNumber,
+                        info.verification_time?.toEpochMilli() ?: 0L,
+                        idToken,
+                        // The sync flow does not report an RCS state for a verification.
+                        RcsState.STATE_UNSPECIFIED.value,
+                        localStateDeadline
+                    )
+                }
+            }
+        }
+
         finalVerification.toClientVerification(imsiToSlotMap)
     }.toTypedArray()
+
+    ConstellationStateStore.storeVerifiedNumbers(context, localRecords)
 
     if (isPublicKeyAcked) {
         Log.d(TAG, "Server acknowledged client public key")
