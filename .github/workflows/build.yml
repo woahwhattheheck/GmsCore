@@ -1,4 +1,4 @@
-name: "RCS #2994 combined source build"
+name: "RCS #2994 focused consent RPC regression"
 
 on:
   push:
@@ -21,8 +21,8 @@ jobs:
     timeout-minutes: 60
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
-      VALIDATION_SOURCE_SHA: '61587ce21dd640494719920deda08691b5e1b820'
-      VALIDATION_SOURCE_TREE: 'd129cefcc6730823514086c84c614de51e3b51de'
+      VALIDATION_SOURCE_SHA: '8a10bae18bc8b4c6ecd7dcc862e0ba9fe4db0f07'
+      VALIDATION_SOURCE_TREE: '1d520695fd8b3aa499c33db8689e5ed3c21eabb0'
       EVIDENCE_DIR: /tmp/rcs2994-evidence-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Start the execution receipt
@@ -118,7 +118,7 @@ jobs:
           test -f "$rcs_sdk_root/platforms/android-35/android.jar"
           test -x "$rcs_sdk_root/build-tools/35.0.0/aapt2"
 
-      - name: Run the four module suites and one APK variant
+      - name: Run the focused consent RPC regression
         id: build
         shell: bash
         run: |
@@ -130,10 +130,7 @@ jobs:
             '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pkotlin.compiler.execution.strategy=in-process \
             :play-services-constellation-core:testDebugUnitTest \
-            :play-services-asterism-core:testDebugUnitTest \
-            :play-services-droidguard:testDebugUnitTest \
-            :play-services-droidguard-core:testDebugUnitTest \
-            :play-services-core:assembleVtmDefaultDebug \
+            --tests org.microg.gms.constellation.core.AutoSetConsentTest \
             2>&1 | tee "$EVIDENCE_DIR/gradle.log"
           rcs_gradle_exit="${PIPESTATUS[0]}"
           set -e
@@ -151,13 +148,10 @@ jobs:
               "source_tree": os.environ["VALIDATION_SOURCE_TREE"],
               "gradle_jvmargs": "-Xmx3g -XX:MaxMetaspaceSize=768m",
               "max_workers": 1,
+              "test_filter": "org.microg.gms.constellation.core.AutoSetConsentTest",
               "kotlin_compiler_execution_strategy": "in-process",
               "tasks": [
                   ":play-services-constellation-core:testDebugUnitTest",
-                  ":play-services-asterism-core:testDebugUnitTest",
-                  ":play-services-droidguard:testDebugUnitTest",
-                  ":play-services-droidguard-core:testDebugUnitTest",
-                  ":play-services-core:assembleVtmDefaultDebug",
               ],
           }
           (Path(os.environ["EVIDENCE_DIR"]) / "build.json").write_text(
@@ -167,7 +161,7 @@ jobs:
           PY
           exit "$rcs_gradle_exit"
 
-      - name: Collect actual test XML, APK, hashes, and elapsed time
+      - name: Collect focused actual test XML, hashes, and elapsed time
         if: always()
         env:
           BUILD_STEP_OUTCOME: ${{ steps.build.outcome }}
@@ -199,14 +193,11 @@ jobs:
 
           modules = {
               "constellation": Path("play-services-constellation/core"),
-              "asterism": Path("play-services-asterism/core"),
-              "droidguard": Path("play-services-droidguard"),
-              "droidguard_core": Path("play-services-droidguard/core"),
           }
           junit = {}
           for name, module in modules.items():
               reports = sorted(
-                  (module / "build/test-results/testDebugUnitTest").glob("TEST-*.xml")
+                  (module / "build/test-results/testDebugUnitTest").glob("TEST-org.microg.gms.constellation.core.AutoSetConsentTest.xml")
               )
               totals = {
                   "report_files": len(reports), "tests": 0,
@@ -224,31 +215,13 @@ jobs:
                       totals["failures"] += len(case.findall("failure"))
                       totals["errors"] += len(case.findall("error"))
                       totals["skipped"] += len(case.findall("skipped"))
-              if not reports or totals["tests"] <= totals["skipped"]:
-                  problems.append(f"{name}: no executed test cases in actual XML")
+              if len(reports) != 1 or totals["tests"] != 5 or totals["skipped"]:
+                  problems.append(f"{name}: expected all five focused cases in actual XML")
               if totals["failures"] or totals["errors"]:
                   problems.append(f"{name}: test failures or errors")
               junit[name] = totals
 
-          apks = []
-          apk_root = Path("play-services-core/build/outputs/apk")
-          for metadata in sorted(apk_root.rglob("output-metadata.json")):
-              try:
-                  descriptor = json.loads(metadata.read_text(encoding="utf-8"))
-              except (OSError, json.JSONDecodeError) as error:
-                  problems.append(f"{metadata}: invalid APK metadata: {error}")
-                  continue
-              if descriptor.get("variantName") != "vtmDefaultDebug":
-                  continue
-              retain(metadata)
-              for element in descriptor.get("elements", []):
-                  apk = metadata.parent / element["outputFile"]
-                  if apk.is_file() and apk.suffix == ".apk":
-                      apks.append(retain(apk))
-                  else:
-                      problems.append(f"Expected APK missing: {apk}")
-          if not apks:
-              problems.append("No VtmDefaultDebug APK was produced.")
+          apks = []  # This focused run does not assemble an APK.
 
           build_path = evidence / "build.json"
           source_path = evidence / "source.json"
@@ -299,11 +272,11 @@ jobs:
               raise SystemExit(1)
           PY
 
-      - name: Upload the APK and execution evidence
+      - name: Upload focused execution evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rcs2994-combined-${{ env.VALIDATION_SOURCE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: rcs2994-consent-${{ env.VALIDATION_SOURCE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.EVIDENCE_DIR }}/
           if-no-files-found: error
           retention-days: 30
