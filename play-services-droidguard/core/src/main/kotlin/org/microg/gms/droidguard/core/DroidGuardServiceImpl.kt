@@ -26,30 +26,33 @@ class DroidGuardServiceImpl(private val service: DroidGuardChimeraService, priva
         val requestMap = map?.let { HashMap(it) } ?: HashMap()
         val task = Runnable {
             var handle: IDroidGuardHandle? = null
-            val result = try {
-                handle = getHandle()
-                val initReply = handle.initWithRequest(flow, request)
-                if (initReply == null) handle.init(flow)
-                else try {
-                    initReply.pfd?.close()
+            try {
+                val result = try {
+                    handle = getHandle()
+                    val initReply = handle.initWithRequest(flow, request)
+                    if (initReply == null) handle.init(flow)
+                    else try {
+                        initReply.pfd?.close()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to close unused DroidGuard init descriptor", e)
+                    }
+                    handle.snapshot(HashMap(requestMap))
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to close unused DroidGuard init descriptor", e)
+                    Log.w(TAG, "guardWithRequest failed", e)
+                    FallbackCreator.create(flow, service, requestMap, e)
                 }
-                handle.snapshot(HashMap(requestMap))
-            } catch (e: Exception) {
-                Log.w(TAG, "guardWithRequest failed", e)
-                FallbackCreator.create(flow, service, requestMap, e)
+                // Remote-session cleanup must not delay an already completed result.
+                try {
+                    callbacks.onResult(result)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to deliver DroidGuard result", e)
+                }
             } finally {
                 try {
                     handle?.close()
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to close DroidGuard handle", e)
                 }
-            }
-            try {
-                callbacks.onResult(result)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to deliver DroidGuard result", e)
             }
         }
 
