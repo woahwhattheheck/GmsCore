@@ -132,6 +132,11 @@ class CastDeviceSession(
                 callbacks.onApplicationConnectionFailed(STATUS_TIMEOUT)
                 return@requestReceiver
             }
+            // Only a fresh receiver status can decide whether to join or launch.
+            if (reply.optString("type") != "RECEIVER_STATUS" || reply.optJSONObject("status") == null) {
+                callbacks.onApplicationConnectionFailed(STATUS_INVALID_REQUEST)
+                return@requestReceiver
+            }
             val running = receiverStatus?.applications?.firstOrNull { it.appId == appId }
             if (running != null) attachApplication(running, false)
             else sendLaunch(appId, language)
@@ -145,6 +150,10 @@ class CastDeviceSession(
             when (reply?.optString("type")) {
                 null -> callbacks.onApplicationConnectionFailed(STATUS_TIMEOUT)
                 "RECEIVER_STATUS" -> {
+                    if (reply.optJSONObject("status") == null) {
+                        callbacks.onApplicationConnectionFailed(STATUS_INVALID_REQUEST)
+                        return@requestReceiver
+                    }
                     val launched = receiverStatus?.applications?.firstOrNull { it.appId == appId }
                     if (launched != null) attachApplication(launched, true)
                     else callbacks.onApplicationConnectionFailed(STATUS_APPLICATION_NOT_RUNNING)
@@ -161,6 +170,11 @@ class CastDeviceSession(
         requestReceiver(JSONObject().put("type", "GET_STATUS")) { reply ->
             if (reply == null) {
                 callbacks.onApplicationConnectionFailed(STATUS_TIMEOUT)
+                return@requestReceiver
+            }
+            // A rejected or malformed reply must not confirm an application from a cached status.
+            if (reply.optString("type") != "RECEIVER_STATUS" || reply.optJSONObject("status") == null) {
+                callbacks.onApplicationConnectionFailed(STATUS_INVALID_REQUEST)
                 return@requestReceiver
             }
             val running = receiverStatus?.applications?.firstOrNull {
