@@ -23,15 +23,16 @@ import com.google.android.gms.cast.framework.IDiscoveryManagerListener;
 import com.google.android.gms.dynamic.IObjectWrapper;
 import com.google.android.gms.dynamic.ObjectWrapper;
 
-import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 public class DiscoveryManagerImpl extends IDiscoveryManager.Stub {
     private static final String TAG = DiscoveryManagerImpl.class.getSimpleName();
 
     private final CastContextImpl castContextImpl;
 
-    private final Set<IDiscoveryManagerListener> discoveryManagerListeners = new HashSet<>();
+    private final Set<IDiscoveryManagerListener> discoveryManagerListeners = new CopyOnWriteArraySet<>();
+    private volatile Boolean deviceAvailable;
 
     public DiscoveryManagerImpl(CastContextImpl castContextImpl) {
         this.castContextImpl = castContextImpl;
@@ -49,9 +50,28 @@ public class DiscoveryManagerImpl extends IDiscoveryManager.Stub {
         castContextImpl.setActiveDiscovery(false);
     }
 
+    private void notifyDeviceAvailability(IDiscoveryManagerListener listener, boolean available) {
+        try {
+            listener.onDeviceAvailabilityChanged(available);
+        } catch (RemoteException e) {
+            Log.d(TAG, "Remote exception calling onDeviceAvailabilityChanged: " + e.getMessage());
+        }
+    }
+
+    void onDeviceAvailabilityChanged(boolean available) {
+        if (deviceAvailable != null && deviceAvailable == available) return;
+        deviceAvailable = available;
+        for (IDiscoveryManagerListener listener : discoveryManagerListeners) {
+            notifyDeviceAvailability(listener, available);
+        }
+    }
+
     @Override
     public void addDiscoveryManagerListener(IDiscoveryManagerListener listener) {
-        if (listener != null) this.discoveryManagerListeners.add(listener);
+        if (listener == null) return;
+        this.discoveryManagerListeners.add(listener);
+        Boolean available = deviceAvailable;
+        if (available != null) notifyDeviceAvailability(listener, available);
     }
 
     @Override
