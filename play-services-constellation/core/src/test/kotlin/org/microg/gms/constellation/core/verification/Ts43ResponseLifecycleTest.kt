@@ -9,12 +9,15 @@ import android.content.Context
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.telephony.TelephonyManager
-import com.sun.net.httpserver.HttpServer
 import okhttp3.Call
 import okhttp3.Connection
 import okhttp3.EventListener
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -25,7 +28,7 @@ import org.microg.gms.constellation.core.verification.ts43.EapAkaService
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
 import java.lang.reflect.InvocationTargetException
-import java.net.InetSocketAddress
+import java.net.InetAddress
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -138,14 +141,14 @@ class Ts43ResponseLifecycleTest {
         val requests = AtomicInteger()
         val released = AtomicInteger()
         val responses = Collections.synchronizedList(mutableListOf<Response>())
-        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/entitlement") { exchange ->
-            requests.incrementAndGet()
-            val bytes = body.toByteArray(Charsets.UTF_8)
-            exchange.sendResponseHeaders(status, bytes.size.toLong())
-            exchange.responseBody.use { it.write(bytes) }
+        val server = MockWebServer()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                requests.incrementAndGet()
+                return MockResponse().setResponseCode(status).setBody(body)
+            }
         }
-        server.start()
+        server.start(InetAddress.getByName("127.0.0.1"), 0)
         val client = OkHttpClient.Builder()
             .eventListener(object : EventListener() {
                 override fun connectionReleased(call: Call, connection: Connection) {
@@ -157,13 +160,13 @@ class Ts43ResponseLifecycleTest {
             }
             .build()
         try {
-            block(client, "http://127.0.0.1:${server.address.port}/entitlement", requests, released)
+            block(client, "http://127.0.0.1:${server.port}/entitlement", requests, released)
         } finally {
             // Also clean up the deliberately leaking baseline during regression reproduction.
             responses.forEach { it.close() }
             client.connectionPool.evictAll()
             client.dispatcher.executorService.shutdown()
-            server.stop(0)
+            server.shutdown()
         }
     }
 }
