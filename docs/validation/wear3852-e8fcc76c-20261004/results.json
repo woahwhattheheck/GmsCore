@@ -1,0 +1,484 @@
+{
+  "source_sha": "e8fcc76cda77165de370ae599ab4d649e6f03a4f",
+  "source_tree": "83e486ed8e459297885c880d7764e1581d404ad3",
+  "controller_sha": "21df18a74dfcaea9e4d8501d12365193cd6a0339",
+  "run_id": "37209801957",
+  "run_attempt": "1",
+  "tracked_source_diff": "",
+  "commands": {
+    "required": {
+      "exit_code": 0,
+      "command": "./gradlew --no-daemon --max-workers=2 --no-configuration-cache --continue :play-services-wearable-core:testDebugUnitTest :play-services-wearable:testDebugUnitTest :play-services-wearable-core:compileDebugAndroidTestJavaWithJavac assembleVtmDefaultDebug"
+    },
+    "lint": {
+      "exit_code": 0,
+      "command": "./gradlew --no-daemon --max-workers=2 --no-configuration-cache :play-services-wearable-core:lintDebug"
+    }
+  },
+  "suites": {
+    "core": {
+      "tests": 105,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "files": [
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.AssetCompletionListenerTest.xml",
+          "sha256": "e5da1ca9ad5011d00e4daf3d39cbcf43838ded243fb222ef1387883eeb2a2e50",
+          "name": "org.microg.gms.wearable.AssetCompletionListenerTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.AssetFdAccessTest.xml",
+          "sha256": "813e105ceb70aab87144509b655c63cde7476f268d4b2af06e1f627972a4ac1a",
+          "name": "org.microg.gms.wearable.AssetFdAccessTest",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.AssetReadinessDatabaseTest.xml",
+          "sha256": "2ab981b8c7bdf3f8af9222dd61e474069a48d007231aa4cee6f10295928cdeae",
+          "name": "org.microg.gms.wearable.AssetReadinessDatabaseTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.CapabilityServiceTest.xml",
+          "sha256": "056e87a65cb1c9306b3480c8adbcdc157355f00a41e1e434386b515a1cbfed0a",
+          "name": "org.microg.gms.wearable.CapabilityServiceTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.ChannelInitializationCallbackTest.xml",
+          "sha256": "5e895daf5c51e5c21cd708e148cb4618398866375a38a0fb41e4bb1fb867ede2",
+          "name": "org.microg.gms.wearable.ChannelInitializationCallbackTest",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.DataItemRecordCursorTest.xml",
+          "sha256": "aa8991b31449aeb4a5bcfcf7303f0039af305880679d7d292659425293d3bbe9",
+          "name": "org.microg.gms.wearable.DataItemRecordCursorTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.DataItemUriFilterTest.xml",
+          "sha256": "76ef63e22f9b9f710955e2c7c8ecff7638fce3b960cd1254b567a9e86afd53a4",
+          "name": "org.microg.gms.wearable.DataItemUriFilterTest",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.LegacyConnectionCallbackTest.xml",
+          "sha256": "0aaf8dca456b721acebbbbf19a04cda29724a8e2bc69bbeb2ce647668d07f233",
+          "name": "org.microg.gms.wearable.LegacyConnectionCallbackTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.ListenerBinderIdentityTest.xml",
+          "sha256": "b1f86d20df2f64e0643961cd044f9baea35fc942a0063b987d403714b5686e13",
+          "name": "org.microg.gms.wearable.ListenerBinderIdentityTest",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.MessageHandlerAssetDispatchTest.xml",
+          "sha256": "87e909c286e880d8255431de62145eaf83298717273493003634412f48566c44",
+          "name": "org.microg.gms.wearable.MessageHandlerAssetDispatchTest",
+          "tests": 17,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.TypedWearableCallbackTest.xml",
+          "sha256": "048321a32f5997b63cc02b61c5f92ac60bc40f721a60417296121166c846ea5a",
+          "name": "org.microg.gms.wearable.TypedWearableCallbackTest",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.UnsupportedAncsCallbackTest.xml",
+          "sha256": "02ca5b2dba3859dec3ebaf483ba43e7211fa7b3c7333b8ea87ab1493c88e09d8",
+          "name": "org.microg.gms.wearable.UnsupportedAncsCallbackTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.UnsupportedTelephonyCallbackTest.xml",
+          "sha256": "81acbddf0fe2d003b44543d40c18bac4ae677988eaf8f7d34a83a072520caf54",
+          "name": "org.microg.gms.wearable.UnsupportedTelephonyCallbackTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.WearableConnectionReassemblyTest.xml",
+          "sha256": "1e467dea6e3295a3c79a0a0899baa3dbaefb8c7876a1bcc88a1c0485bccf1910",
+          "name": "org.microg.gms.wearable.WearableConnectionReassemblyTest",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.bluetooth.BleLifecycleTest.xml",
+          "sha256": "bf00ac8636434d5dcdc664502a9516c8e3ff26dc256c7ac77b1762553cc2f39f",
+          "name": "org.microg.gms.wearable.bluetooth.BleLifecycleTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.bluetooth.BluetoothConnectionThreadShutdownTest.xml",
+          "sha256": "6a2a6c89d1e792730cde690365125e6b0ea89e0b3c1fc47a1b35e50969700517",
+          "name": "org.microg.gms.wearable.bluetooth.BluetoothConnectionThreadShutdownTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.bluetooth.BluetoothWearableConnectionCleanupTest.xml",
+          "sha256": "1016a03ad09a6f12869c2a3ff31ca52a2bc1ca413744a7ca9613d09c072afeee",
+          "name": "org.microg.gms.wearable.bluetooth.BluetoothWearableConnectionCleanupTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.channel.ChannelBehaviorTest.xml",
+          "sha256": "64c894adf519fe095f415b9743d7dae5e659c563014c54305ab7785f4efe1eb7",
+          "name": "org.microg.gms.wearable.channel.ChannelBehaviorTest",
+          "tests": 12,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.channel.ChannelSendOffsetTest.xml",
+          "sha256": "8be75f672202c5a7255dbe3ea4ba7c0f224261242ce90af283d8401f4917b36b",
+          "name": "org.microg.gms.wearable.channel.ChannelSendOffsetTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.network.NetworkConnectionManagerTest.xml",
+          "sha256": "1ccbcf91c79ab15b5240b696d66fcf350643515c6b87fc0e6d92a51e98c371da",
+          "name": "org.microg.gms.wearable.network.NetworkConnectionManagerTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "play-services-wearable/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.wearable.proto.ChannelControlRequestWireDecodeTest.xml",
+          "sha256": "5f031976b1c16c584823385f23bdf26424bc4e0ad8106af5c726be9164d279f7",
+          "name": "org.microg.gms.wearable.proto.ChannelControlRequestWireDecodeTest",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
+    },
+    "api": {
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "files": [
+        {
+          "file": "play-services-wearable/build/test-results/testDebugUnitTest/TEST-com.google.android.gms.wearable.internal.RequestParcelableRoundTripTest.xml",
+          "sha256": "56da4dea21a80c77595281ba3322be7ca6e17ba871bfda800f7581be35452cc5",
+          "name": "com.google.android.gms.wearable.internal.RequestParcelableRoundTripTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
+    }
+  },
+  "apks": [
+    {
+      "path": "play-services-core/build/outputs/apk/vtmDefault/debug/com.google.android.gms-252432000.apk",
+      "bytes": 107564514,
+      "sha256": "5cc6dbfd201df2100da93d68cd1bc78d4a76362303887357bf4155e53d82b18d"
+    }
+  ],
+  "physical_watch_acceptance": "unverified",
+  "lint": {
+    "errors": 0,
+    "warnings": 14,
+    "issues": [
+      {
+        "id": "ApplySharedPref",
+        "severity": "Warning",
+        "message": "Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/src/main/java/org/microg/gms/wearable/ClockworkNodePreferences.java",
+            "line": "67",
+            "column": "26"
+          }
+        ]
+      },
+      {
+        "id": "ApplySharedPref",
+        "severity": "Warning",
+        "message": "Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/src/main/java/org/microg/gms/wearable/ClockworkNodePreferences.java",
+            "line": "76",
+            "column": "26"
+          }
+        ]
+      },
+      {
+        "id": "ApplySharedPref",
+        "severity": "Warning",
+        "message": "Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/src/main/java/org/microg/gms/wearable/ClockworkNodePreferences.java",
+            "line": "116",
+            "column": "40"
+          }
+        ]
+      },
+      {
+        "id": "DefaultLocale",
+        "severity": "Warning",
+        "message": "Implicitly using the default locale is a common source of bugs: Use `toLowerCase(Locale)` instead. For strings meant to be internal use `Locale.ROOT`, otherwise `Locale.getDefault()`.",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/src/main/java/org/microg/gms/wearable/WearableImpl.java",
+            "line": "163",
+            "column": "36"
+          }
+        ]
+      },
+      {
+        "id": "SuspiciousIndentation",
+        "severity": "Warning",
+        "message": "The indentation string here is different from on the previous line (`\" \"` vs `\\t`)",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/src/main/java/org/microg/gms/wearable/MessageHandler.java",
+            "line": "202",
+            "column": "1"
+          },
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/src/main/java/org/microg/gms/wearable/MessageHandler.java",
+            "line": "201",
+            "column": "1",
+            "message": "Previous line indentation here"
+          }
+        ]
+      },
+      {
+        "id": "UnspecifiedRegisterReceiverFlag",
+        "severity": "Warning",
+        "message": "`btStateReceiver` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for android.gms.wearable.altReconnect",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BleConnectionManager.java",
+            "line": "292",
+            "column": "13"
+          }
+        ]
+      },
+      {
+        "id": "UnspecifiedRegisterReceiverFlag",
+        "severity": "Warning",
+        "message": "`retryReceiver` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for com.google.android.gms.wearable.RETRY_CONNECTION",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BluetoothConnectionThread.java",
+            "line": "117",
+            "column": "9"
+          }
+        ]
+      },
+      {
+        "id": "GradleDependency",
+        "severity": "Warning",
+        "message": "A newer version of androidx.test:runner than 1.5.2 is available: 1.7.0",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/build.gradle",
+            "line": "20",
+            "column": "31"
+          }
+        ]
+      },
+      {
+        "id": "GradleDependency",
+        "severity": "Warning",
+        "message": "A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.3.0",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/build.gradle",
+            "line": "21",
+            "column": "31"
+          }
+        ]
+      },
+      {
+        "id": "NewerVersionAvailable",
+        "severity": "Warning",
+        "message": "A newer version of org.robolectric:robolectric than 4.12.2 is available: 4.17",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/build.gradle",
+            "line": "19",
+            "column": "24"
+          }
+        ]
+      },
+      {
+        "id": "DataBindingWithoutKapt",
+        "severity": "Warning",
+        "message": "If you plan to use data binding in a Kotlin project, you should apply the kotlin-kapt plugin.",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/build.gradle",
+            "line": "39",
+            "column": "9"
+          }
+        ]
+      },
+      {
+        "id": "HardwareIds",
+        "severity": "Warning",
+        "message": "Using `getString` to get device identifiers is not recommended",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BluetoothConnectionThread.java",
+            "line": "260",
+            "column": "24"
+          }
+        ]
+      },
+      {
+        "id": "HardwareIds",
+        "severity": "Warning",
+        "message": "Using `getString` to get device identifiers is not recommended",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/src/main/java/org/microg/gms/wearable/bluetooth/BluetoothServer.java",
+            "line": "310",
+            "column": "28"
+          }
+        ]
+      },
+      {
+        "id": "HardwareIds",
+        "severity": "Warning",
+        "message": "Using `getString` to get device identifiers is not recommended",
+        "locations": [
+          {
+            "file": "/home/runner/work/GmsCore/GmsCore/play-services-wearable/core/src/main/java/org/microg/gms/wearable/network/NetworkConnectionThread.java",
+            "line": "126",
+            "column": "24"
+          }
+        ]
+      }
+    ]
+  },
+  "required_passed": true,
+  "workflow_run_url": "https://github.com/woahwhattheheck/GmsCore/actions/runs/37209801957",
+  "job_id": 111458492042,
+  "artifacts": [
+    {
+      "id": 11306161163,
+      "name": "wear3852-e8fcc76c-37209801957",
+      "size_in_bytes": 261398,
+      "url": "https://api.github.com/repos/woahwhattheheck/GmsCore/actions/artifacts/11306161163",
+      "archive_download_url": "https://api.github.com/repos/woahwhattheheck/GmsCore/actions/artifacts/11306161163/zip",
+      "expired": false,
+      "created_at": "2026-10-04T14:43:32Z",
+      "expires_at": "2027-01-02T14:35:14Z",
+      "updated_at": "2026-10-04T14:43:32Z",
+      "digest": "sha256:66503aac67ef6a84efc26513795423cd9f07e7b0dc7ad6c8f1871c615010fa33",
+      "workflow_run": {
+        "id": 37209801957,
+        "repository_id": 1399995704,
+        "head_repository_id": 1399995704,
+        "head_branch": "validate/wear3852-lint-b35f-20261004",
+        "head_sha": "21df18a74dfcaea9e4d8501d12365193cd6a0339"
+      }
+    },
+    {
+      "id": 11305968000,
+      "name": "wear3852-apk-e8fcc76c-37209801957",
+      "size_in_bytes": 103046800,
+      "url": "https://api.github.com/repos/woahwhattheheck/GmsCore/actions/artifacts/11305968000",
+      "archive_download_url": "https://api.github.com/repos/woahwhattheheck/GmsCore/actions/artifacts/11305968000/zip",
+      "expired": false,
+      "created_at": "2026-10-04T14:43:36Z",
+      "expires_at": "2027-01-02T14:35:14Z",
+      "updated_at": "2026-10-04T14:43:36Z",
+      "digest": "sha256:a6786460353e747d15daeb9afd8019c0999a2ff5a186c5dc440b63d53f0ed0d2",
+      "workflow_run": {
+        "id": 37209801957,
+        "repository_id": 1399995704,
+        "head_repository_id": 1399995704,
+        "head_branch": "validate/wear3852-lint-b35f-20261004",
+        "head_sha": "21df18a74dfcaea9e4d8501d12365193cd6a0339"
+      }
+    }
+  ],
+  "artifact_archive_sha256_verified": true,
+  "junit_xml_hashes_verified": true,
+  "source_change_scope": [
+    "play-services-wearable/core/src/main/java/org/microg/gms/wearable/AssetFetcher.java",
+    "play-services-wearable/core/src/main/java/org/microg/gms/wearable/channel/ChannelTransport.java",
+    "play-services-wearable/core/src/main/java/org/microg/gms/wearable/WearableService.java"
+  ],
+  "baseline_source_sha": "1062b78d9cb7c6cd28afb3f342dbd4b87998e936",
+  "baseline_run_id": 37208364926,
+  "baseline_lint": {
+    "errors": 7,
+    "warnings": 14
+  },
+  "historical_same_source_counts_are_not_additive": true,
+  "limitations": [
+    "Physical-watch pairing and feature acceptance remain unverified.",
+    "Catching SecurityException prevents the service shutdown exception from escaping; completion of subsequent cleanup after that exception is not asserted.",
+    "Upstream PR description/comment publication is not proven; the prepared amendment preserves existing 998E custody."
+  ]
+}
