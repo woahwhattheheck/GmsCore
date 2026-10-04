@@ -21,8 +21,8 @@ jobs:
     timeout-minutes: 60
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
-      VALIDATION_SOURCE_SHA: 'e6a18dda8742dd3e5ad8f6f786c2a378d899a710'
-      VALIDATION_SOURCE_TREE: 'd0281af7b9b186cccff459de184092c169105a9a'
+      VALIDATION_SOURCE_SHA: '61587ce21dd640494719920deda08691b5e1b820'
+      VALIDATION_SOURCE_TREE: 'd129cefcc6730823514086c84c614de51e3b51de'
       EVIDENCE_DIR: /tmp/rcs2994-evidence-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Start the execution receipt
