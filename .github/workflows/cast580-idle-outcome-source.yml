@@ -1,0 +1,49 @@
+name: Assemble Cast idle outcome source
+on:
+  push:
+    branches: [delivery/cast580-idle-outcome-delta]
+    paths: [.github/workflows/cast580-idle-outcome-source.yml]
+permissions:
+  contents: write
+concurrency:
+  group: cast580-idle-outcome-delta
+  cancel-in-progress: false
+jobs:
+  source:
+    if: github.repository == 'woahwhattheheck/GmsCore'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: e3a326584a8e94ee3fe8ece02719e4972ecaca88
+          path: carrier
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: db0209b5241e9da4b28e5332d8ec96d8c8ebe1f7
+          path: subject
+          fetch-depth: 1
+      - name: Construct only the original submission follow-up
+        working-directory: subject
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = db0209b5241e9da4b28e5332d8ec96d8c8ebe1f7
+          python ../carrier/work/cast580-idle-outcome/prepare.py
+          git config user.name woahwhattheheck
+          git config user.email brycembusiness2@gmail.com
+          git add play-services-cast/core/src/main/java/org/microg/gms/cast/CastMediaRouteController.java play-services-cast/core/src/test/java/org/microg/gms/cast/RemotePlaybackIdleOutcomeTest.java docs/validation/cast-idle-outcomes.md
+          test "$(git diff --cached --name-only | wc -l)" = 3
+          mkdir -p ../source-result
+          git diff --cached > ../source-result/source.patch
+          git commit -m "fix(cast): distinguish receiver errors and cancellations from completion [skip ci]"
+          git rev-parse HEAD HEAD^{tree} HEAD^ > ../source-result/identity.txt
+          git ls-files -s play-services-cast/core/src/main/java/org/microg/gms/cast/CastMediaRouteController.java play-services-cast/core/src/test/java/org/microg/gms/cast/RemotePlaybackIdleOutcomeTest.java docs/validation/cast-idle-outcomes.md > ../source-result/blobs.txt
+          git archive --format=tar HEAD play-services-cast/core/src/main/java/org/microg/gms/cast/CastMediaRouteController.java play-services-cast/core/src/test/java/org/microg/gms/cast/RemotePlaybackIdleOutcomeTest.java docs/validation/cast-idle-outcomes.md > ../source-result/source.tar
+          git push origin HEAD:refs/heads/delivery/cast580-idle-outcome-delta-result
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cast580-idle-outcome-source
+          path: source-result/
+          retention-days: 7
+          if-no-files-found: error
