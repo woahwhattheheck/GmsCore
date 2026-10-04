@@ -162,6 +162,33 @@ public class RemotePlaybackSessionQueueTest {
     }
 
     @Test
+    public void failedStartWithoutUsableRouteDoesNotPublishSessionState() throws Exception {
+        CastMediaRouteController controller = new CastMediaRouteController(null, "route", "localhost", 8009, 0);
+        RecordingCallback result = new RecordingCallback();
+        Intent request = new Intent(MediaControlIntent.ACTION_START_SESSION)
+                .addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK)
+                .putExtra(MediaControlIntent.EXTRA_SESSION_ID, "failed-session")
+                .putExtra(CastMediaControlIntent.EXTRA_CAST_APPLICATION_ID, "A1B2C3D4")
+                .putExtra(CastMediaControlIntent.EXTRA_CAST_STOP_APPLICATION_WHEN_SESSION_ENDS, true);
+
+        assertTrue(controller.onControlRequest(request, result));
+        assertEquals(1, result.errors);
+        assertEquals(0, result.successes);
+        assertEquals(null, field("remotePlaybackSessionId").get(controller));
+        assertEquals("CC1AD845", field("remotePlaybackApplicationId").get(controller));
+        assertFalse(field("stopApplicationWhenSessionEnds").getBoolean(controller));
+        assertEquals(null, field("pendingSessionStart").get(controller));
+
+        RecordingCallback lookup = new RecordingCallback();
+        Intent getStatus = new Intent(MediaControlIntent.ACTION_GET_SESSION_STATUS)
+                .addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK)
+                .putExtra(MediaControlIntent.EXTRA_SESSION_ID, "failed-session");
+        assertTrue(controller.onControlRequest(getStatus, lookup));
+        assertEquals(1, lookup.errors);
+        assertEquals(0, lookup.successes);
+    }
+
+    @Test
     public void endSessionReportsEndedAndForgetsTheSession() throws Exception {
         CastMediaRouteController controller = new CastMediaRouteController(null, "route", "192.168.1.40", 8009, 0);
         field("remotePlaybackSessionId").set(controller, "session-1");
