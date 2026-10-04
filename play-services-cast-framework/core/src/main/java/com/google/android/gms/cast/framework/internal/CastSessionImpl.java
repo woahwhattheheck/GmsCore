@@ -61,15 +61,20 @@ public class CastSessionImpl extends ICastSession.Stub {
             Log.d(TAG, "Ignoring connection outside an active session start or resume");
             return;
         }
-        if (session.isResuming() || session.isSuspended()) {
-            String sessionId = applicationSessionId != null ? applicationSessionId : session.getSessionId();
-            Log.d(TAG, "Joining application " + getReceiverApplicationId() + " with session " + sessionId);
-            this.controller.joinApplication(getReceiverApplicationId(), sessionId);
-        } else {
-            LaunchOptions launchOptions = options.getLaunchOptions();
-            if (launchOptions == null) launchOptions = new LaunchOptions();
-            Log.d(TAG, "Launching application " + getReceiverApplicationId());
-            this.controller.launchApplication(getReceiverApplicationId(), launchOptions);
+        try {
+            if (session.isResuming() || session.isSuspended()) {
+                String sessionId = applicationSessionId != null ? applicationSessionId : session.getSessionId();
+                Log.d(TAG, "Joining application " + getReceiverApplicationId() + " with session " + sessionId);
+                this.controller.joinApplication(getReceiverApplicationId(), sessionId);
+            } else {
+                LaunchOptions launchOptions = options.getLaunchOptions();
+                if (launchOptions == null) launchOptions = new LaunchOptions();
+                Log.d(TAG, "Launching application " + getReceiverApplicationId());
+                this.controller.launchApplication(getReceiverApplicationId(), launchOptions);
+            }
+        } catch (RemoteException e) {
+            onFailure(CastStatusCodes.INTERNAL_ERROR);
+            throw e;
         }
     }
 
