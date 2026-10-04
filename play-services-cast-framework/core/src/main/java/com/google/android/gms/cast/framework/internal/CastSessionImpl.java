@@ -57,6 +57,10 @@ public class CastSessionImpl extends ICastSession.Stub {
     @Override
     public void onConnected(Bundle routeInfoExtra) throws RemoteException {
         Log.d(TAG, "onConnected");
+        if (!session.isConnecting() && !session.isResuming() && !session.isSuspended()) {
+            Log.d(TAG, "Ignoring connection outside an active session start or resume");
+            return;
+        }
         if (session.isResuming() || session.isSuspended()) {
             String sessionId = applicationSessionId != null ? applicationSessionId : session.getSessionId();
             Log.d(TAG, "Joining application " + getReceiverApplicationId() + " with session " + sessionId);
