@@ -343,14 +343,6 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
                 callback.onError("Unknown remote playback session", null);
                 return true;
             }
-            if (sessionId == null) {
-                sessionId = remotePlaybackSessionId != null ? remotePlaybackSessionId : UUID.randomUUID().toString();
-            }
-            remotePlaybackSessionId = sessionId;
-            remotePlaybackApplicationId = applicationId;
-            stopApplicationWhenSessionEnds = stopWhenEnds;
-            // A device transport is not a launched receiver application. Complete this request
-            // only when onApplicationConnected confirms the requested application below.
         }
         CastDeviceSession target = usableSession();
         if (target == null) {
@@ -359,6 +351,20 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
         }
         PendingSessionStart previous;
         synchronized (this) {
+            // A connection may have been opened while another request changed the logical session.
+            // Recheck before publishing any start-session state.
+            if (sessionId != null && remotePlaybackSessionId != null && !sessionId.equals(remotePlaybackSessionId)) {
+                callback.onError("Unknown remote playback session", null);
+                return true;
+            }
+            if (sessionId == null) {
+                sessionId = remotePlaybackSessionId != null ? remotePlaybackSessionId : UUID.randomUUID().toString();
+            }
+            remotePlaybackSessionId = sessionId;
+            remotePlaybackApplicationId = applicationId;
+            stopApplicationWhenSessionEnds = stopWhenEnds;
+            // A device transport is not a launched receiver application. Complete this request
+            // only when onApplicationConnected confirms the requested application below.
             previous = pendingSessionStart;
             pendingSessionStart = new PendingSessionStart(sessionId, applicationId, callback);
         }
