@@ -16,6 +16,7 @@
 
 package com.google.android.gms.cast;
 
+import android.os.Build;
 import android.text.TextUtils;
 
 import java.util.Collection;
@@ -137,6 +138,9 @@ public final class CastMediaControlIntent {
      * Returns an RFC-5646 language tag string fo the given locale.
      */
     public static String languageTagForLocale(Locale locale) {
+        if (Build.VERSION.SDK_INT >= 21) {
+            return locale.toLanguageTag();
+        }
         StringBuilder sb = new StringBuilder(locale.getLanguage());
         if (!TextUtils.isEmpty(locale.getCountry())) sb.append('-').append(locale.getCountry());
         if (!TextUtils.isEmpty(locale.getVariant())) sb.append('-').append(locale.getVariant());
