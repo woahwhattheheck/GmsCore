@@ -37,13 +37,8 @@ class DroidGuardServiceImplGuardTest {
     }
 
     private fun chimeraWith(factory: NetworkHandleProxyFactory): DroidGuardChimeraService {
-        // Explicit type arg: buildService's T is not inferred from Class<DroidGuardChimeraService>
-        // on this Robolectric version. Field b is hidden from Kotlin by the Java method b(String),
-        // and onCreate() installs a real factory, so overwrite the field after create().
-        val service = Robolectric.buildService<DroidGuardChimeraService>(
-            DroidGuardChimeraService::class.java
-        ).create().get()
-        DroidGuardChimeraService::class.java.getField("b").set(service, factory)
+        val service: DroidGuardChimeraService = Robolectric.setupService(DroidGuardChimeraService::class.java)
+        service.b = factory
         return service
     }
 
