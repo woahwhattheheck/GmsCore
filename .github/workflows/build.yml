@@ -1,4 +1,4 @@
-name: "Dott #3841 integrated source build"
+name: "Dott #3841 response body cap validation"
 
 on:
   push:
@@ -21,8 +21,8 @@ jobs:
     timeout-minutes: 60
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
-      VALIDATION_SOURCE_SHA: '7a648d5fe5f073c61ef7b202aef4c74dd329f4be'
-      VALIDATION_SOURCE_TREE: '24896870026d0edb04989c9627b4a1dc0586670d'
+      VALIDATION_SOURCE_SHA: '2de4887ea7ffd27ec86256f3ccbd48e3e46a8baf'
+      VALIDATION_SOURCE_TREE: 'f23fccdf238d29c8a515381de40e06f586958565'
       EVIDENCE_DIR: /tmp/dott3841-evidence-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Start the execution receipt
@@ -90,43 +90,104 @@ jobs:
           PY
 
 
-      - name: Apply the original owner's retained lifecycle test patch
+      - name: Apply the bounded DroidGuard HTTP response candidate
         shell: bash
         run: |
           python3 - <<'PY'
-          import base64, hashlib, json, os, subprocess
+          import json, os, subprocess
           from pathlib import Path
 
           evidence = Path(os.environ["EVIDENCE_DIR"])
-          patch = base64.b64decode("ZGlmZiAtLWdpdCBhL3BsYXktc2VydmljZXMtZHJvaWRndWFyZC9jb3JlL3NyYy90ZXN0L2tvdGxpbi9vcmcvbWljcm9nL2dtcy9kcm9pZGd1YXJkL2NvcmUvUmVtb3RlRHJvaWRHdWFyZFNlc3Npb25UZXN0Lmt0IGIvcGxheS1zZXJ2aWNlcy1kcm9pZGd1YXJkL2NvcmUvc3JjL3Rlc3Qva290bGluL29yZy9taWNyb2cvZ21zL2Ryb2lkZ3VhcmQvY29yZS9SZW1vdGVEcm9pZEd1YXJkU2Vzc2lvblRlc3Qua3QKaW5kZXggNjA4Yjc2OC4uZjMwMGU3ZiAxMDA2NDQKLS0tIGEvcGxheS1zZXJ2aWNlcy1kcm9pZGd1YXJkL2NvcmUvc3JjL3Rlc3Qva290bGluL29yZy9taWNyb2cvZ21zL2Ryb2lkZ3VhcmQvY29yZS9SZW1vdGVEcm9pZEd1YXJkU2Vzc2lvblRlc3Qua3QKKysrIGIvcGxheS1zZXJ2aWNlcy1kcm9pZGd1YXJkL2NvcmUvc3JjL3Rlc3Qva290bGluL29yZy9taWNyb2cvZ21zL2Ryb2lkZ3VhcmQvY29yZS9SZW1vdGVEcm9pZEd1YXJkU2Vzc2lvblRlc3Qua3QKQEAgLTEwLDYgKzEwLDcgQEAgaW1wb3J0IG9yZy5qdW5pdC5Bc3NlcnQuYXNzZXJ0VHJ1ZQogaW1wb3J0IG9yZy5qdW5pdC5UZXN0CiBpbXBvcnQgamF2YS5pby5CeXRlQXJyYXlJbnB1dFN0cmVhbQogaW1wb3J0IGphdmEuaW8uQnl0ZUFycmF5T3V0cHV0U3RyZWFtCitpbXBvcnQgamF2YS5pby5JT0V4Y2VwdGlvbgogaW1wb3J0IGphdmEubmV0Lkh0dHBVUkxDb25uZWN0aW9uCiBpbXBvcnQgamF2YS5uZXQuVVJMCiBpbXBvcnQgamF2YS51dGlsLkFycmF5RGVxdWUKQEAgLTU5LDcgKzYwLDg3IEBAIGNsYXNzIFJlbW90ZURyb2lkR3VhcmRTZXNzaW9uVGVzdCB7CiAgICAgICAgIH0KICAgICB9CiAKLSAgICBwcml2YXRlIGNsYXNzIFJlY29yZGluZ0Nvbm5lY3Rpb24odXJsOiBVUkwsIHJlc3BvbnNlOiBTdHJpbmcpIDogSHR0cFVSTENvbm5lY3Rpb24odXJsKSB7CisgICAgQFRlc3QKKyAgICBmdW4gY2xvc2VGYWlsdXJlQ2xlYXJzU2Vzc2lvbkFuZFByZXZlbnRzTGF0ZXJTbmFwc2hvdE5ldHdvcmtDYWxscygpIHsKKyAgICAgICAgdmFsIHJlc3BvbnNlcyA9IEFycmF5RGVxdWUobGlzdE9mKCJzZXNzaW9uSWQ9cmVtb3RlJTJGMiIsICIiKSkKKyAgICAgICAgdmFsIHN0YXR1c0NvZGVzID0gQXJyYXlEZXF1ZShsaXN0T2YoMjAwLCA1MDMpKQorICAgICAgICB2YWwgY29ubmVjdGlvbnMgPSBtdXRhYmxlTGlzdE9mPFJlY29yZGluZ0Nvbm5lY3Rpb24+KCkKKyAgICAgICAgdmFsIGNsaWVudCA9IFJlbW90ZURyb2lkR3VhcmRIdHRwQ2xpZW50KCJodHRwOi8vZXhhbXBsZS50ZXN0L2Ryb2lkZ3VhcmQiLCAyXzAwMCkgeyB1cmwgLT4KKyAgICAgICAgICAgIFJlY29yZGluZ0Nvbm5lY3Rpb24odXJsLCByZXNwb25zZXMucmVtb3ZlRmlyc3QoKSwgc3RhdHVzQ29kZXMucmVtb3ZlRmlyc3QoKSkuYWxzbyhjb25uZWN0aW9uczo6YWRkKQorICAgICAgICB9CisgICAgICAgIHZhbCBzZXNzaW9uID0gUmVtb3RlRHJvaWRHdWFyZFNlc3Npb24oY2xpZW50LCBlbXB0eU1hcCgpKQorICAgICAgICBzZXNzaW9uLmJlZ2luKCkKKworICAgICAgICB2YXIgY2xvc2VGYWlsdXJlOiBJT0V4Y2VwdGlvbj8gPSBudWxsCisgICAgICAgIHRyeSB7CisgICAgICAgICAgICBzZXNzaW9uLmNsb3NlKCkKKyAgICAgICAgfSBjYXRjaCAoZTogSU9FeGNlcHRpb24pIHsKKyAgICAgICAgICAgIGNsb3NlRmFpbHVyZSA9IGUKKyAgICAgICAgfQorICAgICAgICBhc3NlcnRUcnVlKGNsb3NlRmFpbHVyZT8ubWVzc2FnZS5vckVtcHR5KCkuY29udGFpbnMoIkhUVFAgNTAzIikpCisKKyAgICAgICAgdmFyIHNuYXBzaG90RmFpbHVyZTogSWxsZWdhbFN0YXRlRXhjZXB0aW9uPyA9IG51bGwKKyAgICAgICAgdHJ5IHsKKyAgICAgICAgICAgIHNlc3Npb24uc25hcHNob3QobWFwT2YoInJwYyIgdG8gInNpZ24iKSkKKyAgICAgICAgfSBjYXRjaCAoZTogSWxsZWdhbFN0YXRlRXhjZXB0aW9uKSB7CisgICAgICAgICAgICBzbmFwc2hvdEZhaWx1cmUgPSBlCisgICAgICAgIH0KKyAgICAgICAgYXNzZXJ0VHJ1ZShzbmFwc2hvdEZhaWx1cmU/Lm1lc3NhZ2Uub3JFbXB0eSgpLmNvbnRhaW5zKCJub3Qgb3BlbiIpKQorCisgICAgICAgIHNlc3Npb24uY2xvc2UoKQorICAgICAgICBhc3NlcnRFcXVhbHMoMiwgY29ubmVjdGlvbnMuc2l6ZSkKKyAgICAgICAgYXNzZXJ0VHJ1ZShjb25uZWN0aW9ucy5hbGwgeyBpdC5kaXNjb25uZWN0ZWQgfSkKKyAgICB9CisKKyAgICBAVGVzdAorICAgIGZ1biByZXBlYXRlZENsb3NlQWZ0ZXJTdWNjZXNzU2VuZHNPbmx5T25lQ2xvc2VSZXF1ZXN0KCkgeworICAgICAgICB2YWwgcmVzcG9uc2VzID0gQXJyYXlEZXF1ZShsaXN0T2YoInNlc3Npb25JZD1yZW1vdGUlMkYzIiwgInN0YXR1cz1vayIpKQorICAgICAgICB2YWwgY29ubmVjdGlvbnMgPSBtdXRhYmxlTGlzdE9mPFJlY29yZGluZ0Nvbm5lY3Rpb24+KCkKKyAgICAgICAgdmFsIGNsaWVudCA9IFJlbW90ZURyb2lkR3VhcmRIdHRwQ2xpZW50KCJodHRwOi8vZXhhbXBsZS50ZXN0L2Ryb2lkZ3VhcmQiLCAyXzAwMCkgeyB1cmwgLT4KKyAgICAgICAgICAgIFJlY29yZGluZ0Nvbm5lY3Rpb24odXJsLCByZXNwb25zZXMucmVtb3ZlRmlyc3QoKSkuYWxzbyhjb25uZWN0aW9uczo6YWRkKQorICAgICAgICB9CisgICAgICAgIHZhbCBzZXNzaW9uID0gUmVtb3RlRHJvaWRHdWFyZFNlc3Npb24oY2xpZW50LCBlbXB0eU1hcCgpKQorCisgICAgICAgIHNlc3Npb24uYmVnaW4oKQorICAgICAgICBzZXNzaW9uLmNsb3NlKCkKKyAgICAgICAgc2Vzc2lvbi5jbG9zZSgpCisKKyAgICAgICAgYXNzZXJ0RXF1YWxzKDIsIGNvbm5lY3Rpb25zLnNpemUpCisgICAgICAgIGFzc2VydFRydWUoY29ubmVjdGlvbnNbMV0udXJsLnF1ZXJ5LmNvbnRhaW5zKCJhY3Rpb249Y2xvc2UiKSkKKyAgICAgICAgYXNzZXJ0VHJ1ZShjb25uZWN0aW9uc1sxXS51cmwucXVlcnkuY29udGFpbnMoInNlc3Npb25JZD1yZW1vdGUlMkYzIikpCisgICAgICAgIGFzc2VydFRydWUoY29ubmVjdGlvbnMuYWxsIHsgaXQuZGlzY29ubmVjdGVkIH0pCisgICAgfQorCisgICAgQFRlc3QKKyAgICBmdW4gZmFpbGVkQmVnaW5MZWF2ZXNTZXNzaW9uQXZhaWxhYmxlRm9yQUZyZXNoQmVnaW4oKSB7CisgICAgICAgIHZhbCByZXNwb25zZXMgPSBBcnJheURlcXVlKGxpc3RPZigiIiwgInNlc3Npb25JZD1yZW1vdGUlMkY0IiwgInN0YXR1cz1vayIpKQorICAgICAgICB2YWwgc3RhdHVzQ29kZXMgPSBBcnJheURlcXVlKGxpc3RPZig1MDMsIDIwMCwgMjAwKSkKKyAgICAgICAgdmFsIGNvbm5lY3Rpb25zID0gbXV0YWJsZUxpc3RPZjxSZWNvcmRpbmdDb25uZWN0aW9uPigpCisgICAgICAgIHZhbCBjbGllbnQgPSBSZW1vdGVEcm9pZEd1YXJkSHR0cENsaWVudCgiaHR0cDovL2V4YW1wbGUudGVzdC9kcm9pZGd1YXJkIiwgMl8wMDApIHsgdXJsIC0+CisgICAgICAgICAgICBSZWNvcmRpbmdDb25uZWN0aW9uKHVybCwgcmVzcG9uc2VzLnJlbW92ZUZpcnN0KCksIHN0YXR1c0NvZGVzLnJlbW92ZUZpcnN0KCkpLmFsc28oY29ubmVjdGlvbnM6OmFkZCkKKyAgICAgICAgfQorICAgICAgICB2YWwgc2Vzc2lvbiA9IFJlbW90ZURyb2lkR3VhcmRTZXNzaW9uKGNsaWVudCwgZW1wdHlNYXAoKSkKKworICAgICAgICB2YXIgYmVnaW5GYWlsdXJlOiBJT0V4Y2VwdGlvbj8gPSBudWxsCisgICAgICAgIHRyeSB7CisgICAgICAgICAgICBzZXNzaW9uLmJlZ2luKCkKKyAgICAgICAgfSBjYXRjaCAoZTogSU9FeGNlcHRpb24pIHsKKyAgICAgICAgICAgIGJlZ2luRmFpbHVyZSA9IGUKKyAgICAgICAgfQorICAgICAgICBhc3NlcnRUcnVlKGJlZ2luRmFpbHVyZT8ubWVzc2FnZS5vckVtcHR5KCkuY29udGFpbnMoIkhUVFAgNTAzIikpCisKKyAgICAgICAgc2Vzc2lvbi5iZWdpbigpCisgICAgICAgIHNlc3Npb24uY2xvc2UoKQorCisgICAgICAgIGFzc2VydEVxdWFscygzLCBjb25uZWN0aW9ucy5zaXplKQorICAgICAgICBhc3NlcnRUcnVlKGNvbm5lY3Rpb25zWzBdLnVybC5xdWVyeS5jb250YWlucygiYWN0aW9uPWJlZ2luIikpCisgICAgICAgIGFzc2VydFRydWUoY29ubmVjdGlvbnNbMV0udXJsLnF1ZXJ5LmNvbnRhaW5zKCJhY3Rpb249YmVnaW4iKSkKKyAgICAgICAgYXNzZXJ0VHJ1ZShjb25uZWN0aW9uc1syXS51cmwucXVlcnkuY29udGFpbnMoImFjdGlvbj1jbG9zZSIpKQorICAgICAgICBhc3NlcnRUcnVlKGNvbm5lY3Rpb25zWzJdLnVybC5xdWVyeS5jb250YWlucygic2Vzc2lvbklkPXJlbW90ZSUyRjQiKSkKKyAgICAgICAgYXNzZXJ0VHJ1ZShjb25uZWN0aW9ucy5hbGwgeyBpdC5kaXNjb25uZWN0ZWQgfSkKKyAgICB9CisKKyAgICBwcml2YXRlIGNsYXNzIFJlY29yZGluZ0Nvbm5lY3Rpb24odXJsOiBVUkwsIHJlc3BvbnNlOiBTdHJpbmcsIHByaXZhdGUgdmFsIHN0YXR1c0NvZGVWYWx1ZTogSW50ID0gMjAwKSA6IEh0dHBVUkxDb25uZWN0aW9uKHVybCkgewogICAgICAgICBwcml2YXRlIHZhbCByZXNwb25zZUJ5dGVzID0gcmVzcG9uc2UudG9CeXRlQXJyYXkoQ2hhcnNldHMuVVRGXzgpCiAgICAgICAgIHZhbCBib2R5ID0gQnl0ZUFycmF5T3V0cHV0U3RyZWFtKCkKICAgICAgICAgdmFyIGRpc2Nvbm5lY3RlZCA9IGZhbHNlCkBAIC02OCw3ICsxNDksNyBAQCBjbGFzcyBSZW1vdGVEcm9pZEd1YXJkU2Vzc2lvblRlc3QgewogICAgICAgICBvdmVycmlkZSBmdW4gY29ubmVjdCgpID0gVW5pdAogICAgICAgICBvdmVycmlkZSBmdW4gZGlzY29ubmVjdCgpIHsgZGlzY29ubmVjdGVkID0gdHJ1ZSB9CiAgICAgICAgIG92ZXJyaWRlIGZ1biB1c2luZ1Byb3h5KCkgPSBmYWxzZQotICAgICAgICBvdmVycmlkZSBmdW4gZ2V0UmVzcG9uc2VDb2RlKCkgPSAyMDAKKyAgICAgICAgb3ZlcnJpZGUgZnVuIGdldFJlc3BvbnNlQ29kZSgpID0gc3RhdHVzQ29kZVZhbHVlCiAgICAgICAgIG92ZXJyaWRlIGZ1biBnZXRJbnB1dFN0cmVhbSgpID0gQnl0ZUFycmF5SW5wdXRTdHJlYW0ocmVzcG9uc2VCeXRlcykKICAgICAgICAgb3ZlcnJpZGUgZnVuIGdldE91dHB1dFN0cmVhbSgpID0gYm9keQogICAgIH0K")
-          expected_sha = "497af7ad875d46645c85eff4f2d02711678dc0513fbf70f4359ccc7636b7fc24"
-          if hashlib.sha256(patch).hexdigest() != expected_sha:
-              raise SystemExit("Retained lifecycle patch bytes do not match.")
-          patch_path = evidence / "session-lifecycle-v2.patch"
-          patch_path.write_bytes(patch)
-          target = "play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardSessionTest.kt"
-          before = subprocess.check_output(["git", "hash-object", target], text=True).strip()
-          if before != "608b7680149c62640c91fdf136661384ff6294b7":
-              raise SystemExit("Session test baseline is not the reviewed blob.")
-          subprocess.run(["git", "apply", "--check", str(patch_path)], check=True)
-          subprocess.run(["git", "apply", str(patch_path)], check=True)
-          changed = subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines()
-          after = subprocess.check_output(["git", "hash-object", target], text=True).strip()
-          if changed != [target] or after != "f300e7fad7a6a9649d6c591f36a701b6bf7ee80b":
-              raise SystemExit("Lifecycle patch changed unexpected source bytes.")
+          source = Path("play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardHttpClient.kt")
+          test = Path("play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardHttpClientTest.kt")
+          expected_source = "db387f3ea824258e3bddf9d4fcafde1aea4be599"
+          expected_test = "7a4ec52d43ab717c5c890ee803f7c8e746fc82d6"
+          def blob(path):
+              return subprocess.check_output(["git", "hash-object", str(path)], text=True).strip()
+
+          before_source = blob(source)
+          before_test = blob(test)
+          if before_source != expected_source or before_test != expected_test:
+              raise SystemExit("HTTP-client source/test preimages do not match the reviewed source pin.")
+
+          old_return = "            return connection.inputStream.use { it.readBytes().toString(StandardCharsets.UTF_8) }"
+          new_return = """            return connection.inputStream.use { input ->
+                val out = ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                var totalRead = 0
+                val limit = 256 * 1024
+                while (true) {
+                    val readLimit = minOf(buffer.size, limit - totalRead + 1)
+                    val read = input.read(buffer, 0, readLimit)
+                    if (read == -1) break
+                    totalRead += read
+                    if (totalRead > limit) {
+                        throw IOException(\"Response body exceeds 256 KiB limit\")
+                    }
+                    out.write(buffer, 0, read)
+                }
+                out.toByteArray().toString(StandardCharsets.UTF_8)
+            }"""
+          source_text = source.read_text(encoding="utf-8")
+          import_line = "import java.io.IOException"
+          if source_text.count(import_line) != 1:
+              raise SystemExit("Expected exactly one java.io.IOException import.")
+          source_text = source_text.replace(import_line, "import java.io.ByteArrayOutputStream\n" + import_line)
+          if source_text.count(old_return) != 1:
+              raise SystemExit("Expected exactly one unbounded response-body read.")
+          source.write_text(source_text.replace(old_return, new_return), encoding="utf-8", newline="\n")
+
+          marker = "    private class RecordingConnection("
+          new_test = """    @Test
+              fun rejectsResponseBodyExceedingLimitAndStillDisconnects() {
+                  lateinit var connection: RecordingConnection
+                  val client = RemoteDroidGuardHttpClient(
+                      \"http://example.test\",
+                      2_000,
+                      openConnection = { url ->
+                          val oversizeResponse = \"a\".repeat(256 * 1024 + 1)
+                          RecordingConnection(url, 200, oversizeResponse).also { connection = it }
+                      }
+                  )
+
+                  try {
+                      client.post(\"snapshot\", emptyMap(), null)
+                      throw AssertionError(\"Expected an IOException for exceeding limit\")
+                  } catch (e: IOException) {
+                      assertTrue(e.message.orEmpty().contains(\"256 KiB limit\", ignoreCase = true))
+                      assertTrue(connection.disconnected)
+                  }
+              }
+
+          """
+          test_text = test.read_text(encoding="utf-8")
+          if "fun rejectsResponseBodyExceedingLimitAndStillDisconnects()" in test_text or test_text.count(marker) != 1:
+              raise SystemExit("Unexpected existing response-limit test or insertion point.")
+          test.write_text(test_text.replace(marker, new_test + marker), encoding="utf-8", newline="\n")
+
+          after_source = blob(source)
+          after_test = blob(test)
+          changed = sorted(subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines())
+          expected_changed = sorted([str(source), str(test), "play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardSessionTest.kt"])
+          if changed != expected_changed:
+              raise SystemExit("Validation patch changed an unexpected repository path.")
+          if after_source == before_source or after_test == before_test:
+              raise SystemExit("Expected both pinned source/test files to change.")
           receipt = {
-              "source": "Slack F0C6HQDQ6DU, DOTT-CLOUD-975E",
-              "patch_sha256": expected_sha,
-              "patch_bytes": len(patch),
-              "target": target,
-              "before_blob": before,
-              "after_blob": after,
-              "production_diff": [],
+              "source_commit": os.environ["VALIDATION_SOURCE_SHA"],
+              "source_tree": os.environ["VALIDATION_SOURCE_TREE"],
+              "source_path": str(source),
+              "source_before_blob": before_source,
+              "source_after_blob": after_source,
+              "test_path": str(test),
+              "test_before_blob": before_test,
+              "test_after_blob": after_test,
+              "response_limit_bytes": 256 * 1024,
+              "test_name": "rejectsResponseBodyExceedingLimitAndStillDisconnects",
           }
-          (evidence / "test-patch.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          (evidence / "http-response-bound-patch.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
           print(json.dumps(receipt, sort_keys=True))
           PY
-
       - name: Set up Java
         uses: actions/setup-java@v5.7.0
         with:
@@ -289,8 +350,8 @@ jobs:
 
           expected_counts = {
               "org.microg.gms.droidguard.core.RemoteDroidGuardInitializationTest": 5,
-              "org.microg.gms.droidguard.core.RemoteDroidGuardSessionTest": 5,
-              "org.microg.gms.droidguard.core.RemoteDroidGuardHttpClientTest": 2,
+              "org.microg.gms.droidguard.core.RemoteDroidGuardSessionTest": 4,
+              "org.microg.gms.droidguard.core.RemoteDroidGuardHttpClientTest": 3,
           }
           actual_counts = {}
           for report in Path("play-services-droidguard/core/build/test-results/testDebugUnitTest").glob("TEST-*.xml"):
@@ -337,6 +398,13 @@ jobs:
 
           start_path = evidence / "execution-start.json"
           start = json.loads(start_path.read_text()) if start_path.is_file() else {}
+          source_delta = subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines()
+          expected_delta = sorted([
+              "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardHttpClient.kt",
+              "play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/RemoteDroidGuardHttpClientTest.kt",
+          ])
+          if sorted(source_delta) != expected_delta:
+              problems.append(f"Unexpected source delta: {source_delta!r}")
           summary = {
               "source": source,
               "execution": {
@@ -351,13 +419,11 @@ jobs:
               "build": build,
               "junit": junit,
               "focused_class_counts": actual_counts,
-              "test_patch": (
-                  json.loads((evidence / "test-patch.json").read_text())
-                  if (evidence / "test-patch.json").is_file() else None
+              "http_response_bound_patch": (
+                  json.loads((evidence / "http-response-bound-patch.json").read_text())
+                  if (evidence / "http-response-bound-patch.json").is_file() else None
               ),
-              "source_delta_after_build": subprocess.check_output(
-                  ["git", "diff", "--name-only"], text=True
-              ).splitlines(),
+              "source_delta_after_build": source_delta,
               "apks": apks,
               "problems": problems,
               "device_dott_result": "not executed by this workflow",
@@ -385,7 +451,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dott3841-integrated-${{ env.VALIDATION_SOURCE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: dott3841-response-bound-${{ env.VALIDATION_SOURCE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.EVIDENCE_DIR }}/
           if-no-files-found: error
           retention-days: 30
+
