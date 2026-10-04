@@ -1100,13 +1100,25 @@ public class WearableImpl {
     }
 
     public DataHolder getDataItemsByUriAsHolder(Uri uri, String packageName) {
+        return getDataItemsByUriAsHolder(uri, packageName, null);
+    }
+
+    public DataHolder getDataItemsByUriAsHolder(Uri uri, String packageName, int filterType) {
+        NodeDatabaseHelper.checkDataItemFilter(uri == null ? null : uri.getPath(), filterType);
+        return getDataItemsByUriAsHolder(uri, packageName, Integer.valueOf(filterType));
+    }
+
+    private DataHolder getDataItemsByUriAsHolder(Uri uri, String packageName, Integer filterType) {
         String firstSignature;
         try {
             firstSignature = PackageUtils.firstSignatureDigest(context, packageName);
         } catch (Exception e) {
             return null;
         }
-        Cursor dataHolderItems = nodeDatabase.getDataItemsForDataHolderByHostAndPath(packageName, firstSignature, fixHost(uri.getHost(), false), uri.getPath());
+        String host = fixHost(uri.getHost(), false);
+        Cursor dataHolderItems = filterType == null
+                ? nodeDatabase.getDataItemsForDataHolderByHostAndPath(packageName, firstSignature, host, uri.getPath())
+                : nodeDatabase.getDataItemsForDataHolderByHostAndPath(packageName, firstSignature, host, uri.getPath(), filterType);
         DataHolder dataHolder = new DataHolder(dataHolderItems, 0, null);
         Log.d(TAG, "Returning data holder of size " + dataHolder.getCount() + " for query " + uri);
         return dataHolder;
@@ -1436,7 +1448,20 @@ public class WearableImpl {
     }
 
     public int deleteDataItems(Uri uri, String packageName) {
-        List<DataItemRecord> records = nodeDatabase.deleteDataItems(packageName, PackageUtils.firstSignatureDigest(context, packageName), fixHost(uri.getHost(), false), uri.getPath());
+        return deleteDataItems(uri, packageName, null);
+    }
+
+    public int deleteDataItems(Uri uri, String packageName, int filterType) {
+        NodeDatabaseHelper.checkDataItemFilter(uri == null ? null : uri.getPath(), filterType);
+        return deleteDataItems(uri, packageName, Integer.valueOf(filterType));
+    }
+
+    private int deleteDataItems(Uri uri, String packageName, Integer filterType) {
+        String signature = PackageUtils.firstSignatureDigest(context, packageName);
+        String host = fixHost(uri.getHost(), false);
+        List<DataItemRecord> records = filterType == null
+                ? nodeDatabase.deleteDataItems(packageName, signature, host, uri.getPath())
+                : nodeDatabase.deleteDataItems(packageName, signature, host, uri.getPath(), filterType);
         for (DataItemRecord record : records) {
             syncRecordToAll(record);
         }

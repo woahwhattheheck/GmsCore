@@ -336,9 +336,10 @@ public class WearableServiceImpl extends IWearableService.Stub {
 
     @Override
     public void getDataItemsByUriWithFilter(IWearableCallbacks callbacks, final Uri uri, int typeFilter) throws RemoteException {
+        NodeDatabaseHelper.checkDataItemFilter(uri == null ? null : uri.getPath(), typeFilter);
         Log.d(TAG, "getDataItemsByUri: " + uri);
         postMain(callbacks, () -> {
-            callbacks.onDataItemChanged(wearable.getDataItemsByUriAsHolder(uri, packageName));
+            callbacks.onDataItemChanged(wearable.getDataItemsByUriAsHolder(uri, packageName, typeFilter));
         });
     }
 
@@ -349,11 +350,12 @@ public class WearableServiceImpl extends IWearableService.Stub {
 
     @Override
     public void deleteDataItemsWithFilter(IWearableCallbacks callbacks, final Uri uri, int typeFilter) throws RemoteException {
+        NodeDatabaseHelper.checkDataItemFilter(uri == null ? null : uri.getPath(), typeFilter);
         Log.d(TAG, "deleteDataItems: " + uri);
         this.wearable.networkHandler.post(new CallbackRunnable(callbacks) {
             @Override
             public void run(IWearableCallbacks callbacks) throws RemoteException {
-                callbacks.onDeleteDataItemsResponse(new DeleteDataItemsResponse(0, wearable.deleteDataItems(uri, packageName)));
+                callbacks.onDeleteDataItemsResponse(new DeleteDataItemsResponse(0, wearable.deleteDataItems(uri, packageName, typeFilter)));
             }
         });
     }
