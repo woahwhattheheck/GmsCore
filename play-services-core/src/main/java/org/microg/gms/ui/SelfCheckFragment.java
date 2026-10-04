@@ -49,6 +49,7 @@ import static android.Manifest.permission.ACCESS_COARSE_LOCATION;
 import static android.Manifest.permission.ACCESS_FINE_LOCATION;
 import static android.Manifest.permission.GET_ACCOUNTS;
 import static android.Manifest.permission.POST_NOTIFICATIONS;
+import static android.Manifest.permission.READ_CALL_LOG;
 import static android.Manifest.permission.READ_EXTERNAL_STORAGE;
 import static android.Manifest.permission.READ_PHONE_NUMBERS;
 import static android.Manifest.permission.READ_PHONE_STATE;
@@ -83,6 +84,9 @@ public class SelfCheckFragment extends AbstractSelfCheckFragment {
                 permissions.add(READ_PHONE_NUMBERS);
             }
             permissions.add(READ_PHONE_STATE);
+            if (SDK_INT >= 28) {
+                permissions.add(READ_CALL_LOG);
+            }
             permissions.add(READ_SMS);
             permissions.add(RECEIVE_SMS);
             permissions.add(SEND_SMS);

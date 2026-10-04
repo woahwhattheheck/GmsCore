@@ -146,6 +146,12 @@ object ChallengeProcessor {
                     subId
                 )
 
+                VerificationMethod.FLASH_CALL -> challenge.flash_call_challenge?.verify(
+                    context,
+                    subId,
+                    remainingMillis
+                )
+
                 else -> {
                     Log.w(TAG, "Unsupported verification method: ${challenge.type}")
                     null
