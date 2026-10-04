@@ -60,6 +60,7 @@ class AuthManager private constructor(context: Context) {
         return InstanceID.getInstance(context).getToken(sender, "GCM")
     }
 
+    @Synchronized
     fun getOrCreateKeyPair(): KeyPair {
         val privateKeyStr = sharedPrefs.getString(KEY_PRIVATE, null)
         val publicKeyStr = sharedPrefs.getString(KEY_PUBLIC, null)

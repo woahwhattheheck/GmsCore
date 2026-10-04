@@ -18,6 +18,7 @@ import org.microg.gms.profile.Build
 import org.microg.gms.profile.ProfileManager
 import org.microg.gms.utils.singleInstanceOf
 import java.io.File
+import java.security.MessageDigest
 import java.util.*
 import com.android.volley.Request as VolleyRequest
 import com.android.volley.Response as VolleyResponse
@@ -135,11 +136,18 @@ class NetworkHandleProxyFactory(private val context: Context) : HandleProxyFacto
         })
         val signed: SignedResponse = future.get()
         val response = signed.unpack()
-        val vmKey = response.vmChecksum!!.hex()
+        val vmKey = formatVmCacheKey(response.vmChecksum!!.hex())
         if (!isValidCache(vmKey)) {
+            // vmChecksum is SHA-1 over content on the wire (verified against a captured
+            // production response); bytes are persisted under that key, so fail closed
+            // before storing a payload under a checksum it does not match.
+            val content = response.content!!.toByteArray()
+            if (!MessageDigest.getInstance("SHA-1").digest(content).contentEquals(response.vmChecksum!!.toByteArray())) {
+                throw SecurityException("VM content does not match its declared checksum")
+            }
             val temp = File(getCacheDir(), "${UUID.randomUUID()}.apk")
             temp.parentFile!!.mkdirs()
-            temp.writeBytes(response.content!!.toByteArray())
+            temp.writeBytes(content)
             getOptDir(vmKey).mkdirs()
             temp.renameTo(getTheApkFile(vmKey))
             updateCacheTimestamp(vmKey)
