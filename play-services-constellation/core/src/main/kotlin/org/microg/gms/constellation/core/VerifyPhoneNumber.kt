@@ -200,7 +200,9 @@ private suspend fun handleVerifyPhoneNumberRequest(
                 } else {
                     Log.d(TAG, "Using typed read-only mode")
                 }
-                verifications = fetchVerifiedPhoneNumbers(context, request.extras, callingPackage)
+                verifications = fetchVerifiedPhoneNumbers(
+                    context, request.extras, callingPackage, idTokenRequest = request.idTokenRequest
+                )
                     .map { it.toPhoneNumberVerification() }
                     .toTypedArray()
                 Status.SUCCESS

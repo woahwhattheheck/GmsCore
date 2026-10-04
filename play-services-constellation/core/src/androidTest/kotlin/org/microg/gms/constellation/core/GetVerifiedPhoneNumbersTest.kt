@@ -7,6 +7,7 @@ package org.microg.gms.constellation.core
 
 import android.os.Bundle
 import androidx.test.platform.app.InstrumentationRegistry
+import com.google.android.gms.constellation.VerifyPhoneNumberRequest
 import com.squareup.wire.GrpcException
 import com.squareup.wire.GrpcStatus
 import com.squareup.wire.Instant
@@ -90,6 +91,53 @@ class GetVerifiedPhoneNumbersTest {
 
         assertEquals(1, backend.callCount)
         assertEquals("iid-token", backend.lastRequest?.iid_token_auth?.iid_token)
+    }
+
+    @Test
+    fun typedIdTokenRequestPopulatesGpnvTokenOption() = runBlocking {
+        val backend = RejectEmptyIidBackend()
+        val extras = Bundle().apply {
+            putString("certificate_hash", "legacy-hash")
+            putString("token_nonce", "legacy-nonce")
+        }
+
+        fetchVerifiedPhoneNumbers(
+            context = InstrumentationRegistry.getInstrumentation().targetContext,
+            bundle = extras,
+            callingPackage = "com.google.android.apps.messaging",
+            idTokenRequest = VerifyPhoneNumberRequest.IdTokenRequest("typed-hash", "typed-nonce"),
+            getIidToken = { "iid-token" },
+            signIidToken = { byteArrayOf(1) to Instant.ofEpochMilli(1) },
+            execute = backend::execute
+        )
+
+        assertEquals("typed-hash", backend.lastRequest?.token_option?.certificate_hash)
+        assertEquals("typed-nonce", backend.lastRequest?.token_option?.token_nonce)
+        assertEquals("com.google.android.apps.messaging", backend.lastRequest?.token_option?.package_name)
+        assertEquals("legacy-hash", extras.getString("certificate_hash"))
+        assertEquals("legacy-nonce", extras.getString("token_nonce"))
+    }
+
+    @Test
+    fun legacyExtrasStillPopulateGpnvTokenOption() = runBlocking {
+        val backend = RejectEmptyIidBackend()
+        val extras = Bundle().apply {
+            putString("certificate_hash", "legacy-hash")
+            putString("token_nonce", "legacy-nonce")
+        }
+
+        fetchVerifiedPhoneNumbers(
+            context = InstrumentationRegistry.getInstrumentation().targetContext,
+            bundle = extras,
+            callingPackage = "com.google.android.apps.messaging",
+            getIidToken = { "iid-token" },
+            signIidToken = { byteArrayOf(1) to Instant.ofEpochMilli(1) },
+            execute = backend::execute
+        )
+
+        assertEquals("legacy-hash", backend.lastRequest?.token_option?.certificate_hash)
+        assertEquals("legacy-nonce", backend.lastRequest?.token_option?.token_nonce)
+        assertEquals("com.google.android.apps.messaging", backend.lastRequest?.token_option?.package_name)
     }
 
     private class RejectEmptyIidBackend {
