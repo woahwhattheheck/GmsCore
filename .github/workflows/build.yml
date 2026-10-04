@@ -1,64 +1,54 @@
-name: "Gradle build"
-permissions: {}
+name: Cast 580 listener lifecycle tests
+
 on:
-  - push
-  - pull_request
-  - workflow_dispatch
+  push:
+    branches:
+      - validation/cast580-lifecycle-7c63414ea055
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    name: "Gradle build ${{ matrix.target }}"
+  cast-lifecycle-tests:
+    name: Cast controller listener lifecycle
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
-      GRADLE_MICROG_VERSION_WITHOUT_GIT: 1
-
-    strategy:
-      matrix:
-        target: [Debug, Release]
-
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
     steps:
-      - name: "Free disk space"
-        run: |
-          # Deleting unneeded software packages
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /opt/hostedtoolcache/go
-
-          # Log available space
-          df -h
-      - name: "Checkout sources"
+      - name: Checkout sources
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: "Setup Java"
+      - name: Setup Java 17
         uses: actions/setup-java@v6
         with:
-          distribution: "temurin"
+          distribution: temurin
           java-version: "17"
-      - name: "Setup Gradle"
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
-          build-scan-publish: true
-          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
-          build-scan-terms-of-use-agree: "yes"
-      - name: "Setup matchers"
+      - name: Run the two controller lifecycle tests
         run: |
-          # Setting up matchers...
-
-          matchers_dir='${{ github.workspace }}/.github/matchers'
-          matcher_list()
-          {
-            echo 'gradle-build-matcher.json'
-            echo 'gradle-build-kotlin-error-matcher.json'
+          cat > "$RUNNER_TEMP/cast580-lifecycle.gradle" <<'GRADLE'
+          allprojects {
+              tasks.withType(Test).configureEach {
+                  maxHeapSize = '512m'
+                  maxParallelForks = 1
+                  systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'
+              }
           }
-
-          matcher_list | while IFS='' read -r NAME; do
-            if test -f "${matchers_dir:?}/${NAME:?}"; then
-              echo "::add-matcher::${matchers_dir:?}/${NAME:?}"
-              echo "Matcher configured: ${NAME:?}"
-            fi
-          done
-      - name: "Execute Gradle assemble"
-        run: "./gradlew assemble${{ matrix.target }}"
-      - name: "Execute Gradle lint"
-        run: "./gradlew lint${{ matrix.target }}"
+          GRADLE
+          ./gradlew :play-services-cast-core:testDebugUnitTest \
+            --tests 'org.microg.gms.cast.CastDeviceControllerLifecycleTest' \
+            --no-daemon --max-workers=2 --console=plain --no-configuration-cache \
+            '-Dorg.gradle.jvmargs=-Xmx1536m -XX:+UseParallelGC' \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            --init-script "$RUNNER_TEMP/cast580-lifecycle.gradle" --stacktrace
+      - name: Upload lifecycle JUnit XML
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cast580-lifecycle-junit-7c63414ea055
+          path: play-services-cast/core/build/test-results/testDebugUnitTest/TEST-org.microg.gms.cast.CastDeviceControllerLifecycleTest.xml
+          if-no-files-found: error
+          retention-days: 14
