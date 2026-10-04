@@ -91,11 +91,11 @@ class SignatureVerifierCapturedReplyTest {
         val signed = SignedResponse.ADAPTER.decode(framedReply)
         val response = with(factory) { signed.unpack() }
         assertNotNull(response.byteCode)
-        assertEquals(70041, response.byteCode!!.size())
-        assertEquals(20, response.vmChecksum!!.size())
+        assertEquals(70041, response.byteCode!!.size)
+        assertEquals(20, response.vmChecksum!!.size)
         assertEquals(10, response.expiryTimeSecs)
         assertNotNull(response.content)
-        assertEquals(377439, response.content!!.size())
+        assertEquals(377439, response.content!!.size)
     }
 
     @Test
