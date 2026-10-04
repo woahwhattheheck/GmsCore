@@ -850,11 +850,11 @@ public class WearableServiceImpl extends IWearableService.Stub {
                         "/backup_settings/backup_enabled",
                         null, new MessageOptions(0));
                 if (messageId < 0) {
-                    Log.w(TAG, "getBackupSettingsSupported: sendRequest failed");
+                    Log.w(TAG, "getBackupEnabled: sendRequest failed");
                     mainHandler.post(() -> {
                         try {
-                            cb.onGetBackupSettingsSupportedResponse(
-                                    new GetBackupSettingsSupportedResponse(
+                            cb.onBooleanResponse(
+                                    new BooleanResponse(
                                             CommonStatusCodes.ERROR, false));
                         } catch (RemoteException ignored) {
                         }
