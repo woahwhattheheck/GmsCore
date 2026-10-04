@@ -86,6 +86,9 @@ public final class CastMediaControlIntent {
      * @param applicationId The application ID of the receiver application.
      */
     public static String categoryForCast(String applicationId) {
+        if (applicationId == null) {
+            throw new IllegalArgumentException("applicationId must not be null");
+        }
         return CATEGORY_CAST + "/" + applicationId;
     }
 
@@ -124,6 +127,9 @@ public final class CastMediaControlIntent {
      * @param applicationId The application ID of the receiver application.
      */
     public static String categoryForRemotePlayback(String applicationId) {
+        if (applicationId == null) {
+            throw new IllegalArgumentException("applicationId must not be null");
+        }
         return CATEGORY_CAST_REMOTE_PLAYBACK + "/" + applicationId;
     }
 
