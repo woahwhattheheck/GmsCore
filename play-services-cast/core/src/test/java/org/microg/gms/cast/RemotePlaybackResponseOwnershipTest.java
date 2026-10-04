@@ -130,7 +130,10 @@ public class RemotePlaybackResponseOwnershipTest {
     @Test public void supportedRequestsAllowNullResultCallback() {
         String[] actions = {MediaControlIntent.ACTION_PLAY, MediaControlIntent.ACTION_PAUSE,
                 MediaControlIntent.ACTION_RESUME, MediaControlIntent.ACTION_STOP,
-                MediaControlIntent.ACTION_SEEK, MediaControlIntent.ACTION_GET_STATUS};
+                MediaControlIntent.ACTION_SEEK, MediaControlIntent.ACTION_GET_STATUS,
+                MediaControlIntent.ACTION_START_SESSION, MediaControlIntent.ACTION_GET_SESSION_STATUS,
+                MediaControlIntent.ACTION_END_SESSION, MediaControlIntent.ACTION_ENQUEUE,
+                MediaControlIntent.ACTION_REMOVE};
         for (String action : actions) {
             CastMediaRouteController controller = new CastMediaRouteController(null, "route", "localhost", 8009, 0);
             Intent request = new Intent(action).addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK);

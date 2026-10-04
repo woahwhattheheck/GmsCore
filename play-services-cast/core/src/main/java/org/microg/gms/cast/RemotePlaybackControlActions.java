@@ -20,6 +20,10 @@ final class RemotePlaybackControlActions {
                 MediaControlIntent.ACTION_RESUME,
                 MediaControlIntent.ACTION_STOP,
                 MediaControlIntent.ACTION_SEEK,
-                MediaControlIntent.ACTION_GET_STATUS));
+                MediaControlIntent.ACTION_GET_STATUS,
+                MediaControlIntent.ACTION_START_SESSION,
+                MediaControlIntent.ACTION_GET_SESSION_STATUS,
+                MediaControlIntent.ACTION_END_SESSION,
+                MediaControlIntent.ACTION_REMOVE));
     }
 }

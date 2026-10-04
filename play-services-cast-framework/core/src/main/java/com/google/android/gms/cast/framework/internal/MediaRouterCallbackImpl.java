@@ -98,7 +98,7 @@ public class MediaRouterCallbackImpl extends IMediaRouterCallback.Stub {
     @Override
     public void onRouteDisconnected(String requestedRouteId, String disconnectedRouteId, Bundle extras, int reason) {
         Log.d(TAG, "onRouteDisconnected: " + disconnectedRouteId + " reason=" + reason);
-        getSessionManager().onRouteUnselected(disconnectedRouteId, reason);
+        getSessionManager().onRouteConnectionLost(disconnectedRouteId, reason);
         updateCastState();
     }
 }

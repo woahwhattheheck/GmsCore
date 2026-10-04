@@ -18,6 +18,7 @@ import com.google.android.gms.cast.JoinOptions
 import com.google.android.gms.cast.LaunchOptions
 import com.google.android.gms.cast.internal.ICastDeviceController
 import com.google.android.gms.cast.internal.ICastDeviceControllerListener
+import com.google.android.gms.common.api.GoogleApiClient
 import com.google.android.gms.common.images.WebImage
 import com.google.android.gms.common.internal.BinderWrapper
 import org.microg.gms.cast.channel.CastChannel
@@ -78,6 +79,19 @@ class CastDeviceControllerImpl(
     @Volatile
     private var rejoining = false
 
+    // Application the client is attached to, kept across a dropped channel so reconnect can join it.
+    @Volatile
+    private var attachedApplicationId: String? = null
+
+    @Volatile
+    private var attachedSessionId: String? = null
+
+    @Volatile
+    private var reconnecting = false
+
+    @Volatile
+    private var reconnectAttempts = 0
+
     @Volatile
     private var released = false
 
@@ -116,6 +130,8 @@ class CastDeviceControllerImpl(
             if (!released) return@synchronized false
             // The client reuses this binder after it disconnected, e.g. when casting to the same device again
             released = false
+            reconnecting = false
+            reconnectAttempts = 0
             session = newSession()
             true
         }
@@ -143,6 +159,7 @@ class CastDeviceControllerImpl(
         Log.d(TAG, "disconnect from ${castDevice.friendlyName} ($packageName)")
         val current = synchronized(this) {
             released = true
+            reconnecting = false
             session
         }
         unlinkListener()
@@ -227,7 +244,11 @@ class CastDeviceControllerImpl(
         override fun onApplicationConnectionFailed(statusCode: Int) = ifCurrent { applicationConnectionFailed(statusCode) }
         override fun onApplicationStatusChanged(statusText: String?) =
             ifCurrent { notify { onApplicationStatusChanged(ApplicationStatus(statusText)) } }
-        override fun onApplicationDisconnected(statusCode: Int) = ifCurrent { notify { onApplicationDisconnected(statusCode) } }
+        override fun onApplicationDisconnected(statusCode: Int) = ifCurrent {
+            attachedApplicationId = null
+            attachedSessionId = null
+            notify { onApplicationDisconnected(statusCode) }
+        }
         override fun onStopApplicationResult(statusCode: Int) = ifCurrent { notify { onStopApplicationResult(statusCode) } }
         override fun onLeaveApplicationResult(statusCode: Int) = ifCurrent { notify { onLeaveApplicationResult(statusCode) } }
         override fun onTextMessage(namespace: String, message: String) = ifCurrent { notify { onTextMessageReceived(namespace, message) } }
@@ -245,7 +266,23 @@ class CastDeviceControllerImpl(
             if (released || owner !== session) CastChannelRegistry.unregister(castDevice.deviceId, owner)
         }
         if (owner !== session) return
-        if (statusCode == CastDeviceSession.STATUS_SUCCESS && initCallback != null && lastApplicationId != null) {
+        if (statusCode != CastDeviceSession.STATUS_SUCCESS) {
+            if (reconnecting && !released) {
+                retryReconnect(owner)
+                return
+            }
+            finishInit(statusCode)
+            if (connectRequested) {
+                connectRequested = false
+                notify { onConnectedWithResult(statusCode) }
+            }
+            return
+        }
+        val wasReconnecting = reconnecting
+        reconnecting = false
+        reconnectAttempts = 0
+        val shouldRejoinAttached = wasReconnecting && attachedApplicationId != null
+        if (statusCode == CastDeviceSession.STATUS_SUCCESS && !shouldRejoinAttached && initCallback != null && lastApplicationId != null) {
             // An older client reconnecting after a connection loss continues with the application it was attached to.
             // The init completes once the join result arrives.
             rejoining = true
@@ -253,9 +290,13 @@ class CastDeviceControllerImpl(
         } else {
             finishInit(statusCode)
         }
-        if (connectRequested) {
+        if (connectRequested || wasReconnecting) {
             connectRequested = false
             notify { onConnectedWithResult(statusCode) }
+        }
+        if (shouldRejoinAttached) {
+            rejoining = true
+            owner.joinApplication(attachedApplicationId, attachedSessionId)
         }
     }
 
@@ -269,9 +310,43 @@ class CastDeviceControllerImpl(
     private fun onSessionDisconnected(owner: CastDeviceSession, statusCode: Int) {
         CastChannelRegistry.unregister(castDevice.deviceId, owner)
         if (owner !== session) return
-        notify { onDisconnected(statusCode) }
-        // Older clients drop their listener on onDisconnected and reconnect through a new controller
-        if (isLegacyClient) disconnect()
+        if (released) {
+            notify { onDisconnected(statusCode) }
+            return
+        }
+        // Play services suspends a dropped channel and reconnects instead of ending the session.
+        reconnecting = true
+        notifySuspend()
+        retryReconnect(owner)
+    }
+
+    private fun retryReconnect(owner: CastDeviceSession) {
+        if (released || owner !== session) return
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            Log.w(TAG, "Giving up reconnect to ${castDevice.friendlyName} after $reconnectAttempts attempts")
+            reconnecting = false
+            notify { onDisconnected(CastDeviceSession.STATUS_NETWORK_ERROR) }
+            if (isLegacyClient) disconnect()
+            return
+        }
+        reconnectAttempts++
+        Log.d(TAG, "Reconnecting to ${castDevice.friendlyName} (attempt $reconnectAttempts)")
+        session.connect()
+    }
+
+    /**
+     * Temporary loss: do not tear the controller down if the client stub has no
+     * [ICastDeviceControllerListener.onConnectionSuspended] transaction.
+     */
+    private fun notifySuspend() {
+        val listener = listener ?: return
+        try {
+            listener.onConnectionSuspended(GoogleApiClient.ConnectionCallbacks.CAUSE_NETWORK_LOST)
+        } catch (e: RemoteException) {
+            Log.d(TAG, "Client has no onConnectionSuspended; reconnecting without it")
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "onConnectionSuspended failed", e)
+        }
     }
 
     private fun deviceStatusChanged(status: ReceiverStatus) {
@@ -280,6 +355,8 @@ class CastDeviceControllerImpl(
     }
 
     private fun applicationConnected(application: ReceiverApplication, wasLaunched: Boolean) {
+        attachedApplicationId = application.appId
+        attachedSessionId = application.sessionId
         notify { onApplicationConnectionSuccess(application.toMetadata(), application.statusText, application.sessionId, wasLaunched) }
         if (rejoining) {
             rejoining = false
@@ -324,5 +401,7 @@ class CastDeviceControllerImpl(
     companion object {
         /** Init status for an older client: connected, but its previous application is not running anymore. */
         const val STATUS_APP_NO_LONGER_RUNNING = 2300
+
+        const val MAX_RECONNECT_ATTEMPTS = 5
     }
 }

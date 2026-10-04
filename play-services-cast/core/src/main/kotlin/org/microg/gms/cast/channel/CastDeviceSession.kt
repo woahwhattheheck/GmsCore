@@ -98,7 +98,8 @@ class CastDeviceSession(
             return@post
         }
         if (channel != null) {
-            if (channel?.isConnected == true) callbacks.onConnected() else callbacks.onConnectionFailed(STATUS_NETWORK_ERROR)
+            // A second connect while the first is still opening is ignored; the first result stands.
+            if (channel?.isConnected == true) callbacks.onConnected()
             return@post
         }
         val newChannel = CastChannel(host, port, this)

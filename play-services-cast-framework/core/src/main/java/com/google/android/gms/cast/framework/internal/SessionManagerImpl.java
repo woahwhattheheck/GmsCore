@@ -29,6 +29,7 @@ import android.util.Log;
 import androidx.mediarouter.media.MediaRouter;
 
 import com.google.android.gms.cast.CastDevice;
+import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.cast.framework.CastState;
 import com.google.android.gms.cast.framework.ICastStateListener;
 import com.google.android.gms.cast.framework.ISessionManager;
@@ -179,6 +180,15 @@ public class SessionManagerImpl extends ISessionManager.Stub {
         routeSelectionToken = selectionToken;
         if (currentSession != null && !currentSession.isDisconnected()) {
             if (TextUtils.equals(currentSession.getRouteId(), routeId)) {
+                if (currentSession.isSuspended()) {
+                    Log.d(TAG, "Resuming suspended session on " + routeId);
+                    try {
+                        currentSession.resume(castContext, castDevice, routeId, extras);
+                    } catch (RemoteException e) {
+                        Log.w(TAG, "Error resuming session: " + e.getMessage());
+                    }
+                    return;
+                }
                 // Also reached when the route matches the categories of multiple session providers.
                 Log.d(TAG, "Route " + routeId + " already has a session");
                 return;
@@ -224,9 +234,28 @@ public class SessionManagerImpl extends ISessionManager.Stub {
     public void onRouteUnselected(String routeId, int reason) {
         if (currentSession == null || !TextUtils.equals(currentSession.getRouteId(), routeId)) return;
         if (currentSession.isDisconnecting() || currentSession.isDisconnected()) return;
+        if (reason == MediaRouter.UNSELECT_REASON_DISCONNECTED) {
+            onRouteConnectionLost(routeId, reason);
+            return;
+        }
         boolean stopCasting = reason == MediaRouter.UNSELECT_REASON_STOPPED ||
-                (reason != MediaRouter.UNSELECT_REASON_DISCONNECTED && castContext.getOptions().getStopReceiverApplicationWhenEndingSession());
+                castContext.getOptions().getStopReceiverApplicationWhenEndingSession();
         endCurrentSessionInternal(stopCasting);
+    }
+
+    /**
+     * A dropped route connection suspends the session so it can be resumed when the receiver
+     * is reachable again. Play services does the same; ending here would drop the Cast session.
+     */
+    public void onRouteConnectionLost(String routeId, int reason) {
+        if (currentSession == null || !TextUtils.equals(currentSession.getRouteId(), routeId)) return;
+        if (currentSession.isDisconnecting() || currentSession.isDisconnected() || currentSession.isSuspended()) {
+            return;
+        }
+        if (currentSession.isConnected()) {
+            Log.d(TAG, "Suspending session on " + routeId + " after connection loss (" + reason + ")");
+            currentSession.notifySessionSuspended(GoogleApiClient.ConnectionCallbacks.CAUSE_NETWORK_LOST);
+        }
     }
 
     public void onRouteChanged(String routeId, Bundle extras) {

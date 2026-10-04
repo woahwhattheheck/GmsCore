@@ -126,6 +126,7 @@ public class CastMediaRouteProvider extends MediaRouteProvider {
         filter = new IntentFilter();
         filter.addCategory(MediaControlIntent.CATEGORY_REMOTE_PLAYBACK);
         filter.addAction(MediaControlIntent.ACTION_PLAY);
+        filter.addAction(MediaControlIntent.ACTION_ENQUEUE);
         filter.addDataScheme("http");
         filter.addDataScheme("https");
         String[] types = {

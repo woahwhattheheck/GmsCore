@@ -39,6 +39,9 @@ import androidx.mediarouter.media.MediaControlIntent;
 import androidx.mediarouter.media.MediaItemStatus;
 import androidx.mediarouter.media.MediaRouteProvider;
 import androidx.mediarouter.media.MediaRouter;
+import androidx.mediarouter.media.MediaSessionStatus;
+
+import com.google.android.gms.cast.CastMediaControlIntent;
 
 import org.microg.gms.cast.channel.CastChannel;
 import org.microg.gms.cast.channel.CastDeviceSession;
@@ -79,6 +82,11 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
     private final long firstMediaRequestId = 1 + (UUID.randomUUID().getLeastSignificantBits() & 0x3fffffffL);
     private long nextMediaRequestId = firstMediaRequestId;
     private PendingPlay pendingPlay;
+    private PendingSessionStart pendingSessionStart;
+    private boolean stopApplicationWhenSessionEnds;
+    private String remotePlaybackApplicationId = DEFAULT_MEDIA_RECEIVER_APP_ID;
+    private int reconnectAttempts;
+    private static final int MAX_RECONNECT_ATTEMPTS = 5;
     private final Map<Long, PendingControl> pendingControls = new HashMap<Long, PendingControl>();
 
     private static class PendingPlay {
@@ -86,14 +94,33 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
         final String contentType;
         final long positionMs;
         final String sessionId;
+        final boolean enqueue;
         final MediaRouter.ControlRequestCallback callback;
 
         PendingPlay(String contentId, String contentType, long positionMs, String sessionId,
                 MediaRouter.ControlRequestCallback callback) {
+            this(contentId, contentType, positionMs, sessionId, false, callback);
+        }
+
+        PendingPlay(String contentId, String contentType, long positionMs, String sessionId,
+                boolean enqueue, MediaRouter.ControlRequestCallback callback) {
             this.contentId = contentId;
             this.contentType = contentType;
             this.positionMs = positionMs;
             this.sessionId = sessionId;
+            this.enqueue = enqueue;
+            this.callback = callback;
+        }
+    }
+
+    private static class PendingSessionStart {
+        final String sessionId;
+        final String applicationId;
+        final MediaRouter.ControlRequestCallback callback;
+
+        PendingSessionStart(String sessionId, String applicationId, MediaRouter.ControlRequestCallback callback) {
+            this.sessionId = sessionId;
+            this.applicationId = applicationId;
             this.callback = callback;
         }
     }
@@ -148,6 +175,16 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
         switch (action) {
             case MediaControlIntent.ACTION_PLAY:
                 return onPlayRequest(intent, callback);
+            case MediaControlIntent.ACTION_ENQUEUE:
+                return onEnqueueRequest(intent, callback);
+            case MediaControlIntent.ACTION_REMOVE:
+                return onRemoveRequest(intent, callback);
+            case MediaControlIntent.ACTION_START_SESSION:
+                return onStartSessionRequest(intent, callback);
+            case MediaControlIntent.ACTION_GET_SESSION_STATUS:
+                return onGetSessionStatusRequest(intent, callback);
+            case MediaControlIntent.ACTION_END_SESSION:
+                return onEndSessionRequest(intent, callback);
             case MediaControlIntent.ACTION_PAUSE:
                 return sendMediaCommand("PAUSE", intent, callback);
             case MediaControlIntent.ACTION_RESUME:
@@ -199,6 +236,204 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
         // media receiver is running before the LOAD command is sent from onApplicationConnected.
         target.launchApplication(DEFAULT_MEDIA_RECEIVER_APP_ID, false, null);
         return true;
+    }
+
+    private boolean onEnqueueRequest(Intent intent, MediaRouter.ControlRequestCallback callback) {
+        Uri data = intent.getData();
+        if (data == null || data.toString().isEmpty()) {
+            callback.onError("Enqueue request without content Uri", null);
+            return true;
+        }
+        String sessionId = intent.getStringExtra(MediaControlIntent.EXTRA_SESSION_ID);
+        long receiverMediaSessionId;
+        synchronized (this) {
+            if (sessionId != null && remotePlaybackSessionId != null && !sessionId.equals(remotePlaybackSessionId)) {
+                callback.onError("Unknown remote playback session", null);
+                return true;
+            }
+            if (sessionId == null) {
+                sessionId = remotePlaybackSessionId != null ? remotePlaybackSessionId : UUID.randomUUID().toString();
+            }
+            remotePlaybackSessionId = sessionId;
+            receiverMediaSessionId = mediaSessionId;
+        }
+        CastDeviceSession target = usableSession();
+        if (target == null) {
+            callback.onError("No connection to " + routeId, null);
+            return true;
+        }
+        if (receiverMediaSessionId <= 0) {
+            PendingPlay previous;
+            synchronized (this) {
+                previous = pendingPlay;
+                pendingPlay = new PendingPlay(data.toString(), intent.getType(),
+                        intent.getLongExtra(MediaControlIntent.EXTRA_ITEM_CONTENT_POSITION, 0),
+                        sessionId, true, callback);
+            }
+            if (previous != null) previous.callback.onError("Replaced by a newer enqueue request", null);
+            target.launchApplication(DEFAULT_MEDIA_RECEIVER_APP_ID, false, null);
+            return true;
+        }
+        long requestId;
+        synchronized (this) {
+            requestId = nextMediaRequestId++;
+        }
+        addPendingControl(requestId, new PendingControl(sessionId, null, true, false, receiverMediaSessionId, callback));
+        try {
+            sendToMediaChannel(target, buildQueueInsertCommand(data.toString(), intent.getType(),
+                    receiverMediaSessionId, requestId), requestId);
+        } catch (JSONException e) {
+            failPendingControl(requestId, e.getMessage());
+        }
+        return true;
+    }
+
+    private boolean onRemoveRequest(Intent intent, MediaRouter.ControlRequestCallback callback) {
+        String sessionId = intent.getStringExtra(MediaControlIntent.EXTRA_SESSION_ID);
+        String itemId = intent.getStringExtra(MediaControlIntent.EXTRA_ITEM_ID);
+        long receiverMediaSessionId;
+        int queueItemId;
+        synchronized (this) {
+            if (sessionId == null || !sessionId.equals(remotePlaybackSessionId)) {
+                callback.onError("Unknown remote playback session", null);
+                return true;
+            }
+            if (itemId == null || (remotePlaybackItemId != null && !itemId.equals(remotePlaybackItemId))) {
+                callback.onError("Unknown remote playback item", null);
+                return true;
+            }
+            receiverMediaSessionId = mediaSessionId;
+            try {
+                queueItemId = Integer.parseInt(itemId);
+            } catch (NumberFormatException e) {
+                callback.onError("Remote playback item is not a queue item", null);
+                return true;
+            }
+        }
+        if (receiverMediaSessionId <= 0) {
+            callback.onError("No active media session on " + routeId, null);
+            return true;
+        }
+        CastDeviceSession target = usableSession();
+        if (target == null) {
+            callback.onError("No connection to " + routeId, null);
+            return true;
+        }
+        long requestId;
+        synchronized (this) {
+            requestId = nextMediaRequestId++;
+        }
+        addPendingControl(requestId, new PendingControl(sessionId, itemId, false, false, receiverMediaSessionId, callback));
+        try {
+            sendToMediaChannel(target, buildQueueRemoveCommand(receiverMediaSessionId, queueItemId, requestId), requestId);
+        } catch (JSONException e) {
+            failPendingControl(requestId, e.getMessage());
+        }
+        return true;
+    }
+
+    private boolean onStartSessionRequest(Intent intent, MediaRouter.ControlRequestCallback callback) {
+        String sessionId = intent.getStringExtra(MediaControlIntent.EXTRA_SESSION_ID);
+        String applicationId = intent.getStringExtra(CastMediaControlIntent.EXTRA_CAST_APPLICATION_ID);
+        if (applicationId == null || applicationId.isEmpty()) applicationId = DEFAULT_MEDIA_RECEIVER_APP_ID;
+        boolean stopWhenEnds = intent.getBooleanExtra(
+                CastMediaControlIntent.EXTRA_CAST_STOP_APPLICATION_WHEN_SESSION_ENDS, false);
+        synchronized (this) {
+            if (sessionId != null && remotePlaybackSessionId != null && !sessionId.equals(remotePlaybackSessionId)) {
+                callback.onError("Unknown remote playback session", null);
+                return true;
+            }
+            if (sessionId == null) {
+                sessionId = remotePlaybackSessionId != null ? remotePlaybackSessionId : UUID.randomUUID().toString();
+            }
+            remotePlaybackSessionId = sessionId;
+            remotePlaybackApplicationId = applicationId;
+            stopApplicationWhenSessionEnds = stopWhenEnds;
+            if (sessionConnected && pendingSessionStart == null) {
+                callback.onResult(sessionStatusBundle(sessionId, MediaSessionStatus.SESSION_STATE_ACTIVE));
+                return true;
+            }
+        }
+        CastDeviceSession target = usableSession();
+        if (target == null) {
+            callback.onError("No connection to " + routeId, temporaryDisconnectExtras());
+            return true;
+        }
+        PendingSessionStart previous;
+        synchronized (this) {
+            previous = pendingSessionStart;
+            pendingSessionStart = new PendingSessionStart(sessionId, applicationId, callback);
+        }
+        if (previous != null) previous.callback.onError("Replaced by a newer start-session request", null);
+        boolean relaunch = intent.getBooleanExtra(CastMediaControlIntent.EXTRA_CAST_RELAUNCH_APPLICATION, false);
+        target.launchApplication(applicationId, relaunch, intent.getStringExtra(CastMediaControlIntent.EXTRA_CAST_LANGUAGE_CODE));
+        return true;
+    }
+
+    private boolean onGetSessionStatusRequest(Intent intent, MediaRouter.ControlRequestCallback callback) {
+        String sessionId = intent.getStringExtra(MediaControlIntent.EXTRA_SESSION_ID);
+        synchronized (this) {
+            if (sessionId == null || !sessionId.equals(remotePlaybackSessionId)) {
+                callback.onError("Unknown remote playback session", null);
+                return true;
+            }
+            callback.onResult(sessionStatusBundle(sessionId, MediaSessionStatus.SESSION_STATE_ACTIVE));
+        }
+        return true;
+    }
+
+    private boolean onEndSessionRequest(Intent intent, MediaRouter.ControlRequestCallback callback) {
+        String sessionId = intent.getStringExtra(MediaControlIntent.EXTRA_SESSION_ID);
+        boolean stopApp;
+        String endedId;
+        long receiverMediaSessionId;
+        synchronized (this) {
+            if (sessionId == null || !sessionId.equals(remotePlaybackSessionId)) {
+                callback.onError("Unknown remote playback session", null);
+                return true;
+            }
+            endedId = remotePlaybackSessionId;
+            stopApp = stopApplicationWhenSessionEnds;
+            receiverMediaSessionId = mediaSessionId;
+            remotePlaybackSessionId = null;
+            remotePlaybackItemId = null;
+            mediaSessionId = 0;
+            mediaPlaybackState = MediaItemStatus.PLAYBACK_STATE_FINISHED;
+            mediaPositionMs = 0;
+            mediaDurationMs = -1;
+        }
+        CastDeviceSession target = usableSession();
+        if (receiverMediaSessionId > 0 && target != null) {
+            long requestId;
+            synchronized (this) {
+                requestId = nextMediaRequestId++;
+            }
+            try {
+                sendToMediaChannel(target, buildMediaCommand("STOP", requestId, receiverMediaSessionId, 0), requestId);
+            } catch (JSONException e) {
+                Log.d(TAG, "Failed to stop media while ending session", e);
+            }
+        }
+        if (stopApp && target != null) {
+            target.stopApplication(null);
+        }
+        callback.onResult(sessionStatusBundle(endedId, MediaSessionStatus.SESSION_STATE_ENDED));
+        return true;
+    }
+
+    private Bundle sessionStatusBundle(String sessionId, int sessionState) {
+        Bundle result = new Bundle();
+        result.putString(MediaControlIntent.EXTRA_SESSION_ID, sessionId);
+        result.putBundle(MediaControlIntent.EXTRA_SESSION_STATUS, new MediaSessionStatus.Builder(sessionState)
+                .setQueuePaused(mediaPlaybackState == MediaItemStatus.PLAYBACK_STATE_PAUSED)
+                .build().asBundle());
+        return result;
+    }
+
+    static Bundle temporaryDisconnectExtras() {
+        Bundle extras = new Bundle();
+        extras.putInt(CastMediaControlIntent.EXTRA_ERROR_CODE, CastMediaControlIntent.ERROR_CODE_TEMPORARILY_DISCONNECTED);
+        return extras;
     }
 
     private boolean sendMediaCommand(String type, Intent intent, MediaRouter.ControlRequestCallback callback) {
@@ -306,7 +541,52 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
     }
 
     static String buildLoadCommand(PendingPlay play, long requestId) throws JSONException {
+        if (play.enqueue) {
+            return buildQueueLoadCommand(play.contentId, play.contentType, play.positionMs, requestId);
+        }
         return buildLoadCommand(play.contentId, play.contentType, play.positionMs, requestId);
+    }
+
+    static JSONObject buildQueueItem(String contentId, String contentType, boolean autoplay) throws JSONException {
+        JSONObject media = new JSONObject();
+        media.put("contentId", contentId);
+        media.put("streamType", "BUFFERED");
+        if (contentType != null) media.put("contentType", contentType);
+        JSONObject item = new JSONObject();
+        item.put("media", media);
+        item.put("autoplay", autoplay);
+        return item;
+    }
+
+    static String buildQueueLoadCommand(String contentId, String contentType, long positionMs, long requestId)
+            throws JSONException {
+        JSONObject command = new JSONObject();
+        command.put("type", "QUEUE_LOAD");
+        command.put("requestId", requestId);
+        command.put("items", new JSONArray().put(buildQueueItem(contentId, contentType, true)));
+        command.put("startIndex", 0);
+        command.put("repeatMode", "REPEAT_OFF");
+        command.put("currentTime", positionMs / 1000.0);
+        return command.toString();
+    }
+
+    static String buildQueueInsertCommand(String contentId, String contentType, long mediaSessionId, long requestId)
+            throws JSONException {
+        JSONObject command = new JSONObject();
+        command.put("type", "QUEUE_INSERT");
+        command.put("requestId", requestId);
+        command.put("mediaSessionId", mediaSessionId);
+        command.put("items", new JSONArray().put(buildQueueItem(contentId, contentType, false)));
+        return command.toString();
+    }
+
+    static String buildQueueRemoveCommand(long mediaSessionId, int itemId, long requestId) throws JSONException {
+        JSONObject command = new JSONObject();
+        command.put("type", "QUEUE_REMOVE");
+        command.put("requestId", requestId);
+        command.put("mediaSessionId", mediaSessionId);
+        command.put("itemIds", new JSONArray().put(itemId));
+        return command.toString();
     }
 
     /** Snapshot of one media status entry, parsed separately for testability. */
@@ -315,12 +595,19 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
         final int playbackState;
         final long positionMs;
         final long durationMs;
+        final Integer queueItemId;
 
         MediaStatusSnapshot(long mediaSessionId, int playbackState, long positionMs, long durationMs) {
+            this(mediaSessionId, playbackState, positionMs, durationMs, null);
+        }
+
+        MediaStatusSnapshot(long mediaSessionId, int playbackState, long positionMs, long durationMs,
+                Integer queueItemId) {
             this.mediaSessionId = mediaSessionId;
             this.playbackState = playbackState;
             this.positionMs = positionMs;
             this.durationMs = durationMs;
+            this.queueItemId = queueItemId;
         }
     }
 
@@ -334,7 +621,15 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
             double duration = media.optDouble("duration", -1);
             if (duration >= 0 && !Double.isInfinite(duration)) durationMs = (long) (duration * 1000);
         }
-        return new MediaStatusSnapshot(sessionId, playbackState, positionMs, durationMs);
+        Integer queueItemId = null;
+        if (status.has("currentItemId")) {
+            queueItemId = status.optInt("currentItemId");
+        } else {
+            JSONArray items = status.optJSONArray("items");
+            JSONObject first = items != null ? items.optJSONObject(0) : null;
+            if (first != null && first.has("itemId")) queueItemId = first.optInt("itemId");
+        }
+        return new MediaStatusSnapshot(sessionId, playbackState, positionMs, durationMs, queueItemId);
     }
 
     static int toItemPlaybackState(String playerState) {
@@ -383,18 +678,55 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
         }
     }
 
+    private void completePendingSessionStart(ReceiverApplication application) {
+        PendingSessionStart start;
+        synchronized (this) {
+            start = pendingSessionStart;
+            if (start == null) return;
+            if (!start.applicationId.equals(application.getAppId())
+                    && !DEFAULT_MEDIA_RECEIVER_APP_ID.equals(application.getAppId())
+                    && !application.getNamespaces().contains(MEDIA_NAMESPACE)) {
+                return;
+            }
+            pendingSessionStart = null;
+            remotePlaybackSessionId = start.sessionId;
+        }
+        start.callback.onResult(sessionStatusBundle(start.sessionId, MediaSessionStatus.SESSION_STATE_ACTIVE));
+    }
+
+    private void reconnectSelectedRoute() {
+        CastDeviceSession started = null;
+        synchronized (this) {
+            if (!selected || released || session != null) return;
+            started = startSessionLocked();
+        }
+        if (started != null) started.connect();
+    }
+
     private void failPendingPlay(String error) {
+        failPendingPlay(error, null);
+    }
+
+    private void failPendingPlay(String error, Bundle extras) {
         PendingPlay play;
+        PendingSessionStart start;
         synchronized (this) {
             play = pendingPlay;
             pendingPlay = null;
+            start = pendingSessionStart;
+            pendingSessionStart = null;
         }
-        if (play != null) play.callback.onError(error, null);
+        if (play != null) play.callback.onError(error, extras);
+        if (start != null) start.callback.onError(error, extras);
     }
 
     private void failPendingControl(long requestId, String error) {
+        failPendingControl(requestId, error, null);
+    }
+
+    private void failPendingControl(long requestId, String error, Bundle extras) {
         PendingControl pending = takePendingControl(requestId);
-        if (pending != null) pending.callback.onError(error, null);
+        if (pending != null) pending.callback.onError(error, extras);
     }
 
     private void onMediaStatusMessage(JSONObject json) {
@@ -460,10 +792,20 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
                     remotePlaybackItemId = itemId;
                 }
             }
+            if (snapshot.queueItemId != null && pending.itemId == null) {
+                itemId = String.valueOf(snapshot.queueItemId);
+                synchronized (this) {
+                    remotePlaybackItemId = itemId;
+                }
+            }
             result.putString(MediaControlIntent.EXTRA_ITEM_ID, itemId);
             result.putBundle(MediaControlIntent.EXTRA_ITEM_STATUS, new MediaItemStatus.Builder(snapshot.playbackState)
                     .setContentPosition(snapshot.positionMs).setContentDuration(mediaDurationMs).build().asBundle());
         }
+        result.putBundle(MediaControlIntent.EXTRA_SESSION_STATUS, new MediaSessionStatus.Builder(
+                MediaSessionStatus.SESSION_STATE_ACTIVE)
+                .setQueuePaused(snapshot != null && snapshot.playbackState == MediaItemStatus.PLAYBACK_STATE_PAUSED)
+                .build().asBundle());
         pending.callback.onResult(result);
     }
 
@@ -516,6 +858,7 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
             oldSession = session;
             session = null;
             sessionConnected = false;
+            reconnectAttempts = 0;
             mediaSessionId = 0;
             remotePlaybackSessionId = null;
             remotePlaybackItemId = null;
@@ -586,25 +929,35 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
         }
 
         private void onSessionEnded(int statusCode) {
+            boolean staySelected;
             synchronized (CastMediaRouteController.this) {
                 if (CastMediaRouteController.this.session != session) return;
                 CastMediaRouteController.this.session = null;
                 sessionConnected = false;
-                mediaSessionId = 0;
-                remotePlaybackSessionId = null;
-                remotePlaybackItemId = null;
-                provider.onRouteStateChanged(CastMediaRouteController.this, routeId, MediaRouter.RouteInfo.CONNECTION_STATE_DISCONNECTED, -1);
+                staySelected = selected && !released && reconnectAttempts < MAX_RECONNECT_ATTEMPTS;
+                if (!staySelected) {
+                    mediaSessionId = 0;
+                    remotePlaybackSessionId = null;
+                    remotePlaybackItemId = null;
+                    reconnectAttempts = 0;
+                    provider.onRouteStateChanged(CastMediaRouteController.this, routeId, MediaRouter.RouteInfo.CONNECTION_STATE_DISCONNECTED, -1);
+                } else {
+                    reconnectAttempts++;
+                    provider.onRouteStateChanged(CastMediaRouteController.this, routeId, MediaRouter.RouteInfo.CONNECTION_STATE_CONNECTING, -1);
+                }
             }
             Log.d(TAG, "Connection to " + routeId + " ended: " + statusCode);
-            failPendingPlay("Connection to " + routeId + " ended: " + statusCode);
+            Bundle extras = temporaryDisconnectExtras();
+            failPendingPlay("Connection to " + routeId + " ended: " + statusCode, extras);
             List<Long> pending;
             synchronized (CastMediaRouteController.this) {
                 pending = new ArrayList<Long>(pendingControls.keySet());
             }
             for (long requestId : pending) {
-                failPendingControl(requestId, "Connection to " + routeId + " ended: " + statusCode);
+                failPendingControl(requestId, "Connection to " + routeId + " ended: " + statusCode, extras);
             }
             session.disconnect();
+            if (staySelected) reconnectSelectedRoute();
         }
 
         @Override
@@ -612,6 +965,7 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
             synchronized (CastMediaRouteController.this) {
                 if (CastMediaRouteController.this.session != session) return;
                 sessionConnected = true;
+                reconnectAttempts = 0;
                 provider.onRouteStateChanged(CastMediaRouteController.this, routeId, MediaRouter.RouteInfo.CONNECTION_STATE_CONNECTED, -1);
             }
         }
@@ -641,7 +995,9 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
 
         @Override
         public void onApplicationConnected(@NonNull ReceiverApplication application, boolean wasLaunched) {
-            if (isCurrent()) flushPendingPlay(application);
+            if (!isCurrent()) return;
+            completePendingSessionStart(application);
+            flushPendingPlay(application);
         }
 
         @Override
