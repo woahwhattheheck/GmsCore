@@ -37,15 +37,13 @@ class DroidGuardServiceImplGuardTest {
     }
 
     private fun chimeraWith(factory: NetworkHandleProxyFactory): DroidGuardChimeraService {
-        val service: DroidGuardChimeraService =
-            Robolectric.buildService(DroidGuardChimeraService::class.java).create().get()
-        // `b` is the embedded factory used by getHandle(). It is not a public setter
-        // (the previous assignment did not compile), so inject the test double by field.
-        val field = DroidGuardChimeraService::class.java.declaredFields.first { candidate ->
-            candidate.type.isAssignableFrom(factory.javaClass) || candidate.name == "b"
-        }
-        field.isAccessible = true
-        field.set(service, factory)
+        // Explicit type arg: buildService's T is not inferred from Class<DroidGuardChimeraService>
+        // on this Robolectric version. Field b is hidden from Kotlin by the Java method b(String),
+        // and onCreate() installs a real factory, so overwrite the field after create().
+        val service = Robolectric.buildService<DroidGuardChimeraService>(
+            DroidGuardChimeraService::class.java
+        ).create().get()
+        DroidGuardChimeraService::class.java.getField("b").set(service, factory)
         return service
     }
 
@@ -112,7 +110,7 @@ class DroidGuardServiceImplGuardTest {
     @Test
     fun getClientTimeoutMillis_is60Seconds() {
         val service = chimeraWith(factory { HandleProxy(RecordingVm(SNAPSHOT, AtomicBoolean()), VM_KEY) })
-        assertEquals(60000, DroidGuardServiceImpl(service, "org.microg.test").getClientTimeoutMillis())
+        assertEquals(60000, DroidGuardServiceImpl(service, "org.microg.test").clientTimeoutMillis)
     }
 
     private class RecordingVm(
