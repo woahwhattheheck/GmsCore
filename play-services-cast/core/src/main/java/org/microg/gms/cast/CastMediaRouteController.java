@@ -326,7 +326,7 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
 
     static MediaStatusSnapshot parseMediaStatus(JSONObject status) {
         long sessionId = status.optLong("mediaSessionId", 0);
-        int playbackState = toItemPlaybackState(status.optString("playerState"));
+        int playbackState = toItemPlaybackState(status.optString("playerState"), status.optString("idleReason"));
         long positionMs = (long) (status.optDouble("currentTime", 0) * 1000);
         long durationMs = -1;
         JSONObject media = status.optJSONObject("media");
@@ -338,6 +338,18 @@ public class CastMediaRouteController extends MediaRouteProvider.RouteController
     }
 
     static int toItemPlaybackState(String playerState) {
+        return toItemPlaybackState(playerState, null);
+    }
+
+    static int toItemPlaybackState(String playerState, String idleReason) {
+        if ("IDLE".equals(playerState)) {
+            if ("ERROR".equals(idleReason)) return MediaItemStatus.PLAYBACK_STATE_ERROR;
+            // Cast spells CANCELLED with two Ls; AndroidX uses CANCELED.
+            // A new LOAD interrupts and cancels the previous item, not finishes it.
+            if ("CANCELLED".equals(idleReason) || "INTERRUPTED".equals(idleReason)) {
+                return MediaItemStatus.PLAYBACK_STATE_CANCELED;
+            }
+        }
         if ("PLAYING".equals(playerState)) return MediaItemStatus.PLAYBACK_STATE_PLAYING;
         if ("PAUSED".equals(playerState)) return MediaItemStatus.PLAYBACK_STATE_PAUSED;
         if ("BUFFERING".equals(playerState)) return MediaItemStatus.PLAYBACK_STATE_BUFFERING;
