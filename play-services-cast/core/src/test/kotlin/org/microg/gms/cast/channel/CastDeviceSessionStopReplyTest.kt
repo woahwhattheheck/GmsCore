@@ -69,6 +69,20 @@ class CastDeviceSessionStopReplyTest {
         }
     }
 
+    @Test
+    fun overlappingStopsKeepPerRequestSessionAttribution() {
+        Fixture().use {
+            it.setApplication("first-session")
+            val requests = it.queueStops("first-session", "second-session")
+            assertEquals(listOf("first-session", "second-session"), requests.map { request -> request.getString("sessionId") })
+
+            it.deliverReply(requests[0], statusReply("second-session"))
+
+            assertEquals(CastDeviceSession.STATUS_SUCCESS, it.applicationDisconnected.get(2, TimeUnit.SECONDS))
+            assertEquals(CastDeviceSession.STATUS_SUCCESS, it.result.get(2, TimeUnit.SECONDS))
+        }
+    }
+
     private fun statusReply(vararg sessionIds: String): JSONObject {
         val applications = JSONArray()
         for (id in sessionIds) {
@@ -80,6 +94,7 @@ class CastDeviceSessionStopReplyTest {
 
     private class Fixture(connected: Boolean = true) : AutoCloseable {
         val result = CompletableFuture<Int>()
+        val applicationDisconnected = CompletableFuture<Int>()
         private val callbacks = object : CastDeviceSession.Callbacks {
             override fun onConnected() = Unit
             override fun onConnectionFailed(statusCode: Int) = Unit
@@ -88,7 +103,7 @@ class CastDeviceSessionStopReplyTest {
             override fun onApplicationConnected(application: ReceiverApplication, wasLaunched: Boolean) = Unit
             override fun onApplicationConnectionFailed(statusCode: Int) = Unit
             override fun onApplicationStatusChanged(statusText: String?) = Unit
-            override fun onApplicationDisconnected(statusCode: Int) = Unit
+            override fun onApplicationDisconnected(statusCode: Int) { applicationDisconnected.complete(statusCode) }
             override fun onStopApplicationResult(statusCode: Int) { result.complete(statusCode) }
             override fun onLeaveApplicationResult(statusCode: Int) = Unit
             override fun onTextMessage(namespace: String, message: String) = Unit
@@ -107,6 +122,49 @@ class CastDeviceSessionStopReplyTest {
                 .set(channel, DataOutputStream(sent))
             if (connected) CastDeviceSession::class.java.getDeclaredField("channel").apply { isAccessible = true }
                 .set(session, channel)
+        }
+
+        fun setApplication(sessionId: String) {
+            CastDeviceSession::class.java.getDeclaredField("application").apply { isAccessible = true }.set(
+                session,
+                ReceiverApplication(
+                    appId = "test-app",
+                    displayName = null,
+                    sessionId = sessionId,
+                    transportId = "transport-$sessionId",
+                    statusText = null,
+                    iconUrl = null,
+                    namespaces = emptyList(),
+                ),
+            )
+        }
+
+        fun queueStops(vararg sessionIds: String): List<JSONObject> {
+            for (sessionId in sessionIds) session.stopApplication(sessionId)
+            executor.submit {}.get(2, TimeUnit.SECONDS)
+
+            val input = DataInputStream(ByteArrayInputStream(sent.toByteArray()))
+            val requests = ArrayList<JSONObject>()
+            while (input.available() > 0) {
+                val requestBytes = ByteArray(input.readInt()).also { input.readFully(it) }
+                requests += JSONObject(CastMessage.ADAPTER.decode(requestBytes).payload_utf8!!)
+            }
+            return requests
+        }
+
+        fun deliverReply(request: JSONObject, reply: JSONObject) {
+            reply.put("requestId", request.getLong("requestId"))
+            session.onMessage(
+                CastMessage(
+                    CastMessage.ProtocolVersion.CASTV2_1_0,
+                    RECEIVER_ID,
+                    channel.senderId,
+                    NAMESPACE_RECEIVER,
+                    CastMessage.PayloadType.STRING,
+                    payload_utf8 = reply.toString(),
+                ),
+            )
+            executor.submit {}.get(2, TimeUnit.SECONDS)
         }
 
         fun stopWithReply(reply: JSONObject): Int {
