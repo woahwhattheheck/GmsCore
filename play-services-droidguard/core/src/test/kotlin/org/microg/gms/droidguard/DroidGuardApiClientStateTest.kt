@@ -15,6 +15,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,7 +39,8 @@ import java.util.concurrent.atomic.AtomicReference
  *    openHandles into the request bundle — getServiceInterface() throws before
  *    request.setOpenHandles is reached — and the client counter stays 0
  *  - interfaceFromBinder delegates to IDroidGuardService.Stub.asInterface:
- *    null binder and a descriptor-less binder both yield null
+ *    null yields null; a descriptor-less binder is wrapped in a remote proxy
+ *    whose asBinder() identity is preserved
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -134,9 +136,15 @@ class DroidGuardApiClientStateTest {
     }
 
     @Test
-    fun interfaceFromBinder_nullAndDescriptorlessBinder_returnNull() {
-        val probe = Probe(context)
-        assertNull(probe.fromBinder(null))
-        assertNull(probe.fromBinder(Binder()))
+    fun interfaceFromBinder_null_returnsNull() {
+        assertNull(Probe(context).fromBinder(null))
+    }
+
+    @Test
+    fun interfaceFromBinder_descriptorlessBinder_wrapsInRemoteProxy() {
+        val binder = Binder()
+        val iface = Probe(context).fromBinder(binder)
+        assertNotNull(iface)
+        assertSame(binder, iface.asBinder())
     }
 }
