@@ -15,8 +15,6 @@ import android.os.Process
 import androidx.core.content.ContextCompat
 import androidx.test.core.app.ApplicationProvider
 import java.io.FileDescriptor
-import java.io.PrintWriter
-import java.io.StringWriter
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import org.junit.After
@@ -54,10 +52,8 @@ class ServiceCallProxyDumpGateTest {
         var dumpCalled = false
         var pingCount = 0
 
-        override fun dump(fd: FileDescriptor, fout: PrintWriter, args: Array<out String>?) {
+        override fun dump(fd: FileDescriptor, args: Array<out String>?) {
             dumpCalled = true
-            fout.print(REAL_DUMP_MARKER)
-            fout.flush()
         }
 
         override fun pingBinder(): Boolean {
@@ -99,13 +95,11 @@ class ServiceCallProxyDumpGateTest {
         val installed = cache[FAKE_SERVICE]
         assertTrue("expected a dynamic proxy in sCache", Proxy.isProxyClass(installed!!.javaClass))
 
-        val out = StringWriter()
         IBinder::class.java
-            .getMethod("dump", FileDescriptor::class.java, PrintWriter::class.java, Array<String>::class.java)
-            .invoke(installed, FileDescriptor(), PrintWriter(out), arrayOf<String>())
+            .getMethod("dump", FileDescriptor::class.java, Array<String>::class.java)
+            .invoke(installed, FileDescriptor(), arrayOf<String>())
 
         assertFalse("dump() must not reach the original binder", fake.dumpCalled)
-        assertEquals("", out.toString())
     }
 
     @Test
@@ -123,10 +117,8 @@ class ServiceCallProxyDumpGateTest {
         ServiceCallProxy.setBlockDumpForService(FAKE_SERVICE, false)
 
         assertSame(fake, cache[FAKE_SERVICE])
-        val out = StringWriter()
-        cache[FAKE_SERVICE]!!.dump(FileDescriptor(), PrintWriter(out), arrayOf<String>())
-        assertTrue(fake.dumpCalled)
-        assertEquals(REAL_DUMP_MARKER, out.toString())
+        cache[FAKE_SERVICE]!!.dump(FileDescriptor(), arrayOf<String>())
+        assertTrue("restored binder must receive dump() again", fake.dumpCalled)
     }
 
     @Test
@@ -199,6 +191,5 @@ class ServiceCallProxyDumpGateTest {
     private companion object {
         const val FAKE_SERVICE = "dg_dump_gate_test"
         const val SEEDED_SERVICE = "audio"
-        const val REAL_DUMP_MARKER = "REAL_DUMP_REACHED"
     }
 }
