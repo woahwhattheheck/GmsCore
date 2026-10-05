@@ -36,6 +36,11 @@ import java.util.concurrent.atomic.AtomicInteger
  *  - close() swallows remote close failures and still marks the handle closed
  *  - openHandle() on an unconnected client returns an error handle rather
  *    than throwing (catch-all -> "Initialization failed: ...")
+ *
+ * Lives in the core test sourceSet: the client impl classes are public and
+ * reachable through core's `api project(':play-services-droidguard')`, and
+ * this test needs real Handler/Looper/Binder/Base64 shadows — the non-core
+ * module's JUnit-only classpath cannot run it.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -76,7 +81,7 @@ class DroidGuardClientHandleSemanticsTest {
     @Test
     fun errorCtor_shortCircuitsToErrorBytes_urlSafeNoPad() {
         val impl = DroidGuardHandleImpl(apiClient(), DroidGuardResultsRequest(), "Initialization failed: nope")
-        val encoded = impl.snapshot(emptyMap())
+        val encoded = impl.snapshot(emptyMap<String, String>())
         // URL_SAFE + NO_WRAP + NO_PADDING alphabet on the wire
         assertTrue(encoded.matches(Regex("[A-Za-z0-9_-]+")))
         assertFalse(encoded.contains('='))
@@ -88,7 +93,7 @@ class DroidGuardClientHandleSemanticsTest {
     fun liveHandle_returnsPayload_isOpenedTrue() {
         val fake = FakeHandle()
         val impl = DroidGuardHandleImpl(apiClient(), DroidGuardResultsRequest(), fake)
-        assertEquals("AQID", impl.snapshot(emptyMap()))
+        assertEquals("AQID", impl.snapshot(emptyMap<String, String>()))
         assertEquals(1, fake.snapshotCalls.get())
         assertTrue(impl.isOpened)
     }
@@ -97,9 +102,9 @@ class DroidGuardClientHandleSemanticsTest {
     fun nullResult_setsStickyError() {
         val fake = FakeHandle().apply { snapshotResult = null }
         val impl = DroidGuardHandleImpl(apiClient(), DroidGuardResultsRequest(), fake)
-        assertEquals("ERROR : Received null", decode(impl.snapshot(emptyMap())))
+        assertEquals("ERROR : Received null", decode(impl.snapshot(emptyMap<String, String>())))
         // Sticky: the remote is not consulted again on retry.
-        assertEquals("ERROR : Received null", decode(impl.snapshot(emptyMap())))
+        assertEquals("ERROR : Received null", decode(impl.snapshot(emptyMap<String, String>())))
         assertEquals(1, fake.snapshotCalls.get())
         assertFalse(impl.isOpened)
     }
@@ -108,7 +113,7 @@ class DroidGuardClientHandleSemanticsTest {
     fun throwingRemote_setsStickyError() {
         val fake = FakeHandle().apply { snapshotThrow = RuntimeException("inner") }
         val impl = DroidGuardHandleImpl(apiClient(), DroidGuardResultsRequest(), fake)
-        val decoded = decode(impl.snapshot(emptyMap()))
+        val decoded = decode(impl.snapshot(emptyMap<String, String>()))
         assertTrue(decoded.startsWith("ERROR : Snapshot failed:"))
         assertTrue(decoded.contains("remote-boom"))
         assertEquals(1, fake.snapshotCalls.get())
@@ -120,13 +125,17 @@ class DroidGuardClientHandleSemanticsTest {
         val fake = FakeHandle().apply { snapshotSleepMs = 2000 }
         val request = DroidGuardResultsRequest().setTimeoutMillis(60)
         val impl = DroidGuardHandleImpl(apiClient(), request, fake)
-        val decoded = decode(impl.snapshot(emptyMap()))
+        val decoded = decode(impl.snapshot(emptyMap<String, String>()))
         assertEquals("ERROR : Snapshot timeout: 60 ms", decoded)
-        // Timeout does NOT set the sticky error field: handle still reports open
-        // and a subsequent fast snapshot succeeds.
+        // Timeout does NOT set the sticky error field: handle still reports open.
         fake.snapshotSleepMs = 0
         assertTrue(impl.isOpened)
-        assertEquals("AQID", impl.snapshot(emptyMap()))
+        // The remote runnable is still sleeping on the handler thread; its late
+        // offer also lands in the (capacity-1) result queue. Wait for it to
+        // finish before retrying so the retry is not racing the sleeper.
+        Thread.sleep(2500)
+        assertEquals("AQID", impl.snapshot(emptyMap<String, String>()))
+        assertTrue(impl.isOpened)
     }
 
     @Test
@@ -145,7 +154,7 @@ class DroidGuardClientHandleSemanticsTest {
         val request = DroidGuardResultsRequest()
         val impl = client.openHandle("testFlow", request)
         assertNotNull(impl)
-        val decoded = decode(impl.snapshot(emptyMap()))
+        val decoded = decode(impl.snapshot(emptyMap<String, String>()))
         assertTrue(decoded.startsWith("ERROR : Initialization failed:"))
         assertTrue(decoded.contains("interface only available once connected"))
         // The catch-all path returns a closed handle; it never reaches
