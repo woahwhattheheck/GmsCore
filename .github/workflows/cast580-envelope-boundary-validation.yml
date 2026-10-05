@@ -1,0 +1,89 @@
+name: Cast580 envelope boundary validation
+
+on:
+  push:
+    branches:
+      - validation/cast580-envelope-dc662064-branchlight
+
+permissions:
+  contents: read
+
+jobs:
+  envelope-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dc662064705a32a3108b73b28ba2c1bb9aa31b39
+          fetch-depth: 1
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Record runner identity
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p validation-output
+          {
+            echo "hostname=$(hostname)"
+            echo "kernel=$(uname -a)"
+            echo "head=$(git rev-parse HEAD)"
+            java -version 2>&1
+            ./gradlew --version
+          } | tee validation-output/runner.txt
+
+      - name: Run focused envelope boundary test
+        shell: bash
+        run: |
+          set +e
+          ./gradlew :play-services-cast-core:testDebugUnitTest --tests org.microg.gms.cast.channel.CastChannelEnvelopeBoundaryTest --no-daemon --stacktrace --max-workers=2 -Dorg.gradle.jvmargs="-Xmx2g" > validation-output/gradle.log 2>&1
+          status=$?
+          echo "$status" > validation-output/exit-code.txt
+          cat validation-output/gradle.log
+          exit 0
+
+      - name: Summarize JUnit XML
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob, json, os, xml.etree.ElementTree as ET
+          paths = glob.glob('play-services-cast/core/build/test-results/testDebugUnitTest/**/*.xml', recursive=True)
+          totals = {'files': len(paths), 'tests': 0, 'failures': 0, 'errors': 0, 'skipped': 0}
+          cases = []
+          for path in paths:
+              root = ET.parse(path).getroot()
+              totals['tests'] += int(root.attrib.get('tests', 0))
+              totals['failures'] += int(root.attrib.get('failures', 0))
+              totals['errors'] += int(root.attrib.get('errors', 0))
+              totals['skipped'] += int(root.attrib.get('skipped', 0))
+              for case in root.findall('.//testcase'):
+                  cases.append({'classname': case.attrib.get('classname'), 'name': case.attrib.get('name')})
+          os.makedirs('validation-output', exist_ok=True)
+          with open('validation-output/junit-summary.json', 'w', encoding='utf-8') as f:
+              json.dump({'totals': totals, 'cases': cases}, f, indent=2)
+          print(json.dumps({'totals': totals, 'cases': cases}, indent=2))
+          PY
+
+      - name: Upload focused evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cast580-envelope-boundary-dc662064
+          path: |
+            validation-output/
+            play-services-cast/core/build/test-results/testDebugUnitTest/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Preserve focused test exit status
+        if: always()
+        shell: bash
+        run: |
+          status=$(cat validation-output/exit-code.txt 2>/dev/null || echo 99)
+          exit "$status"
