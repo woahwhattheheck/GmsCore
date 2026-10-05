@@ -62,7 +62,11 @@ class RemoteDroidGuardHandleClient(
                 } catch (e: Exception) {
                     completion.trySetException(e)
                 } finally {
-                    handle?.close()
+                    // The task is already complete here; cleanup failure must not escape the worker.
+                    try {
+                        handle?.close()
+                    } catch (_: Exception) {
+                    }
                 }
             }
         } catch (e: RejectedExecutionException) {
