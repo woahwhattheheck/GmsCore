@@ -9,6 +9,8 @@ import android.content.Context
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.google.android.gms.common.api.Api
+import android.os.Bundle
+import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.api.internal.ConnectionCallbacks
 import com.google.android.gms.common.api.internal.OnConnectionFailedListener
 import com.google.android.gms.common.internal.ClientSettings
@@ -55,6 +57,15 @@ class DroidGuardClientImplOptionsTest {
         return f.get(client) as String?
     }
 
+    private object NoopCallbacks : ConnectionCallbacks {
+        override fun onConnected(bundle: Bundle?) {}
+        override fun onConnectionSuspended(i: Int) {}
+    }
+
+    private object NoopFailedListener : OnConnectionFailedListener {
+        override fun onConnectionFailed(result: ConnectionResult) {}
+    }
+
     @Test
     fun getClient_returnsDistinctDroidGuardClientImplInstances() {
         val a = DroidGuard.getClient(context)
@@ -75,7 +86,7 @@ class DroidGuardClientImplOptionsTest {
         val client = api().clientBuilder.buildClient(
             context, Looper.getMainLooper(), ClientSettings.createDefault(context),
             DroidGuardClientImpl.Options("com.vendor.caller"),
-            null as ConnectionCallbacks?, null as OnConnectionFailedListener?
+            NoopCallbacks, NoopFailedListener
         )
         assertTrue(client is DroidGuardApiClient)
         assertEquals("com.vendor.caller", packageNameOf(client))
@@ -86,7 +97,7 @@ class DroidGuardClientImplOptionsTest {
         val client = api().clientBuilder.buildClient(
             context, Looper.getMainLooper(), ClientSettings.createDefault(context),
             DroidGuardClientImpl.Options(null),
-            null as ConnectionCallbacks?, null as OnConnectionFailedListener?
+            NoopCallbacks, NoopFailedListener
         )
         assertEquals(context.packageName, packageNameOf(client))
     }
