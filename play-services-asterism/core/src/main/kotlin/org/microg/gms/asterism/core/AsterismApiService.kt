@@ -8,6 +8,7 @@ import com.google.android.gms.asterism.SetAsterismConsentRequest
 import com.google.android.gms.asterism.internal.IAsterismApiService
 import com.google.android.gms.asterism.internal.IAsterismCallbacks
 import com.google.android.gms.common.Feature
+import com.google.android.gms.common.api.Status
 import com.google.android.gms.common.internal.ConnectionInfo
 import com.google.android.gms.common.internal.GetServiceRequest
 import com.google.android.gms.common.internal.IGmsCallbacks
@@ -68,7 +69,10 @@ class AsterismApiServiceImpl(
     ) {
         Log.i(TAG, "getAsterismConsent(): $request")
         if (cb == null || request == null) return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            cb.onConsentFetched(Status.INTERNAL_ERROR, null)
+            return
+        }
         requestDispatcher.dispatch(cb, "getAsterismConsent") { callbacks ->
             handleGetAsterismConsent(context, callbacks, request)
         }
@@ -77,7 +81,10 @@ class AsterismApiServiceImpl(
     override fun setAsterismConsent(cb: IAsterismCallbacks?, request: SetAsterismConsentRequest?) {
         Log.i(TAG, "setAsterismConsent(): $request")
         if (cb == null || request == null) return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            cb.onConsentRegistered(Status.INTERNAL_ERROR, null)
+            return
+        }
         requestDispatcher.dispatch(cb, "setAsterismConsent") { callbacks ->
             handleSetAsterismConsent(context, callbacks, request)
         }
@@ -86,7 +93,10 @@ class AsterismApiServiceImpl(
     override fun getIsPnvrConstellationDevice(cb: IAsterismCallbacks?) {
         Log.i(TAG, "getIsPnvrConstellationDevice()")
         if (cb == null) return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            cb.onIsPnvrConstellationDevice(Status.INTERNAL_ERROR, false)
+            return
+        }
         requestDispatcher.dispatch(cb, "getIsPnvrConstellationDevice") { callbacks ->
             handleGetIsPnvrConstellationDevice(context, callbacks)
         }
