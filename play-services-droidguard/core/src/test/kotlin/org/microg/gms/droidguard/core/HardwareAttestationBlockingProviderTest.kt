@@ -140,11 +140,10 @@ class HardwareAttestationBlockingProviderTest {
             assertFalse(currentlyEnabled())
             assertSame(fake, Security.getProvider("AndroidKeyStore"))
             // The fake still serves AndroidKeyStore key stores end to end.
-            assertSame(
-                FakeKeyStoreSpi.FakeCertificate,
-                KeyStore.getInstance("AndroidKeyStore").getCertificate("alias1")
-            )
-            assertNotNull(KeyStore.getInstance("AndroidKeyStore").getCertificateChain("alias1"))
+            val restored = KeyStore.getInstance("AndroidKeyStore")
+            restored.load(null, null)
+            assertSame(FakeKeyStoreSpi.FakeCertificate, restored.getCertificate("alias1"))
+            assertNotNull(restored.getCertificateChain("alias1"))
             // Disable while never-enabled is a no-op too.
             HardwareAttestationBlockingProvider.ensureEnabled(false)
             assertFalse(currentlyEnabled())
