@@ -46,6 +46,9 @@ class HardwareAttestationBlockingProviderTest {
         }
     }
 
+    private class NamedProvider(name: String, version: Double, info: String) :
+        Provider(name, version, info)
+
     private fun currentlyEnabled(): Boolean {
         val outer = runCatching {
             HardwareAttestationBlockingProvider::class.java
@@ -77,7 +80,7 @@ class HardwareAttestationBlockingProviderTest {
     @Test
     fun ctor_copiesIdentity_registersService_setsRealSpi() {
         val spi = FakeKeyStoreSpi()
-        val real = Provider("RealKS", 2.5, "real info")
+        val real = NamedProvider("RealKS", 2.5, "real info")
         val blocking = HardwareAttestationBlockingProvider(real, spi)
         assertEquals("RealKS", blocking.name)
         assertEquals(2.5, blocking.version, 0.0)
@@ -91,7 +94,7 @@ class HardwareAttestationBlockingProviderTest {
     @Test
     fun jcaResolvedKeyStore_blocksChain_delegatesOthers() {
         val spi = FakeKeyStoreSpi()
-        val blocking = HardwareAttestationBlockingProvider(Provider("RealKS2", 1.0, "r"), spi)
+        val blocking = HardwareAttestationBlockingProvider(NamedProvider("RealKS2", 1.0, "r"), spi)
         Security.addProvider(blocking)
         try {
             val ks = KeyStore.getInstance("AndroidKeyStore", "RealKS2")
