@@ -1,4 +1,4 @@
-name: "RCS #2994 dgfix 510dad6b unit-test validation"
+name: "RCS #2994 head ab1508df unit-test validation"
 
 on:
   push:
@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: rcs2994-headtest-dgfix-510dad6b-swe7
+  group: rcs2994-headtest-ab1508df-swe7
   cancel-in-progress: false
 
 jobs:
@@ -24,8 +24,8 @@ jobs:
     timeout-minutes: 90
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
-      VALIDATION_SOURCE_SHA: '510dad6b0741a886b79329b00139d325e51d67e3'
-      VALIDATION_SOURCE_TREE: '3ac58e8a7a1fd0447d7f5536550582a91e45942b'
+      VALIDATION_SOURCE_SHA: 'ab1508dfc512ca232ee23b22eb2f3e22c93a592f'
+      VALIDATION_SOURCE_TREE: 'e56640180e8c0ec32e450a442b6245ccf9efb950'
       EVIDENCE_DIR: /tmp/rcs2994-headtest-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Start the execution receipt
@@ -283,7 +283,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rcs2994-headtest-dgfix-510dad6b-${{ github.run_id }}-${{ github.run_attempt }}
+          name: rcs2994-headtest-ab1508df-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.EVIDENCE_DIR }}/
           if-no-files-found: error
           retention-days: 30
