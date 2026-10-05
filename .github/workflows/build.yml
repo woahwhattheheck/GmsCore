@@ -1,4 +1,5 @@
 name: "RCS #2994 head d980bafc unit-test validation"
+# retrigger: 2026-10-05T21Z
 
 on:
   push:
