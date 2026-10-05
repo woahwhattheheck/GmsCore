@@ -1,0 +1,75 @@
+name: Cast inbound failure lifecycle
+
+on:
+  push:
+    branches:
+      - validation/cast580-inbound-failure-sol56-20261004
+    paths:
+      - 'play-services-cast/core/src/test/kotlin/org/microg/gms/cast/channel/CastChannelInputFailureLifecycleTest.kt'
+      - '.github/workflows/cast-inbound-failure-lifecycle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
+
+jobs:
+  lifecycle:
+    if: github.repository == 'woahwhattheheck/GmsCore'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact sources
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Record source identities
+        shell: bash
+        run: |
+          mkdir -p validation-results
+          printf 'commit=%s\n' "$GITHUB_SHA" > validation-results/source.txt
+          sha256sum \
+            play-services-cast/core/src/main/kotlin/org/microg/gms/cast/channel/CastChannel.kt \
+            play-services-cast/core/src/main/kotlin/org/microg/gms/cast/channel/CastDeviceSession.kt \
+            play-services-cast/core/src/test/kotlin/org/microg/gms/cast/channel/CastChannelInputFailureLifecycleTest.kt \
+            > validation-results/source-sha256.txt
+
+      - name: Run focused lifecycle checks
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew :play-services-cast-core:testDebugUnitTest \
+            --tests org.microg.gms.cast.channel.CastChannelInputFailureLifecycleTest \
+            --tests org.microg.gms.cast.channel.CastDeviceSessionPendingCloseControlTest \
+            --no-daemon --stacktrace --max-workers=2 \
+            -Dorg.gradle.jvmargs="-Xmx2g" \
+            2>&1 | tee validation-results/gradle.log
+
+      - name: Preserve JUnit evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p validation-results/junit
+          if [ -d play-services-cast/core/build/test-results/testDebugUnitTest ]; then
+            cp -R play-services-cast/core/build/test-results/testDebugUnitTest/. validation-results/junit/
+          fi
+
+      - name: Upload focused evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cast580-inbound-failure-lifecycle
+          path: validation-results/
+          if-no-files-found: error
