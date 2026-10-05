@@ -109,6 +109,32 @@ class RemoteDroidGuardHandleInteropTest {
     }
 
     @Test
+    fun getResultsCloseFailureDoesNotEscapeAfterSuccessfulSnapshot() {
+        RemoteDroidGuardSessionServer().use { server ->
+            var worker: Runnable? = null
+            val executor = Executor { work -> worker = work }
+            val client = RemoteDroidGuardHandleClient(server.url, "com.example.app", 2_000, executor)
+            val result = client.getResults("play_integrity", mapOf("rpc" to "challenge"), null)
+            result.addOnCompleteListener(Executor { it.run() }) {
+                server.close()
+            }
+            var escaped: Throwable? = null
+
+            try {
+                worker!!.run()
+            } catch (t: Throwable) {
+                escaped = t
+            }
+
+            assertTrue(result.isComplete)
+            assertTrue(result.isSuccessful)
+            assertEquals("session=remote/1&n=1&rpc=challenge", decode(result.result))
+            assertEquals(null, escaped)
+            assertEquals(listOf("begin", "snapshot"), server.actions.toList())
+        }
+    }
+
+    @Test
     fun getResultsUsesOneAcceptedWorkerAndClosesTheSessionAfterCompletion() {
         RemoteDroidGuardSessionServer().use { server ->
             val rejected = RejectedExecutionException("executor stopped after init")
