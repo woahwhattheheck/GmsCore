@@ -1,0 +1,51 @@
+name: Cast580 envelope exact validation
+on:
+  push:
+    branches:
+      - validation/cast580-envelope-sol56-20261004
+permissions:
+  contents: read
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: 1
+    steps:
+      - name: Runner identity
+        run: |
+          echo "host=$(hostname)"
+          uname -a
+      - name: Checkout exact source
+        uses: actions/checkout@v7
+        with:
+          ref: dc662064705a32a3108b73b28ba2c1bb9aa31b39
+          fetch-depth: 0
+      - name: Verify source pin
+        run: |
+          test "$(git rev-parse HEAD)" = "dc662064705a32a3108b73b28ba2c1bb9aa31b39"
+          echo "source_sha=$(git rev-parse HEAD)"
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - name: Run focused Cast envelope boundary test
+        run: |
+          ./gradlew :play-services-cast-core:testDebugUnitTest --tests org.microg.gms.cast.channel.CastChannelEnvelopeBoundaryTest --no-daemon --stacktrace --max-workers=2 -Dorg.gradle.jvmargs="-Xmx2g"
+      - name: Report JUnit counts
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          files=glob.glob("play-services-cast/core/build/test-results/testDebugUnitTest/*.xml")
+          tests=failures=errors=skipped=0
+          for path in files:
+              root=ET.parse(path).getroot()
+              tests+=int(root.attrib.get("tests",0))
+              failures+=int(root.attrib.get("failures",0))
+              errors+=int(root.attrib.get("errors",0))
+              skipped+=int(root.attrib.get("skipped",0))
+          print(f"CAST580_JUNIT files={len(files)} tests={tests} failures={failures} errors={errors} skipped={skipped}")
+          PY
