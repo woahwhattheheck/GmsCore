@@ -18,6 +18,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Run focused Cast STOP reply suite
+        env:
+          GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
         run: |
           ./gradlew :play-services-cast-core:testDebugUnitTest \
             --tests org.microg.gms.cast.channel.CastDeviceSessionStopReplyTest \
