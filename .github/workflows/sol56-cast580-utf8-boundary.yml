@@ -1,0 +1,34 @@
+name: Cast 580 UTF-8 boundary
+
+on:
+  push:
+    branches:
+      - sol56/cast580-utf8-boundary-20261004-2027
+
+permissions:
+  contents: read
+
+jobs:
+  utf8-boundary:
+    runs-on: ubuntu-24.04
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
+    steps:
+      - name: Checkout exact donor
+        uses: actions/checkout@v7
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Run focused UTF-8 boundary tests
+        run: >
+          ./gradlew :play-services-cast-core:testDebugUnitTest
+          --tests org.microg.gms.cast.channel.CastDeviceSessionUtf8SendBoundaryTest
+          --no-daemon --stacktrace --max-workers=2
+          -Dorg.gradle.jvmargs="-Xmx2g"
