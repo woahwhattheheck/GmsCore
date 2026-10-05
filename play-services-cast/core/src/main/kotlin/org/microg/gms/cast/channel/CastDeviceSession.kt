@@ -72,7 +72,7 @@ class CastDeviceSession(
         fun onSendMessageFailure(namespace: String, requestId: Long, statusCode: Int)
     }
 
-    private class PendingRequest(val onReply: (JSONObject?) -> Unit) {
+    private class PendingRequest(val onReply: (JSONObject?) -> Unit, val stopSessionId: String? = null) {
         var timeout: ScheduledFuture<*>? = null
     }
 
@@ -89,7 +89,6 @@ class CastDeviceSession(
     private var receiverStatus: ReceiverStatus? = null
     private var application: ReceiverApplication? = null
     private var disconnectRequested = false
-    private var stoppingSessionId: String? = null
 
     fun connect() = post(onRejected = { callbacks.onConnectionFailed(STATUS_NETWORK_ERROR) }) {
         if (disconnectRequested) {
@@ -237,9 +236,10 @@ class CastDeviceSession(
             callbacks.onStopApplicationResult(STATUS_INVALID_REQUEST)
             return@post
         }
-        stoppingSessionId = target
-        requestReceiver(JSONObject().put("type", "STOP").put("sessionId", target)) { reply ->
-            stoppingSessionId = null
+        requestReceiver(
+            JSONObject().put("type", "STOP").put("sessionId", target),
+            stopSessionId = target,
+        ) { reply ->
             when (reply?.optString("type")) {
                 null -> callbacks.onStopApplicationResult(STATUS_TIMEOUT)
                 "RECEIVER_STATUS" -> {
@@ -308,14 +308,19 @@ class CastDeviceSession(
         callbacks.onApplicationConnected(app, wasLaunched)
     }
 
-    private fun requestReceiver(request: JSONObject, timeoutMillis: Long = REQUEST_TIMEOUT_MILLIS, onReply: (JSONObject?) -> Unit) {
+    private fun requestReceiver(
+        request: JSONObject,
+        timeoutMillis: Long = REQUEST_TIMEOUT_MILLIS,
+        stopSessionId: String? = null,
+        onReply: (JSONObject?) -> Unit,
+    ) {
         val channel = channel
         if (channel == null) {
             onReply(null)
             return
         }
         val requestId = nextRequestId++
-        val pending = PendingRequest(onReply)
+        val pending = PendingRequest(onReply, stopSessionId)
         pendingRequests[requestId] = pending
         try {
             channel.send(RECEIVER_ID, NAMESPACE_RECEIVER, request.put("requestId", requestId).toString())
@@ -329,6 +334,9 @@ class CastDeviceSession(
         }, timeoutMillis, TimeUnit.MILLISECONDS)
     }
 
+    private fun hasPendingStopFor(sessionId: String): Boolean =
+        pendingRequests.values.any { it.stopSessionId == sessionId }
+
     private fun handleReceiverMessage(json: JSONObject) {
         if (json.optString("type") != "RECEIVER_STATUS") return
         val statusJson = json.optJSONObject("status") ?: return
@@ -340,7 +348,7 @@ class CastDeviceSession(
             if (updated == null) {
                 application = null
                 runCatching { channel?.closeTransport(current.transportId) }
-                callbacks.onApplicationDisconnected(if (current.sessionId == stoppingSessionId) STATUS_SUCCESS else STATUS_APPLICATION_NOT_RUNNING)
+                callbacks.onApplicationDisconnected(if (hasPendingStopFor(current.sessionId)) STATUS_SUCCESS else STATUS_APPLICATION_NOT_RUNNING)
             } else {
                 application = updated
                 if (updated.statusText != current.statusText) callbacks.onApplicationStatusChanged(updated.statusText)
@@ -383,7 +391,7 @@ class CastDeviceSession(
         val current = application
         if (current?.transportId == transportId) {
             application = null
-            callbacks.onApplicationDisconnected(if (current.sessionId == stoppingSessionId) STATUS_SUCCESS else STATUS_APPLICATION_NOT_RUNNING)
+            callbacks.onApplicationDisconnected(if (hasPendingStopFor(current.sessionId)) STATUS_SUCCESS else STATUS_APPLICATION_NOT_RUNNING)
         }
     }
 
