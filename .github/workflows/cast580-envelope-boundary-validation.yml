@@ -18,6 +18,12 @@ jobs:
           ref: dc662064705a32a3108b73b28ba2c1bb9aa31b39
           fetch-depth: 0
 
+      - name: Restore upstream version tags
+        run: |
+          git remote add upstream https://github.com/microg/GmsCore.git
+          git fetch upstream --tags --force
+          git describe --tags --abbrev=0 --match='v[0-9]*'
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
