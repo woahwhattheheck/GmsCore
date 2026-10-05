@@ -18,6 +18,7 @@ import org.microg.gms.droidguard.BytesException
 import org.microg.gms.droidguard.GuardCallback
 import org.microg.gms.droidguard.HandleProxy
 import java.io.FileNotFoundException
+import java.lang.reflect.Method
 
 class DroidGuardHandleImpl(private val context: Context, private val packageName: String, private val factory: NetworkHandleProxyFactory, private val callback: GuardCallback) : IDroidGuardHandle.Stub() {
     private val condition = ConditionVariable()
@@ -63,13 +64,11 @@ class DroidGuardHandleImpl(private val context: Context, private val packageName
         this.condition.open()
         if (handleInitError == null) {
             val initializedProxy = handleProxy!!
-            // rb() is optional: VM builds may omit it. An absent method is not an error —
-            // probe it separately so the init'd handle survives a missing rb.
-            val rbMethod = try {
-                initializedProxy.handle.javaClass.getDeclaredMethod("rb")
-            } catch (e: NoSuchMethodException) {
-                null
-            }
+            // rb() is optional. A missing method is not an error; only a throwing rb()
+            // or a non-null rb() whose VM apk is missing fail-closes the handle.
+            // Scan inherited + declared methods so VM classes that don't redeclare
+            // rb still resolve it, and make it invocable for non-public VM shapes.
+            val rbMethod = findVmMethod(initializedProxy.handle.javaClass, "rb", 0)
             if (rbMethod != null) {
                 try {
                     val `object` = rbMethod.invoke(initializedProxy.handle) as? Parcelable?
@@ -98,7 +97,9 @@ class DroidGuardHandleImpl(private val context: Context, private val packageName
         handleInitError?.let { return FallbackCreator.create(flow, context, map, it) }
         val handleProxy = this.handleProxy ?: return FallbackCreator.create(flow, context, map, IllegalStateException())
         return try {
-            handleProxy.handle::class.java.getDeclaredMethod("ss", Map::class.java).invoke(handleProxy.handle, map) as ByteArray
+            val ss = findVmMethod(handleProxy.handle.javaClass, "ss", 1)
+                ?: throw NoSuchMethodException("ss")
+            ss.invoke(handleProxy.handle, map) as ByteArray
         } catch (e: Exception) {
             try {
                 throw BytesException(handleProxy.extra, e)
@@ -124,5 +125,13 @@ class DroidGuardHandleImpl(private val context: Context, private val packageName
         private const val TAG = "GmsGuardHandleImpl"
         private val LOW_LATENCY_ENABLED = false
         private val NOT_LOW_LATENCY_FLOWS = setOf("ad_attest", "attest", "checkin", "federatedMachineLearningReduced", "msa-f", "ad-event-attest-token")
+
+        private fun findVmMethod(clazz: Class<*>, name: String, parameterCount: Int): Method? {
+            val method = (clazz.methods + clazz.declaredMethods).firstOrNull {
+                it.name == name && it.parameterTypes.size == parameterCount
+            } ?: return null
+            method.isAccessible = true
+            return method
+        }
     }
 }
