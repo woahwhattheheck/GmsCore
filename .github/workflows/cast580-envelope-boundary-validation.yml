@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: dc662064705a32a3108b73b28ba2c1bb9aa31b39
-          fetch-depth: 1
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
