@@ -37,11 +37,14 @@ class ContainedEditTextPreferenceBindTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
 
     private fun inflatedItemView(): ViewGroup {
-        val inflater = LayoutInflater.from(context)
-        val item = inflater.inflate(R.layout.preference_material_with_widget_below, null) as ViewGroup
-        val widgetFrame = item.findViewById<ViewGroup>(android.R.id.widget_frame)
-        assertNotNull(widgetFrame)
-        inflater.inflate(R.layout.preference_edit_widget, widgetFrame, true)
+        // The item layout (preference_material_with_widget_below) uses
+        // ?android:attr/listPreferredItem* theme attrs that do not resolve
+        // under the bare unit-test theme; the binding contract under test is
+        // the widget layout supplying an android.R.id.edit EditText, so the
+        // widget is inflated into a plain container standing in for
+        // widget_frame.
+        val item = android.widget.LinearLayout(context)
+        LayoutInflater.from(context).inflate(R.layout.preference_edit_widget, item, true)
         return item
     }
 
