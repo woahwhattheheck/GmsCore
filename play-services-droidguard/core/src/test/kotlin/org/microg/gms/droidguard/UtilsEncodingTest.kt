@@ -64,7 +64,7 @@ class UtilsEncodingTest {
     @Test
     fun toBase64_roundTripsThroughUrlDecoder() {
         val src = byteArrayOf(0x10, 0x22, 0x7F.toByte(), 0x80.toByte(), 0xF1.toByte(), 0x00, 0x5A)
-        val decoded = java.util.Base64.getUrlDecoder().withoutPadding().decode(Utils.toBase64(src))
+        val decoded = java.util.Base64.getUrlDecoder().decode(Utils.toBase64(src))
         assertArrayEquals(src, decoded)
     }
 
