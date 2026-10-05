@@ -141,9 +141,17 @@ class DroidGuardClientHandleSemanticsTest {
     @Test
     fun close_swallowsRemoteThrow_andMarksClosed() {
         val fake = FakeHandle().apply { closeThrow = RuntimeException("x") }
-        val impl = DroidGuardHandleImpl(apiClient(), DroidGuardResultsRequest(), fake)
+        val client = apiClient()
+        val impl = DroidGuardHandleImpl(client, DroidGuardResultsRequest(), fake)
         impl.close()
+        // close() posts to the client's private handler thread, which really
+        // executes under Robolectric (only the main looper is paused). The
+        // remote latch counts down mid-runnable — before markHandleClosed() and
+        // handle=null run — so the tail assertions poll isOpened() until the
+        // runnable finishes instead of trusting the latch.
         assertTrue(fake.closeLatch.await(10, TimeUnit.SECONDS))
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+        while (impl.isOpened && System.nanoTime() < deadline) Thread.sleep(5)
         assertEquals(1, fake.closeCalls.get())
         assertFalse(impl.isOpened)
     }
