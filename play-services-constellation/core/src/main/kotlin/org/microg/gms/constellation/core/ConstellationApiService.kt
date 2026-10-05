@@ -6,12 +6,15 @@ import android.os.Bundle
 import android.util.Log
 import com.google.android.gms.common.Feature
 import com.google.android.gms.common.api.ApiMetadata
+import com.google.android.gms.common.api.Status
 import com.google.android.gms.common.internal.ConnectionInfo
 import com.google.android.gms.common.internal.GetServiceRequest
 import com.google.android.gms.common.internal.IGmsCallbacks
 import com.google.android.gms.constellation.GetIidTokenRequest
 import com.google.android.gms.constellation.GetPnvCapabilitiesRequest
+import com.google.android.gms.constellation.GetPnvCapabilitiesResponse
 import com.google.android.gms.constellation.VerifyPhoneNumberRequest
+import com.google.android.gms.constellation.VerifyPhoneNumberResponse
 import com.google.android.gms.constellation.internal.IConstellationApiService
 import com.google.android.gms.constellation.internal.IConstellationCallbacks
 import kotlinx.coroutines.CoroutineScope
@@ -78,7 +81,10 @@ class ConstellationApiServiceImpl(
             }"
         )
         if (cb == null || bundle == null) return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            cb.onPhoneNumberVerified(Status.INTERNAL_ERROR, emptyList(), ApiMetadata.DEFAULT)
+            return
+        }
         dispatcher.dispatch(cb, "verifyPhoneNumberV1") { callbacks ->
             handleVerifyPhoneNumberV1(context, callbacks, bundle, packageName)
         }
@@ -91,7 +97,10 @@ class ConstellationApiServiceImpl(
     ) {
         Log.i(TAG, "verifyPhoneNumberSingleUse()")
         if (cb == null || bundle == null) return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            cb.onPhoneNumberVerified(Status.INTERNAL_ERROR, emptyList(), ApiMetadata.DEFAULT)
+            return
+        }
         dispatcher.dispatch(cb, "verifyPhoneNumberSingleUse") { callbacks ->
             handleVerifyPhoneNumberSingleUse(context, callbacks, bundle, packageName)
         }
@@ -107,7 +116,14 @@ class ConstellationApiServiceImpl(
             "verifyPhoneNumber(): apiVersion=${request?.apiVersion}, policy=${request?.policyId}"
         )
         if (cb == null || request == null) return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            cb.onPhoneNumberVerificationsCompleted(
+                Status.INTERNAL_ERROR,
+                VerifyPhoneNumberResponse(emptyArray(), Bundle()),
+                ApiMetadata.DEFAULT
+            )
+            return
+        }
         dispatcher.dispatch(cb, "verifyPhoneNumber") { callbacks ->
             handleVerifyPhoneNumberRequest(context, callbacks, request, packageName)
         }
@@ -132,7 +148,14 @@ class ConstellationApiServiceImpl(
     ) {
         Log.i(TAG, "getPnvCapabilities(): $request")
         if (cb == null || request == null) return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            cb.onGetPnvCapabilitiesCompleted(
+                Status.INTERNAL_ERROR,
+                GetPnvCapabilitiesResponse(emptyList()),
+                ApiMetadata.DEFAULT
+            )
+            return
+        }
         dispatcher.dispatch(cb, "getPnvCapabilities") { callbacks ->
             handleGetPnvCapabilities(context, callbacks, request)
         }
