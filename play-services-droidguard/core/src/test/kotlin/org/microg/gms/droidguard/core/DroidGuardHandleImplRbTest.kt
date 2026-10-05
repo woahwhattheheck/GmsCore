@@ -121,13 +121,13 @@ class DroidGuardHandleImplRbTest {
         service.close()
     }
 
-    private class NoRbVm {
+    class NoRbVm {
         fun init() = true
         fun ss(map: Map<Any?, Any?>): ByteArray = SNAPSHOT
         fun close() = Unit
     }
 
-    private class RbVm(
+    class RbVm(
         private val value: android.os.Parcelable?,
         private val throwOnRb: Boolean = false
     ) {
