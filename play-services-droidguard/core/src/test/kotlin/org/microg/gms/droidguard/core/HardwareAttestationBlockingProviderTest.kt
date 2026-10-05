@@ -30,14 +30,16 @@ import java.security.Security
  *  - a KeyStore resolved through JCA delegates ordinary calls to the real SPI
  *    while engineGetCertificateChain throws unconditionally (the self-frame
  *    match already pinned on the keystore itself)
- *  - ensureEnabled(true) cannot complete its swap in this JVM: extracting
- *    keyStoreSpi via reflection on java.security.KeyStore throws
- *    InaccessibleObjectException under JDK 17 (java.base/java.security is not
- *    opened to unnamed modules), so the catch-all fail-soft path runs, leaves
- *    currentlyEnabled false, and never mutates the provider registry — the
- *    registered AndroidKeyStore provider survives every attempt untouched.
- *    On device the field is reachable; the silent-no-op contract itself is
- *    what this test pins.
+ *  - ensureEnabled(true) obtains the real SPI via the provider's own
+ *    "KeyStore.AndroidKeyStore" JCA service (Service.newInstance) — a public
+ *    API path that also works on strict-module runtimes where reflective
+ *    reads of java.security.KeyStore.keyStoreSpi are denied — swaps the
+ *    blocking provider in at position 1, and flips currentlyEnabled; a
+ *    second enable is an early-out no-op, and disable restores the exact
+ *    original provider instance.
+ *  - a provider that registers no "KeyStore.AndroidKeyStore" service entry,
+ *    or no provider at all, still fails soft: the exception is swallowed,
+ *    currentlyEnabled stays false and the registry is untouched.
  *  - the enabled->disabled end state never leaves a blocking provider
  *    registered, whether or not an AndroidKeyStore provider exists
  */
@@ -124,30 +126,60 @@ class HardwareAttestationBlockingProviderTest {
     }
 
     @Test
-    fun ensureEnabled_failSoft_neverMutatesRegistry() {
+    fun ensureEnabled_enableSwapsProvider_disableRestoresOriginal() {
         val fake = FakeAksProvider()
         Security.insertProviderAt(fake, 1)
         try {
-            // The swap needs private-field access to java.security.KeyStore;
-            // under JDK 17 without add-opens it throws inside the try, the
-            // catch-all swallows it, and nothing in the registry changes.
             HardwareAttestationBlockingProvider.ensureEnabled(true)
-            assertFalse(currentlyEnabled())
-            assertSame(fake, Security.getProvider("AndroidKeyStore"))
-            // Never enabled -> the enabled==enabled early-out never engages,
-            // so a second attempt retries the swap and fails soft again.
+            assertTrue(currentlyEnabled())
+            val swapped = Security.getProvider("AndroidKeyStore")
+            assertTrue(swapped is HardwareAttestationBlockingProvider)
+            // The fake's own JCA service entry supplied the SPI: the swapped
+            // keystore delegates ordinary calls to FakeKeyStoreSpi while the
+            // chain call hits the blocking guard's self-frame match.
+            val ks = KeyStore.getInstance("AndroidKeyStore")
+            ks.load(null, null)
+            assertSame(FakeKeyStoreSpi.FakeCertificate, ks.getCertificate("alias1"))
+            try {
+                ks.getCertificateChain("alias1")
+                fail("blocking keystore must throw on getCertificateChain")
+            } catch (e: UnsupportedOperationException) {
+                // pinned current behavior
+            }
+            // currentlyEnabled == enabled -> early-out, registry untouched.
             HardwareAttestationBlockingProvider.ensureEnabled(true)
-            assertFalse(currentlyEnabled())
-            assertSame(fake, Security.getProvider("AndroidKeyStore"))
-            // The fake still serves AndroidKeyStore key stores end to end.
-            val restored = KeyStore.getInstance("AndroidKeyStore")
-            restored.load(null, null)
-            assertSame(FakeKeyStoreSpi.FakeCertificate, restored.getCertificate("alias1"))
-            assertNotNull(restored.getCertificateChain("alias1"))
-            // Disable while never-enabled is a no-op too.
+            assertSame(swapped, Security.getProvider("AndroidKeyStore"))
+            // Disable restores the exact original provider instance.
             HardwareAttestationBlockingProvider.ensureEnabled(false)
             assertFalse(currentlyEnabled())
             assertSame(fake, Security.getProvider("AndroidKeyStore"))
+            // And the fake serves chains end to end again.
+            val restored = KeyStore.getInstance("AndroidKeyStore")
+            restored.load(null, null)
+            assertNotNull(restored.getCertificateChain("alias1"))
+        } finally {
+            Security.removeProvider("AndroidKeyStore")
+        }
+    }
+
+    @Test
+    fun ensureEnabled_noServiceEntry_failSoft_neverMutatesRegistry() {
+        // Provider named AndroidKeyStore but with no KeyStore.AndroidKeyStore
+        // service -> newInstance path has nothing to build -> fail-soft.
+        val empty = NamedProvider("AndroidKeyStore", 1.0, "no svc")
+        Security.insertProviderAt(empty, 1)
+        try {
+            HardwareAttestationBlockingProvider.ensureEnabled(true)
+            assertFalse(currentlyEnabled())
+            assertSame(empty, Security.getProvider("AndroidKeyStore"))
+            // Second attempt retries and fails soft again — no early-out.
+            HardwareAttestationBlockingProvider.ensureEnabled(true)
+            assertFalse(currentlyEnabled())
+            assertSame(empty, Security.getProvider("AndroidKeyStore"))
+            // Disable while never-enabled is a no-op too.
+            HardwareAttestationBlockingProvider.ensureEnabled(false)
+            assertFalse(currentlyEnabled())
+            assertSame(empty, Security.getProvider("AndroidKeyStore"))
         } finally {
             Security.removeProvider("AndroidKeyStore")
         }
