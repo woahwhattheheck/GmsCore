@@ -60,17 +60,7 @@ suspend fun handleGetPnvCapabilities(
                     listOf(
                         verificationCapability(
                             9,
-                            when {
-                                !GetPnvCapabilitiesApiPhenotype.FPNV_ALLOWED_CARRIER_IDS.contains(
-                                    carrierId
-                                ) ->
-                                    VerificationStatus.UNSUPPORTED_CARRIER
-
-                                telephonyManager.simState != TelephonyManager.SIM_STATE_READY ->
-                                    VerificationStatus.UNSUPPORTED_SIM_NOT_READY
-
-                                else -> VerificationStatus.SUPPORTED
-                            }
+                            pnvVerificationStatus(carrierId, telephonyManager.simState)
                         )
                     )
                 } else {
@@ -125,6 +115,26 @@ suspend fun handleGetPnvCapabilities(
             ApiMetadata.DEFAULT
         )
     }
+}
+
+
+/**
+ * Resolves the advertised FPNV capability without treating an unconfigured carrier allowlist as a
+ * deny-all policy. The integrated phenotype shim currently has no carrier IDs; when a real
+ * allowlist is supplied later it remains authoritative.
+ */
+internal fun pnvVerificationStatus(
+    carrierId: Int,
+    simState: Int,
+    allowedCarrierIds: Collection<Int> = GetPnvCapabilitiesApiPhenotype.FPNV_ALLOWED_CARRIER_IDS
+): VerificationStatus = when {
+    allowedCarrierIds.isNotEmpty() && carrierId !in allowedCarrierIds ->
+        VerificationStatus.UNSUPPORTED_CARRIER
+
+    simState != TelephonyManager.SIM_STATE_READY ->
+        VerificationStatus.UNSUPPORTED_SIM_NOT_READY
+
+    else -> VerificationStatus.SUPPORTED
 }
 
 /**
