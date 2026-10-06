@@ -109,7 +109,7 @@ private suspend fun MoChallenge.sendOnce(context: Context, subId: Int): Challeng
         PendingIntent.FLAG_ONE_SHOT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
     )
 
-    Log.d(TAG, "Sending MO SMS to $proxy_number with messageId: $messageId")
+    Log.d(TAG, "Sending MO SMS verification challenge")
 
     val response = withTimeoutOrNull(30_000L) {
         suspendCancellableCoroutine { continuation ->
