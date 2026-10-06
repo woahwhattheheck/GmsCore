@@ -1,0 +1,91 @@
+// Validation-only dependencies; this file is never a product-source postimage.
+dependencies {
+    testImplementation 'org.robolectric:robolectric:4.12.2'
+    testImplementation 'org.mockito:mockito-inline:5.2.0'
+}
+// Stage exactly the API 29 SDK expected by Robolectric 4.12.2. The local
+// dependency resolver prevents a second, unrecorded SDK download during tests.
+configurations {
+    dottValidationAndroidRuntime {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
+}
+dependencies {
+    dottValidationAndroidRuntime 'org.robolectric:android-all-instrumented:10-robolectric-5803371-i6'
+}
+def dottAndroidRuntimeDirectory = new File(System.getenv('DOTT_ANDROID_RUNTIME_DIR'))
+def stageDottAndroidRuntime = tasks.register('stageDottAndroidRuntime', Copy) {
+    from configurations.dottValidationAndroidRuntime
+    into dottAndroidRuntimeDirectory
+}
+android {
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            maxParallelForks = 1
+            dependsOn stageDottAndroidRuntime
+            systemProperty 'robolectric.dependency.dir', dottAndroidRuntimeDirectory.absolutePath
+            systemProperty 'robolectric.offline', 'true'
+            systemProperty 'robolectric.usePreinstrumentedJars', 'true'
+        }
+    }
+}
+// Artifact provenance for actual resolved test/compiler dependencies.
+// Bootstrap runs before project dependency outputs are built, so hash only its
+// already-resolved Maven classpath. Full test/compiler artifacts are recorded
+// after lifecycle execution by the separate task below.
+tasks.register('recordDottValidationBootstrap') {
+    doLast {
+        def destination = new File(System.getenv('EVIDENCE_DIR'), 'selected-root-buildscript-classpath.json')
+        destination.parentFile.mkdirs()
+        def rows = []
+        rootProject.buildscript.configurations.classpath.resolvedConfiguration.resolvedArtifacts.each { a ->
+            def digest = java.security.MessageDigest.getInstance('SHA-256')
+            a.file.withInputStream { input ->
+                byte[] buffer = new byte[8192]
+                int size
+                while ((size = input.read(buffer)) != -1) digest.update(buffer, 0, size)
+            }
+            rows.add([configuration: 'rootBuildscriptClasspath', coordinate: a.moduleVersion.id.toString(),
+                name: a.file.name, bytes: a.file.length(),
+                sha256: digest.digest().encodeHex().toString()])
+        }
+        destination.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(rows)) + '\n'
+    }
+}
+tasks.register('recordDottValidationDependencies') {
+    doLast {
+        def destination = new File(System.getenv('EVIDENCE_DIR'), 'resolved-gradle-dependencies.json')
+        destination.parentFile.mkdirs()
+        def names = ['debugUnitTestRuntimeClasspath', 'debugUnitTestCompileClasspath',
+            'kotlinCompilerClasspath', 'dottValidationAndroidRuntime']
+        def rows = []
+        names.each { name ->
+            configurations.findByName(name)?.resolvedConfiguration?.resolvedArtifacts?.each { a ->
+                def digest = java.security.MessageDigest.getInstance('SHA-256')
+                a.file.withInputStream { input ->
+                    byte[] buffer = new byte[8192]
+                    int size
+                    while ((size = input.read(buffer)) != -1) digest.update(buffer, 0, size)
+                }
+                rows.add([configuration: name, coordinate: a.moduleVersion.id.toString(),
+                    name: a.file.name, bytes: a.file.length(),
+                    sha256: digest.digest().encodeHex().toString()])
+            }
+        }
+        rootProject.buildscript.configurations.classpath.resolvedConfiguration.resolvedArtifacts.each { a ->
+            def digest = java.security.MessageDigest.getInstance('SHA-256')
+            a.file.withInputStream { input ->
+                byte[] buffer = new byte[8192]
+                int size
+                while ((size = input.read(buffer)) != -1) digest.update(buffer, 0, size)
+            }
+            rows.add([configuration: 'rootBuildscriptClasspath', coordinate: a.moduleVersion.id.toString(),
+                name: a.file.name, bytes: a.file.length(),
+                sha256: digest.digest().encodeHex().toString()])
+        }
+        destination.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(rows)) + '\n'
+    }
+}

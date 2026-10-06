@@ -1,64 +1,73 @@
-name: "Gradle build"
-permissions: {}
+name: "Dott init-reply lifecycle validation"
 on:
-  - push
-  - pull_request
-  - workflow_dispatch
-
+  push:
+    branches:
+      - 'validation/dott3841-init-reply-5f56-20261006'
+    paths:
+      - '.github/workflows/build.yml'
+permissions:
+  contents: read
+concurrency:
+  group: dott3841-init-reply-5f56-validation
+  cancel-in-progress: false
 jobs:
-  build:
-    name: "Gradle build ${{ matrix.target }}"
-    runs-on: ubuntu-latest
+  lifecycle:
+    if: github.repository == 'woahwhattheheck/GmsCore' && github.ref == 'refs/heads/validation/dott3841-init-reply-5f56-20261006' && github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     env:
-      GRADLE_MICROG_VERSION_WITHOUT_GIT: 1
-
-    strategy:
-      matrix:
-        target: [Debug, Release]
-
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
+      EVIDENCE_DIR: ${{ runner.temp }}/dott3841-init-reply-${{ github.run_id }}-${{ github.run_attempt }}
+      DOTT_ANDROID_RUNTIME_DIR: ${{ runner.temp }}/dott3841-android-runtime-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: "Free disk space"
+      - name: Checkout immutable validation controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Checkout exact original product source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: '5f56c5bc037056f54c7d2dfe2edc03d8c57e0da8'
+          path: product
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
+        with:
+          cache-read-only: true
+      - name: Ensure pinned Android build components
+        shell: bash
         run: |
-          # Deleting unneeded software packages
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /opt/hostedtoolcache/go
-
-          # Log available space
-          df -h
-      - name: "Checkout sources"
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: "Setup Java"
-        uses: actions/setup-java@v6
-        with:
-          distribution: "temurin"
-          java-version: "17"
-      - name: "Setup Gradle"
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
-          build-scan-publish: true
-          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
-          build-scan-terms-of-use-agree: "yes"
-      - name: "Setup matchers"
+          set -euo pipefail
+          validation_sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$validation_sdk_root"
+          validation_sdkmanager="$validation_sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          if ! test -x "$validation_sdkmanager"; then
+            validation_sdkmanager="$(command -v sdkmanager)"
+          fi
+          if ! test -f "$validation_sdk_root/platforms/android-35/android.jar" ||
+             ! test -x "$validation_sdk_root/build-tools/35.0.0/aapt2"; then
+            "$validation_sdkmanager" --sdk_root="$validation_sdk_root" 'platforms;android-35' 'build-tools;35.0.0'
+          fi
+      - name: Execute same actual provider lifecycle suite before and after
+        id: lifecycle
+        shell: bash
         run: |
-          # Setting up matchers...
-
-          matchers_dir='${{ github.workspace }}/.github/matchers'
-          matcher_list()
-          {
-            echo 'gradle-build-matcher.json'
-            echo 'gradle-build-kotlin-error-matcher.json'
-          }
-
-          matcher_list | while IFS='' read -r NAME; do
-            if test -f "${matchers_dir:?}/${NAME:?}"; then
-              echo "::add-matcher::${matchers_dir:?}/${NAME:?}"
-              echo "Matcher configured: ${NAME:?}"
-            fi
-          done
-      - name: "Execute Gradle assemble"
-        run: "./gradlew assemble${{ matrix.target }}"
-      - name: "Execute Gradle lint"
-        run: "./gradlew lint${{ matrix.target }}"
+          set -euo pipefail
+          python3 controller/validation/dott3841-init-reply-failclosed-20261006/run-validation.py --product product --controller controller --evidence "$EVIDENCE_DIR"
+      - name: Upload actual JUnit XML and source-bound execution receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dott3841-init-reply-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_DIR }}/
+          if-no-files-found: error
+          retention-days: 30

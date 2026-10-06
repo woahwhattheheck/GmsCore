@@ -1,0 +1,209 @@
+{
+  "status": "Frozen prospective controller; test expectations only, no execution yet.",
+  "source": {
+    "commit": "5f56c5bc037056f54c7d2dfe2edc03d8c57e0da8",
+    "tree": "cab6c7c21a2cff55e2513074e1b878d0d56badae"
+  },
+  "canonicalBranch": "luna2-dott-session-transport-2851-20261001",
+  "canonicalPr": "https://github.com/microg/GmsCore/pull/3841",
+  "validationBranch": "validation/dott3841-init-reply-5f56-20261006",
+  "eventPolicy": "One automatic push event only; no workflow_dispatch or second dispatch.",
+  "registeredWorkflowPath": ".github/workflows/build.yml",
+  "priorWorkflowId": 373633045,
+  "projectedTrees": {
+    "original": "cab6c7c21a2cff55e2513074e1b878d0d56badae",
+    "candidate": "3816a397d95c1c602c16ec7b1a092b1d8c9b0b30"
+  },
+  "baseBuildGitBlob": "04a4c63c7294ba98591fd58c15b03c391b8882d3",
+  "rootBuildGitBlob": "a42ad581950ee347fe962e9110c18e1d59ebd880",
+  "bootstrapDiagnostic": "Before lifecycle phases: actual buildEnvironment and selected root buildscript artifact coordinates/bytes/SHA; no declared bootstrap dependency changes.",
+  "sourcePostimages": [
+    {
+      "sourcePath": "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProvider.kt",
+      "mode": "100644",
+      "beforeGitBlob": "bbf96e0edc57a92d00345abf1fdd3b916c37d86a",
+      "controllerLock": {
+        "path": "validation/dott3841-init-reply-failclosed-20261006/source-postimages/play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProvider.kt",
+        "bytes": 8900,
+        "sha256": "b0845f7234ed5dccd64781ed2b0899d9186016fe2d600be74b4a20bbcfb8b7b0",
+        "gitBlob": "78767c88e78b798775d122a9b82c79483ba13398"
+      }
+    },
+    {
+      "sourcePath": "play-services-droidguard/REMOTE_DROIDGUARD_SETUP.md",
+      "mode": "100644",
+      "beforeGitBlob": "396577d1d7784b82a77bfaf69a2599cb733f0a7e",
+      "controllerLock": {
+        "path": "validation/dott3841-init-reply-failclosed-20261006/source-postimages/play-services-droidguard/REMOTE_DROIDGUARD_SETUP.md",
+        "bytes": 11358,
+        "sha256": "5c832c793f9a80649fff3c0f490aa7abbf05e1e116f04133de755ac4465e1330",
+        "gitBlob": "949ec838e43f69567c2393a711f613fe03ba008c"
+      }
+    }
+  ],
+  "validationTestFiles": [
+    {
+      "sourcePath": "play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProviderInitReplyTest.kt",
+      "controllerLock": {
+        "path": "validation/dott3841-init-reply-failclosed-20261006/test-overlay/play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProviderInitReplyTest.kt",
+        "bytes": 5744,
+        "sha256": "a1f554e32f2e5b17c97613e02c9c0784a43bad7057c36efcde8b42187c84801e",
+        "gitBlob": "a367c3de0405f825ce7fa97cbb2484461fa7902b"
+      }
+    },
+    {
+      "sourcePath": "play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProviderPartialReplyTest.kt",
+      "controllerLock": {
+        "path": "validation/dott3841-init-reply-failclosed-20261006/test-overlay/play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProviderPartialReplyTest.kt",
+        "bytes": 5145,
+        "sha256": "41d3b76e1e91a004b3c3dc4688818147781f365d624b0b5432dd06ae265cba42",
+        "gitBlob": "79a5d4cc1f1f3bd096293eaf4bc678b21f6de29d"
+      }
+    },
+    {
+      "sourcePath": "play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProviderTestHarness.kt",
+      "controllerLock": {
+        "path": "validation/dott3841-init-reply-failclosed-20261006/test-overlay/play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProviderTestHarness.kt",
+        "bytes": 10903,
+        "sha256": "8cf398e0e5614ea4c848122a2555d1edefe15115ec6a952c65a2c869d9d937ff",
+        "gitBlob": "cb747f19f4c05af97f2ac986805e7b6882fcb6fb"
+      }
+    }
+  ],
+  "dependencyOverlay": {
+    "path": "validation/dott3841-init-reply-failclosed-20261006/validation-overlay.gradle",
+    "bytes": 4447,
+    "sha256": "22acf52d0ae0178a9103d8bfc98bbb4db1caf8e341ad7db8b09506c34c5ded24",
+    "gitBlob": "8b6c6441bb212e10fc30ac561a431c801d7c87ec"
+  },
+  "testClasses": [
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderPartialReplyTest"
+  ],
+  "expectedCases": [
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest#actualCoreDescriptorOpenFailureReturnsNoIdAndClosesVmOnce",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest#actualCoreReplyDescriptorProbeObservesOpenThenClosed",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest#callerBundleReplyIsRejectedWithoutSessionIdAndDescriptorIsClosed",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest#emptyReplyRetainsOneVmAcrossRepeatedSnapshotsAndClosesOnce",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest#evenEmptyCallerBundleReplyIsRejected",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest#nativeInitFalseReturnsNoIdAndClosesFailedVmOnce",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest#nativeRbThrowsReturnsNoIdAndClosesFailedVmOnce",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest#nonBundleParcelableReplyIsRejected",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderPartialReplyTest#controlledBothFieldsReplyIsRejectedAndClosed",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderPartialReplyTest#controlledDescriptorCloseExceptionStillRejectsAndClosesVm",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderPartialReplyTest#controlledDescriptorOnlyReplyIsRejectedAndClosed",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderPartialReplyTest#controlledObjectOnlyReplyIsRejectedWithoutId"
+  ],
+  "originalExpectedFailures": [
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest#callerBundleReplyIsRejectedWithoutSessionIdAndDescriptorIsClosed",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest#evenEmptyCallerBundleReplyIsRejected",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest#nonBundleParcelableReplyIsRejected",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderPartialReplyTest#controlledBothFieldsReplyIsRejectedAndClosed",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderPartialReplyTest#controlledDescriptorOnlyReplyIsRejectedAndClosed",
+    "org.microg.gms.droidguard.core.DroidGuardSessionProviderPartialReplyTest#controlledObjectOnlyReplyIsRejectedWithoutId"
+  ],
+  "robolectricAndroidRuntime": {
+    "coordinate": "org.robolectric:android-all-instrumented:10-robolectric-5803371-i6",
+    "fileName": "android-all-instrumented-10-robolectric-5803371-i6.jar",
+    "sdk": 29,
+    "resolverPolicy": "Gradle staging; offline local Robolectric SDK resolver; actual JAR hash recorded; bytes not uploaded"
+  },
+  "tooling": {
+    "gradle": "8.13",
+    "java": "17",
+    "robolectric": "4.12.2",
+    "mockitoInline": "5.2.0",
+    "androidCompileSdk": 35,
+    "androidBuildTools": "35.0.0",
+    "dependencyPolicy": "Only validation overlay adds dependencies. Actual resolved artifacts and hashes recorded, no production dependency modification."
+  },
+  "actionCommits": {
+    "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+    "actions/setup-java": "b6effb05e454b25005698d916606bdc6ffcbf961",
+    "gradle/actions/setup-gradle": "3f5f9adaf7d9fecd50b5935e54106014257a94e6",
+    "actions/upload-artifact": "ea165f8d65b6e75b540449e92b4886f43607fa02"
+  },
+  "peerDraftReceiptSha256": "1095dc80d12c41bf05c06a2de8c76b13ac375280008c591dc059992f4d474fe4",
+  "limits": [
+    "No canonical source ref or PR body writes.",
+    "No real Google VM/JNI, Binder IPC, device, live PI or Dott success proof.",
+    "Main eight cases use actual provider/core/store plus controlled factory/public VM.",
+    "Four partial-reply cases control only the core reply boundary after actual empty-reply initialization.",
+    "Descriptor-close-throws proves an attempt plus VM cleanup, not OS descriptor closure.",
+    "Runtime fixture/compiler/dependency uncertainties must be resolved by actual Gradle/JUnit evidence."
+  ],
+  "controllerFileLocks": [
+    {
+      "path": ".github/workflows/build.yml",
+      "bytes": 3131,
+      "sha256": "79fb8c89f378c08af4b721a17f52e7cbbd90bcad2fcaaeeb65c9c31dc7ac10bf",
+      "gitBlob": "c2566a5bcff7516d426041f648d9829121bc5a1e"
+    },
+    {
+      "path": "validation/dott3841-init-reply-failclosed-20261006/README.md",
+      "bytes": 4496,
+      "sha256": "9a1f6ead73552f2e4d032baf4e3e47c1f087f22e21e45891f6a0932c81440325",
+      "gitBlob": "16e9a4b53bdaa6846be3cdb360ac95cf47a979de"
+    },
+    {
+      "path": "validation/dott3841-init-reply-failclosed-20261006/expected-tests.json",
+      "bytes": 1792,
+      "sha256": "98667989f2f1e11c40da33bd09bd1d90756b5577e842d6f1a3301a311908acb9",
+      "gitBlob": "471cf079cfcda4a94624359e5d7fd99159a9ff1f"
+    },
+    {
+      "path": "validation/dott3841-init-reply-failclosed-20261006/peer-draft-provenance.json",
+      "bytes": 5527,
+      "sha256": "1095dc80d12c41bf05c06a2de8c76b13ac375280008c591dc059992f4d474fe4",
+      "gitBlob": "cc59e79a664b483dd14507092cf18590943e8fa0"
+    },
+    {
+      "path": "validation/dott3841-init-reply-failclosed-20261006/proposal-source-receipt.json",
+      "bytes": 1253,
+      "sha256": "6fd942cf68516bbe3ee39dfe771a9e0f82084ab26ef5616c7a2bc4b2915974a1",
+      "gitBlob": "f99355854cf251666e500f4713060506d52ea917"
+    },
+    {
+      "path": "validation/dott3841-init-reply-failclosed-20261006/run-validation.py",
+      "bytes": 15506,
+      "sha256": "fd69998d497a66cec58e6e7cd6de28bcd9156b20686980f158f0a5bb38ce230e",
+      "gitBlob": "05ac50e6250c785fc03c5503c25631385a942f2b"
+    },
+    {
+      "path": "validation/dott3841-init-reply-failclosed-20261006/source-postimages/play-services-droidguard/REMOTE_DROIDGUARD_SETUP.md",
+      "bytes": 11358,
+      "sha256": "5c832c793f9a80649fff3c0f490aa7abbf05e1e116f04133de755ac4465e1330",
+      "gitBlob": "949ec838e43f69567c2393a711f613fe03ba008c"
+    },
+    {
+      "path": "validation/dott3841-init-reply-failclosed-20261006/source-postimages/play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProvider.kt",
+      "bytes": 8900,
+      "sha256": "b0845f7234ed5dccd64781ed2b0899d9186016fe2d600be74b4a20bbcfb8b7b0",
+      "gitBlob": "78767c88e78b798775d122a9b82c79483ba13398"
+    },
+    {
+      "path": "validation/dott3841-init-reply-failclosed-20261006/test-overlay/play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProviderInitReplyTest.kt",
+      "bytes": 5744,
+      "sha256": "a1f554e32f2e5b17c97613e02c9c0784a43bad7057c36efcde8b42187c84801e",
+      "gitBlob": "a367c3de0405f825ce7fa97cbb2484461fa7902b"
+    },
+    {
+      "path": "validation/dott3841-init-reply-failclosed-20261006/test-overlay/play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProviderPartialReplyTest.kt",
+      "bytes": 5145,
+      "sha256": "41d3b76e1e91a004b3c3dc4688818147781f365d624b0b5432dd06ae265cba42",
+      "gitBlob": "79a5d4cc1f1f3bd096293eaf4bc678b21f6de29d"
+    },
+    {
+      "path": "validation/dott3841-init-reply-failclosed-20261006/test-overlay/play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProviderTestHarness.kt",
+      "bytes": 10903,
+      "sha256": "8cf398e0e5614ea4c848122a2555d1edefe15115ec6a952c65a2c869d9d937ff",
+      "gitBlob": "cb747f19f4c05af97f2ac986805e7b6882fcb6fb"
+    },
+    {
+      "path": "validation/dott3841-init-reply-failclosed-20261006/validation-overlay.gradle",
+      "bytes": 4447,
+      "sha256": "22acf52d0ae0178a9103d8bfc98bbb4db1caf8e341ad7db8b09506c34c5ded24",
+      "gitBlob": "8b6c6441bb212e10fc30ac561a431c801d7c87ec"
+    }
+  ]
+}

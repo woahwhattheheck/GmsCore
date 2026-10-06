@@ -1,0 +1,28 @@
+{
+  "source": {
+    "commit": "5f56c5bc037056f54c7d2dfe2edc03d8c57e0da8",
+    "tree": "cab6c7c21a2cff55e2513074e1b878d0d56badae"
+  },
+  "supersedesProposalManifestSha256": "f2ee59980ada58589dc7e06e94ed2e2fbabed5e6f33c8c43f0cf865798ae10fd",
+  "reason": "Peer docs precision: close is attempted; a descriptor close exception does not guarantee OS closure.",
+  "changes": {
+    "play-services-droidguard/core/src/main/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProvider.kt": {
+      "beforeGitBlob": "bbf96e0edc57a92d00345abf1fdd3b916c37d86a",
+      "afterGitBlob": "78767c88e78b798775d122a9b82c79483ba13398",
+      "sha256": "b0845f7234ed5dccd64781ed2b0899d9186016fe2d600be74b4a20bbcfb8b7b0",
+      "bytes": 8900
+    },
+    "play-services-droidguard/REMOTE_DROIDGUARD_SETUP.md": {
+      "beforeGitBlob": "396577d1d7784b82a77bfaf69a2599cb733f0a7e",
+      "afterGitBlob": "949ec838e43f69567c2393a711f613fe03ba008c",
+      "sha256": "5c832c793f9a80649fff3c0f490aa7abbf05e1e116f04133de755ac4465e1330",
+      "bytes": 11358
+    }
+  },
+  "projectedSourceTree": "3816a397d95c1c602c16ec7b1a092b1d8c9b0b30",
+  "unchangedSourceLeaves": 5373,
+  "addedSourceFiles": 0,
+  "deletedSourceFiles": 0,
+  "testsExecuted": false,
+  "canonicalOrNativeWrites": 0
+}

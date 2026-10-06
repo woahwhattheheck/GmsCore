@@ -1,0 +1,115 @@
+{
+  "kind": "frozen validation-only unexecuted Robolectric peer draft",
+  "sourceHead": "5f56c5bc037056f54c7d2dfe2edc03d8c57e0da8",
+  "sourceTree": "cab6c7c21a2cff55e2513074e1b878d0d56badae",
+  "candidateProviderGitBlob": "78767c88e78b798775d122a9b82c79483ba13398",
+  "candidateProviderSha256": "b0845f7234ed5dccd64781ed2b0899d9186016fe2d600be74b4a20bbcfb8b7b0",
+  "candidateManifestSha256": "f2ee59980ada58589dc7e06e94ed2e2fbabed5e6f33c8c43f0cf865798ae10fd",
+  "expectedCases": 12,
+  "expectedOriginalFailures": 6,
+  "expectationsAreNotExecutionEvidence": true,
+  "validationDependenciesOnly": [
+    "org.robolectric:robolectric:4.12.2",
+    "org.mockito:mockito-inline:5.2.0"
+  ],
+  "runtimePinned": "Robolectric API29; proposed real Gradle8.13/JDK17 execution pending primary/root review",
+  "structuralChecks": [
+    "three Kotlin files",
+    "twelve @Test methods match expected-tests.json",
+    "no mockStatic preference interception",
+    "no dynamic caller VM class loading or direct remote network implementation",
+    "Shadow.directlyOn typed via return context for official <R,T> overload",
+    "full-class-name instrumentedPackages prefix supported by official4.12.2 InstrumentationConfiguration"
+  ],
+  "executedKotlinGradleRobolectricTests": false,
+  "actualADBDeviceGuestCommands": 0,
+  "livePIOrDottProof": false,
+  "sourceRefPRBodyCommentSlackWrites": 0,
+  "hashLocks": {
+    "README.md": {
+      "bytes": 4357,
+      "sha256": "09ff075366daea65ecd82237834ba1e44e037039c706cf45e32a8ff5912d6f6f",
+      "gitBlob": "b44bd21f186bc357b22b3ff6c8e02a8426c8bfb2"
+    },
+    "expected-tests.json": {
+      "bytes": 1792,
+      "sha256": "98667989f2f1e11c40da33bd09bd1d90756b5577e842d6f1a3301a311908acb9",
+      "gitBlob": "471cf079cfcda4a94624359e5d7fd99159a9ff1f"
+    },
+    "official-robolectric-source/Config.java": {
+      "bytes": 20662,
+      "sha256": "ee7a1a7e1f654665fd62a2b4708641874a450d0662dd0da32d4f87b0acdeefff",
+      "gitBlob": "1553e6d960703f04bb22f6e570c5b2958cb2f45f"
+    },
+    "official-robolectric-source/ContentProviderController.java": {
+      "bytes": 3741,
+      "sha256": "6cc13a7ae8be054b6fbd65f84203988d0d08d5d2605cf70247a8f583baa40372",
+      "gitBlob": "3643b16a80d40d495e5f7544a3f36511d8085ab7"
+    },
+    "official-robolectric-source/InstrumentationConfiguration.java": {
+      "bytes": 13074,
+      "sha256": "4b0a76ebfd4fbd815d65b310a5b2fa5b00b364d099bea5e9c66a3a46cf62cf1d",
+      "gitBlob": "57cbcb866eb2afa672e0066faf6fab55ff783dac"
+    },
+    "official-robolectric-source/Shadow.java": {
+      "bytes": 3186,
+      "sha256": "ea03c48075ef0cd641d11ff27af17a567ba4ee3989b8269d533e3337194b99d9",
+      "gitBlob": "02ba581a1e706e3b609452cbd826c5ac4c035dd4"
+    },
+    "official-robolectric-source/ShadowApplication.java": {
+      "bytes": 12865,
+      "sha256": "ac1c141a108070c99c8a9f3099b0cb2cfbd4ef6f40d6015a195222321911ef3c",
+      "gitBlob": "b726386c8c86967777199f04afb644dfa42069d7"
+    },
+    "official-robolectric-source/ShadowBinder.java": {
+      "bytes": 2954,
+      "sha256": "2895fda3292858535dd476a238be06b9498e6958155254e6195439fdd82b88a1",
+      "gitBlob": "e62796b324d114d339c29f66c81c35f10d1c04ab"
+    },
+    "official-robolectric-source/ShadowContentProvider.java": {
+      "bytes": 1217,
+      "sha256": "ae22ab0b1fbc2ad41a4d77fc88ee5621210e2bf7543d9800842d077aded5009d",
+      "gitBlob": "a92f530152ecac2ede28b54affe3996ef2c678b3"
+    },
+    "official-robolectric-source/ShadowContentResolver.java": {
+      "bytes": 38531,
+      "sha256": "53f1dfe7b0f5f5e464fe2b74461efea9a81b095e340310b79b94021f94d144ca",
+      "gitBlob": "7c8869b3b6e95ccd740de04459fee73477084e31"
+    },
+    "official-robolectric-source/ShadowContextWrapper.java": {
+      "bytes": 6049,
+      "sha256": "10eb9924a854b7499fa5b7e8584c548f2f6aa0d5d4db9f32c550d639e4696cfc",
+      "gitBlob": "3f821b7d647f4d0154ae03d29a6d906d2f0aa98d"
+    },
+    "official-robolectric-source/ShadowParcelFileDescriptor.java": {
+      "bytes": 11462,
+      "sha256": "dbcde7a90f58999c766f4f71a4683dad95e2e6feed6d8c96b68e419ec830c5e6",
+      "gitBlob": "08cdae467a53c16c736f3e274348fcb0aa1cec51"
+    },
+    "official-robolectric-source/source-receipt.json": {
+      "bytes": 4230,
+      "sha256": "f81d78730d4aeb8e6c95b429894592e9ccc1b574cbe68403baa348d9049b0bd9",
+      "gitBlob": "09ebfb705a3873943ff7c8d589ced7dddd798fbe"
+    },
+    "validation-dependencies.init.gradle": {
+      "bytes": 532,
+      "sha256": "e40eb980d25a52d1476fbd77046e6043c7b978ac679c15fe6f91d16443238729",
+      "gitBlob": "aede5a284355620fea3be6352aeb8a6aae117929"
+    },
+    "validation-overlay/play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProviderInitReplyTest.kt": {
+      "bytes": 5744,
+      "sha256": "a1f554e32f2e5b17c97613e02c9c0784a43bad7057c36efcde8b42187c84801e",
+      "gitBlob": "a367c3de0405f825ce7fa97cbb2484461fa7902b"
+    },
+    "validation-overlay/play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProviderPartialReplyTest.kt": {
+      "bytes": 5145,
+      "sha256": "41d3b76e1e91a004b3c3dc4688818147781f365d624b0b5432dd06ae265cba42",
+      "gitBlob": "79a5d4cc1f1f3bd096293eaf4bc678b21f6de29d"
+    },
+    "validation-overlay/play-services-droidguard/core/src/test/kotlin/org/microg/gms/droidguard/core/DroidGuardSessionProviderTestHarness.kt": {
+      "bytes": 10903,
+      "sha256": "8cf398e0e5614ea4c848122a2555d1edefe15115ec6a952c65a2c869d9d937ff",
+      "gitBlob": "cb747f19f4c05af97f2ac986805e7b6882fcb6fb"
+    }
+  }
+}

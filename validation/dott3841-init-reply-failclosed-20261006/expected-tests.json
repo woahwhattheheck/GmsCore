@@ -1,0 +1,47 @@
+{
+  "status": "declared expectations only; no execution",
+  "total": 12,
+  "candidate": {
+    "cases": {
+      "org.microg.gms.droidguard.core.DroidGuardSessionProviderPartialReplyTest": [
+        "controlledDescriptorOnlyReplyIsRejectedAndClosed",
+        "controlledObjectOnlyReplyIsRejectedWithoutId",
+        "controlledBothFieldsReplyIsRejectedAndClosed",
+        "controlledDescriptorCloseExceptionStillRejectsAndClosesVm"
+      ],
+      "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest": [
+        "actualCoreReplyDescriptorProbeObservesOpenThenClosed",
+        "callerBundleReplyIsRejectedWithoutSessionIdAndDescriptorIsClosed",
+        "evenEmptyCallerBundleReplyIsRejected",
+        "nonBundleParcelableReplyIsRejected",
+        "emptyReplyRetainsOneVmAcrossRepeatedSnapshotsAndClosesOnce",
+        "nativeInitFalseReturnsNoIdAndClosesFailedVmOnce",
+        "nativeRbThrowsReturnsNoIdAndClosesFailedVmOnce",
+        "actualCoreDescriptorOpenFailureReturnsNoIdAndClosesVmOnce"
+      ]
+    },
+    "passes": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "original": {
+    "failures": {
+      "org.microg.gms.droidguard.core.DroidGuardSessionProviderInitReplyTest": [
+        "callerBundleReplyIsRejectedWithoutSessionIdAndDescriptorIsClosed",
+        "evenEmptyCallerBundleReplyIsRejected",
+        "nonBundleParcelableReplyIsRejected"
+      ],
+      "org.microg.gms.droidguard.core.DroidGuardSessionProviderPartialReplyTest": [
+        "controlledDescriptorOnlyReplyIsRejectedAndClosed",
+        "controlledObjectOnlyReplyIsRejectedWithoutId",
+        "controlledBothFieldsReplyIsRejectedAndClosed"
+      ]
+    },
+    "failureCount": 6,
+    "controlsExpectedPass": 6,
+    "errors": 0,
+    "skipped": 0
+  },
+  "sameExactOverlayRequired": true
+}
