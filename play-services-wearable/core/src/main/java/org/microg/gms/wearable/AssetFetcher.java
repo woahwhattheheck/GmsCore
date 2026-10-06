@@ -303,9 +303,9 @@ public class AssetFetcher {
         fetchLog.verbose("Asset received and tracked: " + digest);
     }
 
-    public void onAssetTransferStarted(String digest) {
+    public void onAssetTransferStarted(String digest, String sourceNodeId) {
         PendingFetch pending = pendingFetches.get(digest);
-        if (pending == null) return;
+        if (pending == null || !Objects.equals(pending.nodeId, sourceNodeId)) return;
         PendingFetch transfer = startPendingFetch(digest, pending.nodeId, pending.retry);
         schedulePendingTimeout(transfer, FETCH_TRANSFER_TIMEOUT_MS);
     }

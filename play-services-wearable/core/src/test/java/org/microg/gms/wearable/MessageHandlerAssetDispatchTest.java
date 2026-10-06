@@ -168,7 +168,7 @@ public class MessageHandlerAssetDispatchTest {
         assertEquals(1, fetcher.getStats().currentlyFetching);
         assertEquals(AssetFetcher.FETCH_RESPONSE_TIMEOUT_MS, (long) scheduler.delays.get(0));
 
-        fetcher.onAssetTransferStarted(digest); // a data-null SetAsset header is not completion
+        fetcher.onAssetTransferStarted(digest, "peer-a"); // a data-null SetAsset header is not completion
         assertEquals(1, fetcher.getStats().currentlyFetching);
         assertEquals(AssetFetcher.FETCH_TRANSFER_TIMEOUT_MS, (long) scheduler.delays.get(1));
 
@@ -250,6 +250,46 @@ public class MessageHandlerAssetDispatchTest {
         fetcher.onAssetReceived(digest);
         assertEquals(0, fetcher.getStats().currentlyFetching);
         assertEquals(0, fetcher.getStats().retrying);
+    }
+
+    @Test
+    public void transferStartFromOldPeerDoesNotExtendReplacementPeerTimeout() {
+        ManualScheduler scheduler = new ManualScheduler();
+        AssetFetcher fetcher = new AssetFetcher(null, scheduler, new SilentAssetFetchLog());
+        DataItemRecord record = new DataItemRecord();
+        record.source = "peer-a";
+        record.packageName = "example.app";
+        record.signatureDigest = "signature";
+        String digest = WearableConnection.calculateDigest(new byte[]{8, 6, 4});
+        CapturingConnection connection = new CapturingConnection();
+        CapturingConnection alternateConnection = new CapturingConnection();
+        Map<String, WearableConnection> activeConnections = new LinkedHashMap<>();
+        activeConnections.put("peer-a", connection);
+        activeConnections.put("peer-b", alternateConnection);
+        List<com.google.android.gms.wearable.Asset> missing = Collections.singletonList(
+                com.google.android.gms.wearable.Asset.createFromRef(digest));
+
+        fetcher.fetchMissingAssetsForRecord(connection, "peer-a", record, missing,
+                activeConnections, null);
+        scheduler.runNext(); // peer A response timeout
+        scheduler.runNext(); // retry installs a pending request for peer B
+        assertEquals(1, alternateConnection.messages.size());
+        assertEquals(1, scheduler.tasks.size());
+        assertEquals(AssetFetcher.FETCH_RESPONSE_TIMEOUT_MS, (long) scheduler.delays.get(0));
+
+        fetcher.onAssetTransferStarted(digest, "peer-a"); // stale metadata from A
+        assertEquals(1, scheduler.tasks.size());
+        assertEquals(AssetFetcher.FETCH_RESPONSE_TIMEOUT_MS, (long) scheduler.delays.get(0));
+
+        fetcher.onAssetTransferStarted(digest, "peer-b"); // current peer may extend to transfer timeout
+        assertEquals(2, scheduler.tasks.size());
+        assertEquals(AssetFetcher.FETCH_TRANSFER_TIMEOUT_MS, (long) scheduler.delays.get(1));
+
+        scheduler.runNext(); // stale peer B response timer is now superseded
+        assertEquals(1, fetcher.getStats().currentlyFetching);
+        scheduler.runNext(); // peer B transfer timeout remains authoritative
+        assertEquals(0, fetcher.getStats().currentlyFetching);
+        assertEquals(1, fetcher.getStats().retrying);
     }
 
     @Test

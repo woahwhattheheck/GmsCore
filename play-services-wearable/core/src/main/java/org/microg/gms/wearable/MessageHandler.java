@@ -231,7 +231,7 @@ public class MessageHandler extends ServerMessageListener {
                 wearable.getAssetFetcher().onAssetReceived(setAsset.digest);
                 dispatchAssetReceived(wearable.getAssetManager(), setAsset.digest);
             } else {
-                wearable.getAssetFetcher().onAssetTransferStarted(setAsset.digest);
+                wearable.getAssetFetcher().onAssetTransferStarted(setAsset.digest, peerNodeId);
                 dispatchAssetMetadataReceived(wearable.getAssetManager(), setAsset.digest);
             }
         }
