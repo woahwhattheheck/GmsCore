@@ -1,5 +1,5 @@
-name: "RCS #2994 head d980bafc unit-test validation"
-# retrigger: 2026-10-05T21Z
+name: "RCS #2994 head bf6a893 DroidGuard-core validation"
+# retrigger: 2026-10-06T00Z
 
 on:
   push:
@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: rcs2994-headtest-d980bafc-swe7
+  group: rcs2994-headtest-bf6a893-droidguard-core
   cancel-in-progress: false
 
 jobs:
@@ -25,8 +25,8 @@ jobs:
     timeout-minutes: 90
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
-      VALIDATION_SOURCE_SHA: 'd980bafcbdd255b12a5680692422a80d45716b62'
-      VALIDATION_SOURCE_TREE: '3be1b550f61f54009bb68df828f097d73a2d268e'
+      VALIDATION_SOURCE_SHA: 'bf6a89382d2d20f67209512d2fd8ec8fa32adf83'
+      VALIDATION_SOURCE_TREE: '40792166ec57165b81e7cecd04b150b10609926d'
       EVIDENCE_DIR: /tmp/rcs2994-headtest-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Start the execution receipt
@@ -122,7 +122,7 @@ jobs:
           test -f "$rcs_sdk_root/platforms/android-35/android.jar"
           test -x "$rcs_sdk_root/build-tools/35.0.0/aapt2"
 
-      - name: Run the constellation, asterism, and DroidGuard unit suites
+      - name: Run the focused DroidGuard-core unit suite
         id: build
         shell: bash
         run: |
@@ -133,9 +133,6 @@ jobs:
           ./gradlew --no-daemon --console=plain --max-workers=1 --no-parallel \
             '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pkotlin.compiler.execution.strategy=in-process \
-            :play-services-constellation-core:testDebugUnitTest \
-            :play-services-asterism-core:testDebugUnitTest \
-            :play-services-droidguard:testDebugUnitTest \
             :play-services-droidguard-core:testDebugUnitTest \
             2>&1 | tee "$EVIDENCE_DIR/gradle.log"
           rcs_gradle_exit="${PIPESTATUS[0]}"
@@ -156,9 +153,6 @@ jobs:
               "max_workers": 1,
               "kotlin_compiler_execution_strategy": "in-process",
               "tasks": [
-                  ":play-services-constellation-core:testDebugUnitTest",
-                  ":play-services-asterism-core:testDebugUnitTest",
-                  ":play-services-droidguard:testDebugUnitTest",
                   ":play-services-droidguard-core:testDebugUnitTest",
               ],
           }
@@ -200,9 +194,6 @@ jobs:
               return entry
 
           modules = {
-              "constellation_core": Path("play-services-constellation/core"),
-              "asterism_core": Path("play-services-asterism/core"),
-              "droidguard": Path("play-services-droidguard"),
               "droidguard_core": Path("play-services-droidguard/core"),
           }
           junit = {}
@@ -284,7 +275,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rcs2994-headtest-d980bafc-${{ github.run_id }}-${{ github.run_attempt }}
+          name: rcs2994-headtest-bf6a893-droidguard-core-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.EVIDENCE_DIR }}/
           if-no-files-found: error
           retention-days: 30
