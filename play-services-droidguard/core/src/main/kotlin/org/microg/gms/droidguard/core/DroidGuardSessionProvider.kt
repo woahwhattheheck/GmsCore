@@ -102,8 +102,9 @@ class DroidGuardSessionProvider : ContentProvider() {
         }
         val handle = DroidGuardHandleImpl(ctx, source, factory, GuardCallback(ctx, source))
         try {
-            // The retained server handle executes snapshots itself; no descriptor is exported.
-            handle.initWithRequest(flow, request).pfd?.close()
+            // The ordinary client consumes a non-null init reply by loading the returned VM,
+            // initializing it once, and closing it before using the retained handle.
+            consumeInitReply(handle.initWithRequest(flow, request))
             if (!handle.isReady()) throw DroidGuardSessionException(502, "Native DroidGuard initialization failed")
             return object : DroidGuardHandle {
                 @Volatile private var opened = true
@@ -122,6 +123,27 @@ class DroidGuardSessionProvider : ContentProvider() {
         } catch (e: Exception) {
             handle.close()
             throw e
+        }
+    }
+
+    private fun consumeInitReply(reply: com.google.android.gms.droidguard.internal.DroidGuardInitReply) {
+        val pfd = reply.pfd ?: return
+        try {
+            val bundle = reply.object as? Bundle
+                ?: throw DroidGuardSessionException(502, "Unsupported native DroidGuard init reply")
+            val vmKey = bundle.getString("h")
+                ?: throw DroidGuardSessionException(502, "Native DroidGuard init reply is missing VM key")
+            val followUp = factory.createHandle(vmKey, pfd, bundle)
+            try {
+                followUp.init()
+            } finally {
+                followUp.close()
+            }
+        } finally {
+            try {
+                pfd.close()
+            } catch (_: Exception) {
+            }
         }
     }
 
