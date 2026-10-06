@@ -64,6 +64,16 @@ class DroidGuardHandleImplRbTest {
     }
 
     @Test
+    fun snapshot_selectsMapOverloadBySignature() {
+        val service = handle(factory { HandleProxy(OverloadedSnapshotVm(), VM_KEY) })
+
+        service.initWithRequest("test", null)
+
+        assertArrayEquals(SNAPSHOT, service.snapshot(mutableMapOf()))
+        service.close()
+    }
+
+    @Test
     fun rbThrows_fallsBackInsteadOfUsingBrokenHandle() {
         val service = handle(factory { HandleProxy(RbVm(null, throwOnRb = true), VM_KEY) })
 
@@ -123,6 +133,13 @@ class DroidGuardHandleImplRbTest {
 
     class NoRbVm {
         fun init() = true
+        fun ss(map: Map<Any?, Any?>): ByteArray = SNAPSHOT
+        fun close() = Unit
+    }
+
+    class OverloadedSnapshotVm {
+        fun init() = true
+        fun ss(value: String): ByteArray = error("wrong overload selected: $value")
         fun ss(map: Map<Any?, Any?>): ByteArray = SNAPSHOT
         fun close() = Unit
     }
