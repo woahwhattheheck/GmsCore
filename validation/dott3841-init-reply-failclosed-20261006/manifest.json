@@ -135,9 +135,9 @@
   "controllerFileLocks": [
     {
       "path": ".github/workflows/build.yml",
-      "bytes": 3131,
-      "sha256": "79fb8c89f378c08af4b721a17f52e7cbbd90bcad2fcaaeeb65c9c31dc7ac10bf",
-      "gitBlob": "c2566a5bcff7516d426041f648d9829121bc5a1e"
+      "bytes": 3141,
+      "sha256": "afee4c8cfc409005ba816f0531ea84f1ac3c6096d73b20bfa8f2ae11132c1ccc",
+      "gitBlob": "b1e746d8836f8dd96eb31d78cf7baeb26ea3b9cc"
     },
     {
       "path": "validation/dott3841-init-reply-failclosed-20261006/README.md",

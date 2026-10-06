@@ -17,8 +17,8 @@ jobs:
     timeout-minutes: 60
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
-      EVIDENCE_DIR: ${{ runner.temp }}/dott3841-init-reply-${{ github.run_id }}-${{ github.run_attempt }}
-      DOTT_ANDROID_RUNTIME_DIR: ${{ runner.temp }}/dott3841-android-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_DIR: ${{ github.workspace }}/dott3841-init-reply-${{ github.run_id }}-${{ github.run_attempt }}
+      DOTT_ANDROID_RUNTIME_DIR: ${{ github.workspace }}/dott3841-android-runtime-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout immutable validation controller
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
