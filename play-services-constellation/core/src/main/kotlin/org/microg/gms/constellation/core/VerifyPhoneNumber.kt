@@ -525,7 +525,7 @@ private suspend fun executeSyncFlow(
         ) {
             Log.w(
                 TAG,
-                "Skipping verification for IMSIs=$verificationImsis because it does not match requested IMSIs=$requestedImsis"
+                "Skipping verification because response SIM associations do not match the requested SIM set"
             )
             return@mapNotNull null
         }
@@ -550,8 +550,6 @@ private suspend fun executeSyncFlow(
 
         if (finalVerification.state != Verification.State.VERIFIED) {
             Log.w(TAG, "Unverified. State: ${finalVerification.state}")
-            (finalVerification.pending_verification_info
-                ?: finalVerification.unverified_info)?.let { Log.w(TAG, it.toString()) }
 
             if (!request.includeUnverified) {
                 return@mapNotNull null
