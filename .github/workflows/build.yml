@@ -1,5 +1,5 @@
-name: "RCS #2994 head bf6a893 DroidGuard-core validation"
-# retrigger: 2026-10-06T00Z
+name: "RCS #2994 head 44b97d1 DroidGuard-core validation"
+# retrigger: 2026-10-06T00:37Z
 
 on:
   push:
@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: rcs2994-headtest-bf6a893-droidguard-core
+  group: rcs2994-headtest-44b97d1-droidguard-core
   cancel-in-progress: false
 
 jobs:
@@ -25,8 +25,8 @@ jobs:
     timeout-minutes: 90
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
-      VALIDATION_SOURCE_SHA: 'bf6a89382d2d20f67209512d2fd8ec8fa32adf83'
-      VALIDATION_SOURCE_TREE: '40792166ec57165b81e7cecd04b150b10609926d'
+      VALIDATION_SOURCE_SHA: '44b97d1a58e2aa63facb33aa4237506dd1160231'
+      VALIDATION_SOURCE_TREE: 'a01be921dbce4ffeda6bb0fb7deb5b51cdf08893'
       EVIDENCE_DIR: /tmp/rcs2994-headtest-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Start the execution receipt
@@ -275,7 +275,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rcs2994-headtest-bf6a893-droidguard-core-${{ github.run_id }}-${{ github.run_attempt }}
+          name: rcs2994-headtest-44b97d1-droidguard-core-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.EVIDENCE_DIR }}/
           if-no-files-found: error
           retention-days: 30
