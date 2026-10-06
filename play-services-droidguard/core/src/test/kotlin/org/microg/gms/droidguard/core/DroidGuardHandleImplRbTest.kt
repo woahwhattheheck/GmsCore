@@ -74,6 +74,16 @@ class DroidGuardHandleImplRbTest {
     }
 
     @Test
+    fun snapshot_findsProtectedMapMethodOnSuperclass() {
+        val service = handle(factory { HandleProxy(InheritedSnapshotVm(), VM_KEY) })
+
+        service.initWithRequest("test", null)
+
+        assertArrayEquals(SNAPSHOT, service.snapshot(mutableMapOf()))
+        service.close()
+    }
+
+    @Test
     fun rbThrows_fallsBackInsteadOfUsingBrokenHandle() {
         val service = handle(factory { HandleProxy(RbVm(null, throwOnRb = true), VM_KEY) })
 
@@ -141,6 +151,15 @@ class DroidGuardHandleImplRbTest {
         fun init() = true
         fun ss(value: String): ByteArray = error("wrong overload selected: $value")
         fun ss(map: Map<Any?, Any?>): ByteArray = SNAPSHOT
+        fun close() = Unit
+    }
+
+    open class InheritedSnapshotBaseVm {
+        protected fun ss(map: Map<Any?, Any?>): ByteArray = SNAPSHOT
+    }
+
+    class InheritedSnapshotVm : InheritedSnapshotBaseVm() {
+        fun init() = true
         fun close() = Unit
     }
 
