@@ -280,7 +280,7 @@ internal class MtSmsInbox(
                     if (token == null) continue
 
                     pendingMatch.continuation.completeResume(token)
-                    Log.d(TAG, "Matching MT SMS received from ${receivedMessage.sender}")
+                    Log.d(TAG, "Matching MT SMS received")
                     delivered = true
                     break
                 }
