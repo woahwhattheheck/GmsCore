@@ -52,6 +52,10 @@ data class StoredVerifiedNumber(
 )
 
 object ConstellationStateStore {
+    // storeVerifiedNumbers performs a read-modify-write merge. Serialize only that state so
+    // concurrent verification requests cannot overwrite each other's disjoint SIM records.
+    private val verifiedNumbersLock = Any()
+
     @RequiresApi(Build.VERSION_CODES.O)
     fun loadVerificationTokens(context: Context): List<VerificationToken> {
         val prefs = tokenPrefs(context)
@@ -209,8 +213,10 @@ object ConstellationStateStore {
         val replaced = refreshedImsis.filter { it.isNotEmpty() }.toSet() +
                 fresh.map { it.imsi }
         if (fresh.isEmpty() && replaced.isEmpty()) return
-        val retained = loadVerifiedNumbers(context).filterNot { it.imsi in replaced }
-        writeVerifiedNumbers(context, retained + fresh)
+        synchronized(verifiedNumbersLock) {
+            val retained = loadVerifiedNumbers(context).filterNot { it.imsi in replaced }
+            writeVerifiedNumbers(context, retained + fresh)
+        }
     }
 
     /** Locally stored verified numbers that have not expired yet. */
