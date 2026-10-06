@@ -62,6 +62,15 @@ class CastDeviceSessionStopReplyTest {
     }
 
     @Test
+    fun overlappingStopsKeepDisconnectReasonBoundToMatchingRequest() {
+        Fixture().use {
+            val (stopResult, disconnectResult) = it.stopTwiceAndReplyToFirst()
+            assertEquals(CastDeviceSession.STATUS_SUCCESS, stopResult)
+            assertEquals(CastDeviceSession.STATUS_SUCCESS, disconnectResult)
+        }
+    }
+
+    @Test
     fun missingChannelRetainsTimeoutResult() {
         Fixture(connected = false).use {
             it.session.stopApplication("target-session")
@@ -80,6 +89,7 @@ class CastDeviceSessionStopReplyTest {
 
     private class Fixture(connected: Boolean = true) : AutoCloseable {
         val result = CompletableFuture<Int>()
+        private val applicationDisconnectResult = CompletableFuture<Int>()
         private val callbacks = object : CastDeviceSession.Callbacks {
             override fun onConnected() = Unit
             override fun onConnectionFailed(statusCode: Int) = Unit
@@ -88,7 +98,7 @@ class CastDeviceSessionStopReplyTest {
             override fun onApplicationConnected(application: ReceiverApplication, wasLaunched: Boolean) = Unit
             override fun onApplicationConnectionFailed(statusCode: Int) = Unit
             override fun onApplicationStatusChanged(statusText: String?) = Unit
-            override fun onApplicationDisconnected(statusCode: Int) = Unit
+            override fun onApplicationDisconnected(statusCode: Int) { applicationDisconnectResult.complete(statusCode) }
             override fun onStopApplicationResult(statusCode: Int) { result.complete(statusCode) }
             override fun onLeaveApplicationResult(statusCode: Int) = Unit
             override fun onTextMessage(namespace: String, message: String) = Unit
@@ -109,6 +119,47 @@ class CastDeviceSessionStopReplyTest {
                 .set(session, channel)
         }
 
+        fun stopTwiceAndReplyToFirst(): Pair<Int, Int> {
+            CastDeviceSession::class.java.getDeclaredField("application").apply { isAccessible = true }.set(
+                session,
+                ReceiverApplication(
+                    appId = "test-app",
+                    displayName = null,
+                    sessionId = "target-session",
+                    transportId = "transport-target-session",
+                    statusText = null,
+                    iconUrl = null,
+                    namespaces = emptyList(),
+                ),
+            )
+            session.stopApplication("target-session")
+            session.stopApplication("other-session")
+            executor.submit {}.get(2, TimeUnit.SECONDS)
+
+            val input = DataInputStream(ByteArrayInputStream(sent.toByteArray()))
+            val requests = ArrayList<JSONObject>()
+            repeat(2) {
+                val bytes = ByteArray(input.readInt()).also { input.readFully(it) }
+                requests.add(JSONObject(CastMessage.ADAPTER.decode(bytes).payload_utf8!!))
+            }
+            assertEquals("target-session", requests[0].getString("sessionId"))
+            assertEquals("other-session", requests[1].getString("sessionId"))
+
+            val applications = JSONArray().put(
+                JSONObject()
+                    .put("appId", "test-app")
+                    .put("sessionId", "other-session")
+                    .put("transportId", "transport-other-session"),
+            )
+            deliverReply(
+                JSONObject()
+                    .put("type", "RECEIVER_STATUS")
+                    .put("status", JSONObject().put("applications", applications))
+                    .put("requestId", requests[0].getLong("requestId")),
+            )
+            return result.get(2, TimeUnit.SECONDS) to applicationDisconnectResult.get(2, TimeUnit.SECONDS)
+        }
+
         fun stopWithReply(reply: JSONObject): Int {
             session.stopApplication("target-session")
             // A queued barrier waits for the actual outbound request, without a timing sleep.
@@ -119,6 +170,11 @@ class CastDeviceSessionStopReplyTest {
             assertEquals("STOP", request.getString("type"))
             assertEquals("target-session", request.getString("sessionId"))
             reply.put("requestId", request.getLong("requestId"))
+            deliverReply(reply)
+            return result.get(2, TimeUnit.SECONDS)
+        }
+
+        private fun deliverReply(reply: JSONObject) {
             val response = CastMessage(
                 CastMessage.ProtocolVersion.CASTV2_1_0,
                 RECEIVER_ID,
@@ -133,7 +189,6 @@ class CastDeviceSessionStopReplyTest {
             CastChannel::class.java.getDeclaredMethod("readLoop", DataInputStream::class.java)
                 .apply { isAccessible = true }
                 .invoke(channel, DataInputStream(ByteArrayInputStream(framed.toByteArray())))
-            return result.get(2, TimeUnit.SECONDS)
         }
 
         override fun close() {
