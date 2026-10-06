@@ -67,7 +67,7 @@ class AsterismApiServiceImpl(
         cb: IAsterismCallbacks?,
         request: GetAsterismConsentRequest?,
     ) {
-        Log.i(TAG, "getAsterismConsent(): $request")
+        Log.i(TAG, "getAsterismConsent()")
         if (cb == null || request == null) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             cb.onConsentFetched(Status.INTERNAL_ERROR, null)
@@ -79,7 +79,7 @@ class AsterismApiServiceImpl(
     }
 
     override fun setAsterismConsent(cb: IAsterismCallbacks?, request: SetAsterismConsentRequest?) {
-        Log.i(TAG, "setAsterismConsent(): $request")
+        Log.i(TAG, "setAsterismConsent()")
         if (cb == null || request == null) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             cb.onConsentRegistered(Status.INTERNAL_ERROR, null)
