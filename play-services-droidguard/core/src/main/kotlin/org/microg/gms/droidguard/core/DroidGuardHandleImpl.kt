@@ -125,11 +125,21 @@ class DroidGuardHandleImpl(private val context: Context, private val packageName
         private val NOT_LOW_LATENCY_FLOWS = setOf("ad_attest", "attest", "checkin", "federatedMachineLearningReduced", "msa-f", "ad-event-attest-token")
 
         private fun findVmMethod(clazz: Class<*>, name: String, vararg parameterTypes: Class<*>): Method? {
-            val method = (clazz.methods + clazz.declaredMethods).firstOrNull {
+            var current: Class<*>? = clazz
+            while (current != null) {
+                val method = current.declaredMethods.firstOrNull {
+                    it.name == name && it.parameterTypes.contentEquals(parameterTypes)
+                }
+                if (method != null) {
+                    method.isAccessible = true
+                    return method
+                }
+                current = current.superclass
+            }
+
+            return clazz.methods.firstOrNull {
                 it.name == name && it.parameterTypes.contentEquals(parameterTypes)
-            } ?: return null
-            method.isAccessible = true
-            return method
+            }?.also { it.isAccessible = true }
         }
     }
 }
