@@ -34,7 +34,7 @@ class DroidGuardHandleImpl(private val context: Context, private val packageName
 
     @SuppressLint("SetWorldReadable")
     override fun initWithRequest(flow: String?, request: DroidGuardResultsRequest?): DroidGuardInitReply {
-        Log.d(TAG, "initWithRequest($flow, $request)")
+        Log.d(TAG, "initWithRequest($flow)")
         this.flow = flow
         var handleProxy: HandleProxy? = null
         try {
@@ -66,7 +66,7 @@ class DroidGuardHandleImpl(private val context: Context, private val packageName
             val initializedProxy = handleProxy!!
             // rb() is optional. A missing method is not an error; only a throwing rb()
             // or a non-null rb() whose VM apk is missing fail-closes the handle.
-            val rbMethod = findVmMethod(initializedProxy.handle.javaClass, "rb", 0)
+            val rbMethod = findVmMethod(initializedProxy.handle.javaClass, "rb")
             if (rbMethod != null) {
                 try {
                     val `object` = rbMethod.invoke(initializedProxy.handle) as? Parcelable
@@ -90,12 +90,12 @@ class DroidGuardHandleImpl(private val context: Context, private val packageName
     }
 
     override fun snapshot(map: MutableMap<Any?, Any?>): ByteArray {
-        Log.d(TAG, "snapshot($map)")
+        Log.d(TAG, "snapshot()")
         condition.block()
         handleInitError?.let { return FallbackCreator.create(flow, context, map, it) }
         val handleProxy = this.handleProxy ?: return FallbackCreator.create(flow, context, map, IllegalStateException())
         return try {
-            val ss = findVmMethod(handleProxy.handle.javaClass, "ss", 1)
+            val ss = findVmMethod(handleProxy.handle.javaClass, "ss", Map::class.java)
                 ?: throw NoSuchMethodException("ss")
             ss.invoke(handleProxy.handle, map) as ByteArray
         } catch (e: Exception) {
@@ -124,9 +124,9 @@ class DroidGuardHandleImpl(private val context: Context, private val packageName
         private val LOW_LATENCY_ENABLED = false
         private val NOT_LOW_LATENCY_FLOWS = setOf("ad_attest", "attest", "checkin", "federatedMachineLearningReduced", "msa-f", "ad-event-attest-token")
 
-        private fun findVmMethod(clazz: Class<*>, name: String, parameterCount: Int): Method? {
+        private fun findVmMethod(clazz: Class<*>, name: String, vararg parameterTypes: Class<*>): Method? {
             val method = (clazz.methods + clazz.declaredMethods).firstOrNull {
-                it.name == name && it.parameterTypes.size == parameterCount
+                it.name == name && it.parameterTypes.contentEquals(parameterTypes)
             } ?: return null
             method.isAccessible = true
             return method
