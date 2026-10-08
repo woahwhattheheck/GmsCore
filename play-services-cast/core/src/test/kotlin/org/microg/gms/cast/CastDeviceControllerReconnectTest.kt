@@ -174,6 +174,27 @@ class CastDeviceControllerReconnectTest {
     }
 
     @Test
+    fun delayedConnectSuccessAfterDisconnectIsIgnored() {
+        val listener = RecordingListener()
+        val controller = controller(listener)
+        val session = session(controller)
+        val callbacks = callbacks(session)
+
+        controller.connect()
+        // Do not run the real socket connect. Disconnect while that result is still pending.
+        executors.single().pending.clear()
+        controller.disconnect()
+        executors.single().pending.clear()
+
+        // A late success from the released session must not publish a successful reconnect.
+        callbacks.onConnected()
+
+        assertEquals(listOf("release"), events)
+        assertFalse(listener.events.contains("onConnectedWithResult:0"))
+        assertEquals(0, executors.single().pending.size)
+    }
+
+    @Test
     fun userDisconnectStillEndsWithoutReconnect() {
         val listener = RecordingListener()
         val controller = controller(listener)
