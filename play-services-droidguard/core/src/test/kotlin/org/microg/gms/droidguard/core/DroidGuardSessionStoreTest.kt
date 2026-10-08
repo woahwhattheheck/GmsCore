@@ -17,6 +17,54 @@ import java.util.concurrent.atomic.AtomicLong
 
 class DroidGuardSessionStoreTest {
     @Test
+    fun beginDoesNotPublishSessionClearedDuringInitialization() {
+        val openStarted = CountDownLatch(1)
+        val finishOpen = CountDownLatch(1)
+        val handle = object : DroidGuardHandle {
+            @Volatile private var opened = true
+            override fun isOpened(): Boolean = opened
+            override fun snapshot(data: Map<String, String>): String = "unused"
+            override fun close() {
+                opened = false
+            }
+        }
+
+        DroidGuardSessionStore(
+            openHandle = { _, _, _ ->
+                openStarted.countDown()
+                check(finishOpen.await(5, TimeUnit.SECONDS)) { "initialization did not unblock" }
+                handle
+            },
+            operationTimeoutMillis = 5_000,
+            idleTimeoutMillis = 30_000,
+            maxSessions = 1
+        ).use { store ->
+            val callers = Executors.newSingleThreadExecutor()
+            try {
+                val begin = callers.submit<String> {
+                    store.begin(12, "integrity", "test", emptyMap())
+                }
+                assertTrue("native initialization must start", openStarted.await(5, TimeUnit.SECONDS))
+
+                store.clear()
+                finishOpen.countDown()
+
+                try {
+                    begin.get(5, TimeUnit.SECONDS)
+                    fail("clear must prevent publishing an already-retired session ID")
+                } catch (e: java.util.concurrent.ExecutionException) {
+                    val cause = e.cause as? DroidGuardSessionException ?: throw e
+                    assertEquals(404, cause.code)
+                }
+            } finally {
+                finishOpen.countDown()
+                callers.shutdownNow()
+                callers.awaitTermination(5, TimeUnit.SECONDS)
+            }
+        }
+    }
+
+    @Test
     fun reaperRetainsBusyNativeSnapshotUntilCompletionThenExpiresIdle() {
         val clock = AtomicLong(0L)
         val snapshotStarted = CountDownLatch(1)
