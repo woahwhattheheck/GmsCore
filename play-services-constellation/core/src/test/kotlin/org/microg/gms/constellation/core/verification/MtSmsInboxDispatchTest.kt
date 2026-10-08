@@ -38,7 +38,7 @@ class MtSmsInboxDispatchTest {
         var disposed = false
             private set
         val awaiting get() = !signal.isCompleted
-        override suspend fun awaitMatch(expectedBody: String): ReceivedSms? = signal.await()
+        override suspend fun awaitMatch(expectedBody: String, requiredSubId: Int): ReceivedSms? = signal.await()
         fun deliver(sms: ReceivedSms) { signal.complete(sms) }
         override fun dispose() {
             disposed = true
