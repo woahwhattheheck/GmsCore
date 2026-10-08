@@ -157,15 +157,24 @@ class CastDeviceControllerImpl(
 
     override fun disconnect() {
         Log.d(TAG, "disconnect from ${castDevice.friendlyName} ($packageName)")
-        val current = synchronized(this) {
+        val release = synchronized(this) {
+            if (released) return
             released = true
             reconnecting = false
-            session
+            rejoining = false
+            connectRequested = false
+            val pendingInit = initCallback
+            initCallback = null
+            session to pendingInit
         }
+        val (current, pendingInit) = release
         unlinkListener()
         CastChannelRegistry.unregister(castDevice.deviceId, current)
         current.disconnect()
         onRelease(this)
+        // A legacy service request can still be waiting for its asynchronous connect result.
+        // Complete it as a failure now; a stale session callback must not resurrect this controller.
+        pendingInit?.invoke(CastDeviceSession.STATUS_NETWORK_ERROR)
     }
 
     /** Set the client listener and disconnect once its process dies. Returns false if it is already dead. */
@@ -271,7 +280,7 @@ class CastDeviceControllerImpl(
             // disconnect() may have run during the connect (client died, service destroyed) and unregistered first.
             if (released || owner !== session) CastChannelRegistry.unregister(castDevice.deviceId, owner)
         }
-        if (owner !== session) return
+        if (owner !== session || released) return
         if (statusCode != CastDeviceSession.STATUS_SUCCESS) {
             if (reconnecting && !released) {
                 retryReconnect(owner)
