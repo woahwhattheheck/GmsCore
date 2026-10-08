@@ -44,6 +44,24 @@ class MtSmsMultipartJoinTest {
     }
 
     @Test
+    fun `mixed originating senders cannot be joined into one challenge`() {
+        assertNull(
+            joinParts(
+                listOf("+15550100" to "your code is 74", "+15550200" to "21")
+            )
+        )
+    }
+
+    @Test
+    fun `missing multipart content cannot manufacture a matching challenge`() {
+        assertNull(
+            joinParts(
+                listOf("+15550100" to "your code is 74", null to null, "+15550100" to "21")
+            )
+        )
+    }
+
+    @Test
     fun `an intent without any body yields no message`() {
         assertNull(joinParts(listOf(null to null)))
         assertNull(joinParts(emptyList<Pair<String?, String?>>()))
