@@ -89,6 +89,24 @@ class CastDeviceSessionJoinTest {
     }
 
     @Test
+    fun failedLeaveRetainsTransportForSuccessfulRetry() {
+        Harness().use { harness ->
+            harness.receive(receiverStatus("application-transport").put("requestId", harness.beginJoin()))
+            harness.breakChannelWrites()
+            harness.leaveApplication()
+            assertEquals(listOf(CastDeviceSession.STATUS_NETWORK_ERROR), harness.callbacks.leaveStatuses)
+
+            harness.restoreChannelWrites()
+            harness.leaveApplication(keepOutput = true)
+            assertEquals(
+                listOf(CastDeviceSession.STATUS_NETWORK_ERROR, CastDeviceSession.STATUS_SUCCESS),
+                harness.callbacks.leaveStatuses,
+            )
+            assertEquals(listOf("application-transport"), harness.transportClosures())
+        }
+    }
+
+    @Test
     fun applicationJoinOptionsCannotMakeThePlatformConnectionInvisible() {
         Harness().use { harness ->
             harness.connectPlatform(2)
@@ -247,10 +265,22 @@ class CastDeviceSessionJoinTest {
             return takeReceiverRequest("GET_STATUS")
         }
 
-        fun leaveApplication() {
+        fun leaveApplication(keepOutput: Boolean = false) {
             session.leaveApplication()
             awaitIdle()
-            output.reset()
+            if (!keepOutput) output.reset()
+        }
+
+        fun breakChannelWrites() {
+            val rejected = DataOutputStream(object : java.io.OutputStream() {
+                override fun write(value: Int) { throw java.io.IOException("Cast output interrupted") }
+            })
+            CastChannel::class.java.getDeclaredField("output").apply { isAccessible = true }.set(channel, rejected)
+        }
+
+        fun restoreChannelWrites() {
+            CastChannel::class.java.getDeclaredField("output").apply { isAccessible = true }
+                .set(channel, DataOutputStream(output))
         }
 
         fun connectPlatform(connectionType: Int) = channel.connectTransport(RECEIVER_ID, connectionType)
@@ -271,6 +301,10 @@ class CastDeviceSessionJoinTest {
             output.reset()
             return request.getLong("requestId")
         }
+
+        fun transportClosures(): List<String> = outgoing()
+            .filter { it.namespace == NAMESPACE_CONNECTION && JSONObject(it.payload_utf8!!).optString("type") == "CLOSE" }
+            .map { it.destination_id }
 
         fun transportConnections(): List<String> = outgoing()
             .filter { it.namespace == NAMESPACE_CONNECTION && JSONObject(it.payload_utf8!!).optString("type") == "CONNECT" }
@@ -319,6 +353,7 @@ class CastDeviceSessionJoinTest {
         val connected = ArrayList<ReceiverApplication>()
         val wasLaunched = ArrayList<Boolean>()
         val failures = ArrayList<Int>()
+        val leaveStatuses = ArrayList<Int>()
         override fun onApplicationConnected(application: ReceiverApplication, wasLaunched: Boolean) {
             connected.add(application)
             this.wasLaunched.add(wasLaunched)
@@ -331,7 +366,7 @@ class CastDeviceSessionJoinTest {
         override fun onApplicationStatusChanged(statusText: String?) {}
         override fun onApplicationDisconnected(statusCode: Int) {}
         override fun onStopApplicationResult(statusCode: Int) {}
-        override fun onLeaveApplicationResult(statusCode: Int) {}
+        override fun onLeaveApplicationResult(statusCode: Int) { leaveStatuses.add(statusCode) }
         override fun onTextMessage(namespace: String, message: String) {}
         override fun onBinaryMessage(namespace: String, data: ByteArray) {}
         override fun onSendMessageSuccess(namespace: String, requestId: Long) {}
