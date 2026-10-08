@@ -61,13 +61,27 @@ class CastDeviceControllerImpl(
     @Volatile
     private var listener: ICastDeviceControllerListener? = null
 
-    // Binder of the listener whose death disconnects this controller, guarded by this
+    // Binder/callback pair whose process exit disconnects this controller, guarded by this.
+    // The callback is bound to its binder so a callback already queued for a replaced listener
+    // cannot tear down the replacement listener's live controller.
     private var linkedBinder: IBinder? = null
+    private var linkedDeath: IBinder.DeathRecipient? = null
 
-    private val listenerDeath = IBinder.DeathRecipient {
-        Log.d(TAG, "Client $packageName died, disconnecting from ${castDevice.friendlyName}")
-        listener = null
-        disconnect()
+    private fun listenerDeath(binder: IBinder) = IBinder.DeathRecipient {
+        val current = synchronized(this) {
+            if (linkedBinder !== binder) {
+                false
+            } else {
+                linkedBinder = null
+                linkedDeath = null
+                listener = null
+                true
+            }
+        }
+        if (current) {
+            Log.d(TAG, "Client $packageName died, disconnecting from ${castDevice.friendlyName}")
+            disconnect()
+        }
     }
 
     @Volatile
@@ -186,13 +200,15 @@ class CastDeviceControllerImpl(
         if (binder !== linkedBinder) {
             unlinkListener()
             if (binder != null) {
+                val death = listenerDeath(binder)
                 try {
-                    binder.linkToDeath(listenerDeath, 0)
+                    binder.linkToDeath(death, 0)
                 } catch (e: RemoteException) {
                     listener = null
                     return false
                 }
                 linkedBinder = binder
+                linkedDeath = death
             }
         }
         listener = newListener
@@ -202,8 +218,10 @@ class CastDeviceControllerImpl(
     @Synchronized
     private fun unlinkListener() {
         val binder = linkedBinder ?: return
+        val death = linkedDeath
         linkedBinder = null
-        runCatching { binder.unlinkToDeath(listenerDeath, 0) }
+        linkedDeath = null
+        if (death != null) runCatching { binder.unlinkToDeath(death, 0) }
     }
 
     override fun leaveApplication() = session.leaveApplication()
