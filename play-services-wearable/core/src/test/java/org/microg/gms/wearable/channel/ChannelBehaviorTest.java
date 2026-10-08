@@ -161,18 +161,18 @@ public class ChannelBehaviorTest {
     }
 
     @Test
-    public void omittedAckScalarsReachTheMatchingChannelWithZeroAndFalse() throws Exception {
+    public void omittedAckScalarsPreserveRequestIdAbsenceAndDefaultFinalFalse() throws Exception {
         RecordingManager manager = new RecordingManager();
         RecordingChannel channel = new RecordingChannel(token(true), manager);
         manager.channelTable.put(channel.token, channel);
         ChannelDataAckRequest ack = new ChannelDataAckRequest.Builder()
                 .header(new ChannelDataHeader.Builder().channelId(CHANNEL_ID).build())
-                // fromChannelOperator, requestId, and finalMessage all use proto defaults.
+                // Preserve requestId absence; operator and finalMessage use defaults.
                 .build();
 
         new OnChannelDataAckTask(manager, PEER, ack).execute();
 
-        assertEquals(0L, channel.ackRequestId);
+        assertEquals(null, channel.ackRequestId);
         assertFalse(channel.ackIsFinal);
     }
 
@@ -360,6 +360,53 @@ public class ChannelBehaviorTest {
     }
 
     @Test
+    public void staleNonFinalAckCannotReleaseTheNextChunkButLegacyAndCloseAcksStillWork() throws Exception {
+        RecordingManager manager = new RecordingManager();
+        RecordingTransport transport = new RecordingTransport();
+        transport.readData = new byte[8193];
+        ChannelStateMachine channel = new ChannelStateMachine(token(true), manager, transport, null,
+                ChannelAssetApiEnum.ORIGIN_CHANNEL_API, false, true, null,
+                new Handler(Looper.getMainLooper()));
+        channel.connectionState = ChannelStateMachine.CONNECTION_STATE_ESTABLISHED;
+        ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();
+        try {
+            channel.setOutputStream(pipe[0], null, 0, transport.readData.length);
+            channel.processOutgoingData();
+            assertEquals(0L, manager.sentHeaders.get(0).requestId);
+            channel.onDataAckReceived(0L, false);
+            assertEquals(ChannelStateMachine.SENDING_STATE_WAITING_TO_READ, channel.sendingState);
+            channel.processOutgoingData();
+            assertEquals(1L, manager.sentHeaders.get(1).requestId);
+
+            PendingOperation currentTimeout = channel.sendPendingOp;
+            channel.onDataAckReceived(0L, false);
+            assertEquals(ChannelStateMachine.SENDING_STATE_WAITING_FOR_ACK, channel.sendingState);
+            assertEquals(currentTimeout, channel.sendPendingOp);
+            assertFalse(currentTimeout.isCancelled());
+            channel.processOutgoingData();
+            assertEquals("a duplicate ACK must not allow another send", 2, manager.sentData.size());
+
+            channel.onDataAckReceived((Long) null, false);
+            assertEquals(ChannelStateMachine.SENDING_STATE_WAITING_TO_READ, channel.sendingState);
+            assertTrue(currentTimeout.isCancelled());
+            channel.processOutgoingData();
+            assertEquals(2L, manager.sentHeaders.get(2).requestId);
+
+            // The receiver may close its input after an earlier drained chunk.
+            channel.onDataAckReceived(0L, true);
+            assertEquals(ChannelStateMachine.SENDING_STATE_CLOSED, channel.sendingState);
+            assertFalse(channel.hasOutputStream());
+            assertEquals(null, channel.sendPendingOp);
+        } finally {
+            if (channel.hasOutputStream()) {
+                channel.onChannelOutputClosed(ChannelStatusCodes.CLOSE_REASON_NORMAL, 0);
+            }
+            pipe[0].close();
+            pipe[1].close();
+        }
+    }
+
+    @Test
     public void finalIncomingFrameClosesInputAndNotifiesStreamCallback() throws Exception {
         RecordingManager manager = new RecordingManager();
         RecordingTransport transport = new RecordingTransport();
@@ -484,6 +531,8 @@ public class ChannelBehaviorTest {
         byte[] lastWrite;
         final List<byte[]> writes = new ArrayList<>();
         int readCalls;
+        byte[] readData = new byte[0];
+        int readPosition;
 
         @Override
         public void register(ParcelFileDescriptor fd) {
@@ -496,7 +545,10 @@ public class ChannelBehaviorTest {
         @Override
         public int read(ParcelFileDescriptor fd, byte[] buffer, int offset, int length) {
             readCalls++;
-            return 0;
+            int count = Math.min(length, readData.length - readPosition);
+            System.arraycopy(readData, readPosition, buffer, offset, count);
+            readPosition += count;
+            return count;
         }
 
         @Override
@@ -512,7 +564,7 @@ public class ChannelBehaviorTest {
     }
 
     private static final class RecordingChannel extends ChannelStateMachine {
-        long ackRequestId = Long.MIN_VALUE;
+        Long ackRequestId = Long.MIN_VALUE;
         boolean ackIsFinal;
         int remoteCloseErrorCode = Integer.MIN_VALUE;
 
@@ -522,8 +574,8 @@ public class ChannelBehaviorTest {
         }
 
         @Override
-        public void onDataAckReceived(long ackOffset, boolean isFinal) {
-            ackRequestId = ackOffset;
+        public void onDataAckReceived(Long ackRequestId, boolean isFinal) {
+            this.ackRequestId = ackRequestId;
             ackIsFinal = isFinal;
         }
 

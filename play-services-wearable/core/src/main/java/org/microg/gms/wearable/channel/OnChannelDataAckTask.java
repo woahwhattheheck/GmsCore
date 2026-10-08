@@ -49,9 +49,8 @@ public class OnChannelDataAckTask extends ChannelTask {
 
         setChannel(channel);
 
-        long requestId = ChannelProtocolDefaults.requestId(header.requestId);
         boolean isFinal = ChannelProtocolDefaults.finalMessage(ackRequest.finalMessage);
 
-        channel.onDataAckReceived(requestId, isFinal);
+        channel.onDataAckReceived(header.requestId, isFinal);
     }
 }

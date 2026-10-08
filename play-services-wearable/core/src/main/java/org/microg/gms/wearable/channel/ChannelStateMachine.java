@@ -388,8 +388,21 @@ public class ChannelStateMachine {
     }
 
     public void onDataAckReceived(long ackOffset, boolean isFinal) {
+        onDataAckReceived(Long.valueOf(ackOffset), isFinal);
+    }
+
+    public void onDataAckReceived(Long ackRequestId, boolean isFinal) {
         if (sendingState != SENDING_STATE_WAITING_FOR_ACK) {
             Log.w(TAG, "Received ACK but not waiting for it");
+            return;
+        }
+
+        // Only one chunk is outstanding. A late non-final ACK must not release
+        // a newer send after a timeout or duplicate delivery. Keep absent IDs
+        // compatible, and allow final ACKs with an older ID: the peer also uses
+        // them to report that its app closed the input stream.
+        if (!isFinal && ackRequestId != null && ackRequestId != sequenceNumber - 1) {
+            Log.d(TAG, "Ignoring ACK for a different chunk: " + ackRequestId);
             return;
         }
 
@@ -397,8 +410,6 @@ public class ChannelStateMachine {
             sendPendingOp.cancel();
             sendPendingOp = null;
         }
-
-//        lastAckedOffset = ackOffset;
 
         if (isFinal) {
             if (connectionState == CONNECTION_STATE_CLOSING) {
