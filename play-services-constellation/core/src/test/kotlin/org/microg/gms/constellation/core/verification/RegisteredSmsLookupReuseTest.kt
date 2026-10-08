@@ -67,6 +67,20 @@ class RegisteredSmsLookupReuseTest {
     }
 
     @Test
+    fun platformFailureBeforeSubscriptionLookupReturnsEmptyResponse() {
+        Fixture().use { fixture ->
+            fixture.setNumbers(PRIMARY_NUMBER, null)
+            fixture.failCarrierPrivilegeLookup()
+
+            val response = challenge(PRIMARY_PAYLOAD).verify(fixture.context, 1)
+
+            assertArrayEquals(expected(), response.encode())
+            assertEquals(0, fixture.subscriptionReads)
+            assertEquals(0, fixture.lineNumberReads)
+        }
+    }
+
+    @Test
     fun laterInvocationRefreshesNumbersIncludingDefaultSubscription() {
         Fixture().use { fixture ->
             fixture.setNumbers(PRIMARY_NUMBER, SECONDARY_NUMBER)
@@ -143,6 +157,11 @@ class RegisteredSmsLookupReuseTest {
                 lineNumberReads++
                 ""
             }.`when`(telephony).line1Number
+        }
+
+        fun failCarrierPrivilegeLookup() {
+            `when`(telephony.hasCarrierPrivileges())
+                .thenThrow(IllegalStateException("telephony service unavailable"))
         }
 
         fun setNumbers(primary: String, secondary: String?) {
