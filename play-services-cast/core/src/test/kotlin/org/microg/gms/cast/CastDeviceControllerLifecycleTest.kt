@@ -58,6 +58,29 @@ class CastDeviceControllerLifecycleTest {
     }
 
     @Test
+    fun staleCallbackFromReplacedListenerDoesNotReleaseCurrentListener() {
+        val first = ListenerBinder()
+        val controller = controller(first)
+        val staleCallback = first.recipients.single()
+        val replacement = ListenerBinder()
+
+        controller.addListener(ICastDeviceControllerListener.Stub.asInterface(replacement))
+
+        assertTrue(first.recipients.isEmpty())
+        assertEquals(1, replacement.recipients.size)
+        staleCallback.binderDied()
+
+        assertTrue(controller.hasInitialListener)
+        assertTrue(events.isEmpty())
+        assertEquals(1, replacement.recipients.size)
+
+        replacement.die()
+
+        assertFalse(controller.hasInitialListener)
+        assertEquals(listOf("release"), events)
+    }
+
+    @Test
     fun deadRetainedListenerReleasesReopenedControllerWithoutConnecting() {
         val binder = ListenerBinder()
         val controller = controller(binder)
