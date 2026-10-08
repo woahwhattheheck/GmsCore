@@ -25,6 +25,7 @@ import org.microg.gms.wearable.proto.ChannelDataRequest;
 import org.microg.gms.wearable.proto.ChannelRequest;
 import org.microg.gms.wearable.proto.Request;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.LooperMode;
 
@@ -69,6 +70,54 @@ public class ChannelBehaviorTest {
     @LooperMode(LooperMode.Mode.PAUSED)
     public void stopClosesResourcesWhenPendingOpenCallbackThrows() throws Exception {
         assertStopCompletesPendingOpenAndClosesResources(true);
+    }
+
+    @Test
+    @LooperMode(LooperMode.Mode.PAUSED)
+    public void disconnectClosesEveryPendingChannelWhenOneOpenCallbackThrows() throws Exception {
+        Handler handler = new Handler(Looper.getMainLooper());
+        RecordingManager manager = new RecordingManager(handler);
+        List<ChannelStateMachine> channels = new ArrayList<>();
+        List<List<Integer>> statuses = Arrays.asList(new ArrayList<>(), new ArrayList<>());
+        ParcelFileDescriptor[][] pipes = {
+                ParcelFileDescriptor.createPipe(), ParcelFileDescriptor.createPipe()};
+        try {
+            for (int i = 0; i < pipes.length; i++) {
+                final int index = i;
+                ChannelToken token = new ChannelToken(PEER, token(true).appKey, CHANNEL_ID + i, true);
+                ChannelStateMachine channel = new ChannelStateMachine(token, manager,
+                        new RecordingTransport(), null, ChannelAssetApiEnum.ORIGIN_CHANNEL_API,
+                        false, true, null, handler);
+                channel.connectionState = ChannelStateMachine.CONNECTION_STATE_OPEN_SENT;
+                channel.setOutputStream(pipes[i][0], null, 0, -1);
+                channel.openResultDispatcher = (status, openedToken, path) -> {
+                    statuses.get(index).add(status);
+                    if (index == 0) throw new IllegalStateException("client callback failed");
+                };
+                channels.add(channel);
+                manager.channelTable.put(token, channel);
+            }
+            manager.start();
+            manager.onNodeDisconnected(PEER);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+
+            for (int i = 0; i < channels.size(); i++) {
+                assertEquals(Collections.singletonList(ChannelStatusCodes.CHANNEL_NOT_CONNECTED),
+                        statuses.get(i));
+                assertEquals(null, channels.get(i).openResultDispatcher);
+                assertEquals(ChannelStateMachine.CONNECTION_STATE_CLOSED,
+                        channels.get(i).connectionState);
+                assertFalse(channels.get(i).hasOutputStream());
+            }
+            assertEquals(0, manager.channelTable.size());
+        } finally {
+            manager.stop();
+            for (ChannelStateMachine channel : channels) channel.forceClose(false);
+            for (ParcelFileDescriptor[] pipe : pipes) {
+                pipe[0].close();
+                pipe[1].close();
+            }
+        }
     }
 
     private void assertStopCompletesPendingOpenAndClosesResources(boolean throwFromCallback)

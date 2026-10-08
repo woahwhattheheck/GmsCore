@@ -177,18 +177,7 @@ public class ChannelManager {
             handler.removeCallbacks(processingLoop);
 
             for (ChannelStateMachine channel : channelTable.values()) {
-                OpenChannelCallback openCallback = channel.openResultDispatcher;
-                // Detach before invoking client code: forceClose must not complete
-                // the same open request again, even if the callback throws.
-                channel.openResultDispatcher = null;
-                if (openCallback != null) {
-                    try {
-                        openCallback.onResult(
-                                ChannelStatusCodes.INTERNAL_ERROR, null, channel.channelPath);
-                    } catch (Exception e) {
-                        Log.w(TAG, "Error completing channel open on stop", e);
-                    }
-                }
+                completePendingOpen(channel, ChannelStatusCodes.INTERNAL_ERROR);
                 try {
                     channel.forceClose();
                 } catch (Exception e) {
@@ -201,6 +190,19 @@ public class ChannelManager {
             taskQueue.clear();
 
             Log.d(TAG, "ChannelManager stopped");
+        }
+    }
+
+    private void completePendingOpen(ChannelStateMachine channel, int statusCode) {
+        OpenChannelCallback openCallback = channel.openResultDispatcher;
+        // Detach before invoking client code so cleanup cannot complete the
+        // same request again, including when the callback throws or reenters.
+        channel.openResultDispatcher = null;
+        if (openCallback == null) return;
+        try {
+            openCallback.onResult(statusCode, null, channel.channelPath);
+        } catch (Exception e) {
+            Log.w(TAG, "Error completing pending channel open", e);
         }
     }
 
@@ -364,13 +366,7 @@ public class ChannelManager {
                         channel.sendPendingOp = null;
                     }
 
-                    if (channel.openResultDispatcher != null) {
-                        channel.openResultDispatcher.onResult(
-                                ChannelStatusCodes.CHANNEL_NOT_CONNECTED,
-                                null, channel.channelPath
-                        );
-                        channel.openResultDispatcher = null;
-                    }
+                    completePendingOpen(channel, ChannelStatusCodes.CHANNEL_NOT_CONNECTED);
 
                     try {
                         channel.forceClose();
@@ -400,13 +396,7 @@ public class ChannelManager {
                 if (ch.connectionState == ChannelStateMachine.CONNECTION_STATE_ESTABLISHED) return;
 
                 ch.openTimeoutOp = null;
-                if (ch.openResultDispatcher == null) {
-                    Log.w(TAG, "onOpenTimeout: dispatcher already null for " + token);
-                } else {
-                    ch.openResultDispatcher.onResult(
-                            ChannelStatusCodes.CHANNEL_NOT_CONNECTED, null, ch.channelPath);
-                    ch.openResultDispatcher = null;
-                }
+                completePendingOpen(ch, ChannelStatusCodes.CHANNEL_NOT_CONNECTED);
 
                 boolean closeSent = false;
                 try {
