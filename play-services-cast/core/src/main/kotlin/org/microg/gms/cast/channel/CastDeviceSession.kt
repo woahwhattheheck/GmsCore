@@ -224,9 +224,9 @@ class CastDeviceSession(
             callbacks.onLeaveApplicationResult(STATUS_INVALID_REQUEST)
             return@post
         }
-        application = null
         try {
-            channel?.closeTransport(app.transportId)
+            (channel ?: throw IOException("Channel is disconnected")).closeTransport(app.transportId)
+            application = null
             callbacks.onLeaveApplicationResult(STATUS_SUCCESS)
         } catch (e: IOException) {
             callbacks.onLeaveApplicationResult(STATUS_NETWORK_ERROR)
