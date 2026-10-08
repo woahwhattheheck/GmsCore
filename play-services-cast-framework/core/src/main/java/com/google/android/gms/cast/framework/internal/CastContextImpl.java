@@ -325,11 +325,30 @@ public class CastContextImpl extends ICastContext.Stub {
         // Deprecated by the client library, visibility is tracked using activity lifecycle callbacks.
     }
 
+    private boolean hasSameSessionProviders(Map sessionProvidersByCategory) {
+        int incomingSize = sessionProvidersByCategory == null ? 0 : sessionProvidersByCategory.size();
+        if (incomingSize != sessionProviders.size()) return false;
+        if (sessionProvidersByCategory == null) return true;
+        for (Object rawKey : sessionProvidersByCategory.keySet()) {
+            if (!(rawKey instanceof String)) return false;
+            String key = (String) rawKey;
+            if (!sessionProviders.containsKey(key)) return false;
+            Object incomingBinder = sessionProvidersByCategory.get(key);
+            if (incomingBinder != null && !(incomingBinder instanceof IBinder)) return false;
+            ISessionProvider current = sessionProviders.get(key);
+            IBinder currentBinder = current == null ? null : current.asBinder();
+            if (currentBinder != incomingBinder
+                    && (currentBinder == null || !currentBinder.equals(incomingBinder))) return false;
+        }
+        return true;
+    }
+
     @Override
     public void setReceiverApplicationId(String receiverApplicationId, Map sessionProvidersByCategory) throws RemoteException {
         Log.d(TAG, "setReceiverApplicationId: " + receiverApplicationId);
         runOnMainThread(() -> {
-            if (TextUtils.equals(this.receiverApplicationId, receiverApplicationId)) return;
+            if (TextUtils.equals(this.receiverApplicationId, receiverApplicationId)
+                    && hasSameSessionProviders(sessionProvidersByCategory)) return;
             getSessionManagerImpl().endCurrentSessionInternal(true);
             unregisterRouterCallback();
             this.receiverApplicationId = receiverApplicationId;
