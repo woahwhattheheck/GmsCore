@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -37,6 +38,9 @@ class EapAkaService(private val telephonyManager: TelephonyManager) {
     fun performSimAkaAuth(eapRelayBase64: String, eapIdentity: String): String? {
         val eapPacket = Base64.decode(eapRelayBase64, Base64.DEFAULT)
         if (eapPacket.size < 12) return null
+        val declaredLength = ((eapPacket[2].toInt() and 0xFF) shl 8) or
+                (eapPacket[3].toInt() and 0xFF)
+        if (declaredLength != eapPacket.size) return null
 
         val code = eapPacket[0].toInt()
         val eapId = eapPacket[1]
@@ -51,34 +55,37 @@ class EapAkaService(private val telephonyManager: TelephonyManager) {
         // Parse attributes (starting at offset 8)
         var rand: ByteArray? = null
         var autn: ByteArray? = null
+        var challengeMac: ByteArray? = null
+        var macValueOffset = -1
 
         var offset = 8
         while (offset + 2 <= eapPacket.size) {
             val attrType = eapPacket[offset].toInt() and 0xFF
             val attrLen = (eapPacket[offset + 1].toInt() and 0xFF) * 4
-            if (offset + attrLen > eapPacket.size || attrLen < 4) break
+            if (offset + attrLen > eapPacket.size || attrLen < 4) return null
 
             when (attrType) {
                 AT_RAND -> {
-                    if (attrLen >= 20) {
-                        rand = ByteArray(16)
-                        System.arraycopy(eapPacket, offset + 4, rand, 0, 16)
-                    }
+                    if (attrLen != 20 || rand != null) return null
+                    rand = eapPacket.copyOfRange(offset + 4, offset + 20)
                 }
 
                 AT_AUTN -> {
-                    if (attrLen >= 20) {
-                        autn = ByteArray(16)
-                        System.arraycopy(eapPacket, offset + 4, autn, 0, 16)
-                    }
+                    if (attrLen != 20 || autn != null) return null
+                    autn = eapPacket.copyOfRange(offset + 4, offset + 20)
+                }
+
+                AT_MAC -> {
+                    if (attrLen != 20 || challengeMac != null) return null
+                    macValueOffset = offset + 4
+                    challengeMac = eapPacket.copyOfRange(macValueOffset, macValueOffset + 16)
                 }
             }
             offset += attrLen
-            if (rand != null && autn != null) break
         }
 
-        if (rand == null || autn == null) {
-            Log.e(TAG, "Missing RAND or AUTN in EAP-AKA challenge")
+        if (rand == null || autn == null || challengeMac == null || macValueOffset < 0) {
+            Log.e(TAG, "Missing RAND, AUTN or mandatory AT_MAC in EAP-AKA challenge")
             return null
         }
 
@@ -107,6 +114,17 @@ class EapAkaService(private val telephonyManager: TelephonyManager) {
 
                 val kAut = keys["K_aut"] ?: run {
                     Log.e(TAG, "Failed to derive K_aut")
+                    return null
+                }
+
+                // RFC 4187: authenticate the server's AKA-Challenge before sending
+                // our own AT_RES. The MAC is HMAC-SHA1-128 over the entire EAP
+                // request, with the received AT_MAC value replaced by zeroes.
+                val macInput = eapPacket.copyOf()
+                macInput.fill(0, macValueOffset, macValueOffset + 16)
+                val expectedMac = hmacSha1(kAut, macInput)?.copyOf(16) ?: return null
+                if (!MessageDigest.isEqual(expectedMac, challengeMac)) {
+                    Log.w(TAG, "EAP-AKA server challenge has an invalid MAC")
                     return null
                 }
 
