@@ -11,6 +11,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.ArgumentMatchers.anyInt
@@ -28,13 +29,30 @@ class EapAkaServiceTest {
     private val ck = ByteArray(16) { (0x10 + it).toByte() }
     private val ik = ByteArray(16) { (0x30 + it).toByte() }
 
-    private fun challengePacket(id: Byte): String {
+    private fun challengePacket(
+        id: Byte,
+        identity: String,
+        includeMac: Boolean = true,
+        corruptMac: Boolean = false,
+    ): String {
         val rand = ByteArray(16) { 0x55 }
         val autn = ByteArray(16) { 0x66 }
         val attrs = byteArrayOf(1, 5, 0, 0) + rand + byteArrayOf(2, 5, 0, 0) + autn
-        val len = 8 + attrs.size
+        val macAttr = if (includeMac) byteArrayOf(11, 5, 0, 0) + ByteArray(16) else byteArrayOf()
+        val len = 8 + attrs.size + macAttr.size
         val header = byteArrayOf(1, id, (len shr 8).toByte(), len.toByte(), 23, 1, 0, 0)
-        return Base64.encodeToString(header + attrs, Base64.NO_WRAP)
+        val packet = header + attrs + macAttr
+        if (includeMac) {
+            val kAut = Fips186Prf.deriveKeys(identity.toByteArray(Charsets.UTF_8), ik, ck)["K_aut"]!!
+            val tag = Mac.getInstance("HmacSHA1").apply {
+                init(SecretKeySpec(kAut, "HmacSHA1"))
+            }.doFinal(packet).copyOf(16)
+            System.arraycopy(tag, 0, packet, packet.size - tag.size, tag.size)
+            if (corruptMac) {
+                packet[packet.lastIndex] = (packet.last().toInt() xor 1).toByte()
+            }
+        }
+        return Base64.encodeToString(packet, Base64.NO_WRAP)
     }
 
     private fun simWithAkaSuccess(): TelephonyManager {
@@ -58,12 +76,31 @@ class EapAkaServiceTest {
     }
 
     @Test
+    fun rejectsMissingOrTamperedMandatoryServerChallengeMac() {
+        val service = EapAkaService(simWithAkaSuccess())
+        val eapId = service.buildEapId("310260", "310260123456789")
+        assertNull(service.performSimAkaAuth(challengePacket(0x42, eapId, includeMac = false), eapId))
+        assertNull(service.performSimAkaAuth(challengePacket(0x42, eapId, corruptMac = true), eapId))
+        val wrongIdentity = service.buildEapId("310260", "310260123456789", "carrier.example")
+        assertNull(service.performSimAkaAuth(challengePacket(0x42, eapId), wrongIdentity))
+    }
+
+    @Test
+    fun rejectsPacketWhoseAdvertisedEapLengthDoesNotMatchBody() {
+        val service = EapAkaService(simWithAkaSuccess())
+        val eapId = service.buildEapId("310260", "310260123456789")
+        val packet = Base64.decode(challengePacket(0x42, eapId), Base64.DEFAULT)
+        packet[3] = (packet[3].toInt() - 1).toByte()
+        assertNull(service.performSimAkaAuth(Base64.encodeToString(packet, Base64.NO_WRAP), eapId))
+    }
+
+    @Test
     fun challengeResponse_macIsKeyedOnAnnouncedIdentityWithCarrierRealm() {
         val service = EapAkaService(simWithAkaSuccess())
         val eapId = service.buildEapId("310260", "310260123456789", "nai.epc.carrier.example")
         assertEquals("0310260123456789@nai.epc.carrier.example", eapId)
 
-        val response = service.performSimAkaAuth(challengePacket(0x42), eapId)
+        val response = service.performSimAkaAuth(challengePacket(0x42, eapId), eapId)
         assertNotNull(response)
         val packet = Base64.decode(response, Base64.DEFAULT)
 
