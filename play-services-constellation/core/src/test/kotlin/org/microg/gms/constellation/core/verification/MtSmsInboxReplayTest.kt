@@ -38,6 +38,25 @@ class MtSmsInboxReplayTest {
     )
 
     @Test
+    fun unrelatedSmsBacklogIsBoundedWhileRecentMessagesRemainMatchable() = runTest {
+        val inbox = newInbox()
+        try {
+            val messages = (0..80).map { index ->
+                ReceivedSms(body = "unrelated-$index", sender = "+100")
+            }
+            inbox.onReceivedMessages(messages)
+
+            assertNull(
+                "an old unrelated SMS should have been evicted instead of accumulating forever",
+                withTimeoutOrNull(1L) { inbox.awaitMatch("unrelated-0") }
+            )
+            assertEquals(messages.last(), inbox.awaitMatch("unrelated-80"))
+        } finally {
+            inbox.dispose()
+        }
+    }
+
+    @Test
     fun bufferedMatchIsConsumedBeforeTheNextChallengeRound() = runTest {
         val inbox = newInbox()
         try {
