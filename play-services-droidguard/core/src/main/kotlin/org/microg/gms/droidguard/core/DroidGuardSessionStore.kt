@@ -55,7 +55,12 @@ internal class DroidGuardSessionStore(
             val handle = openHandle(flow, source, request)
             session.handle = handle
             if (!handle.isOpened) throw DroidGuardSessionException(502, "Native DroidGuard initialization failed")
-            session.id
+            synchronized(sessions) {
+                if (sessions[session.id] !== session || session.closed.get()) {
+                    throw DroidGuardSessionException(404, "Session was closed during initialization")
+                }
+                session.id
+            }
         }
     }
 
