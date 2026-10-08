@@ -84,8 +84,20 @@ internal class DroidGuardSessionStore(
             sessions[id]?.takeIf { it.owner == owner }
                 ?: throw DroidGuardSessionException(404, "Unknown session")
         }
-        if (now() - session.touched >= TimeUnit.MILLISECONDS.toNanos(idleTimeoutMillis)) {
-            synchronized(sessions) { sessions.remove(id) }
+        // Admission and idle retirement share the sessions monitor. An executing or
+        // queued native operation owns its session until it updates touched and exits.
+        val expired = synchronized(sessions) {
+            if (sessions[id] === session &&
+                !session.busy.get() &&
+                now() - session.touched >= TimeUnit.MILLISECONDS.toNanos(idleTimeoutMillis)
+            ) {
+                sessions.remove(id)
+                true
+            } else {
+                false
+            }
+        }
+        if (expired) {
             session.requestClose()
             throw DroidGuardSessionException(404, "Session expired")
         }
@@ -95,8 +107,13 @@ internal class DroidGuardSessionStore(
     private fun <T> execute(session: Session, operation: () -> T): T {
         // Admit one operation per handle before using a global worker. Waiting on the same
         // handle must not consume every worker and prevent unrelated sessions from progressing.
-        if (!session.busy.compareAndSet(false, true)) {
-            throw DroidGuardSessionException(503, "Session already has an operation in progress")
+        synchronized(sessions) {
+            if (sessions[session.id] !== session || session.closed.get()) {
+                throw DroidGuardSessionException(404, "Session is closed")
+            }
+            if (!session.busy.compareAndSet(false, true)) {
+                throw DroidGuardSessionException(503, "Session already has an operation in progress")
+            }
         }
         var submitted = false
         try {
@@ -138,7 +155,7 @@ internal class DroidGuardSessionStore(
     internal fun expireIdle() {
         val cutoff = now() - TimeUnit.MILLISECONDS.toNanos(idleTimeoutMillis)
         val expired = synchronized(sessions) {
-            sessions.values.filter { it.touched <= cutoff }.also { values ->
+            sessions.values.filter { !it.busy.get() && it.touched <= cutoff }.also { values ->
                 values.forEach { sessions.remove(it.id) }
             }
         }
