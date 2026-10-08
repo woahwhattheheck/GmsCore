@@ -247,6 +247,42 @@ class VerifyPhoneNumberLocalReadTest {
     }
 
     @Test
+    fun incompleteTargetedSimDescriptor_fallsBackToRpcInsteadOfServingPartialLocalSubset() {
+        val cachedImsi = "001010123456789"
+        storeNumber(cachedImsi, expirationMillis = System.currentTimeMillis() + 600_000L)
+
+        val request = VerifyPhoneNumberRequest(
+            /* policyId */ "emergency_location",
+            /* timeout */ 300L,
+            /* idTokenRequest */ null,
+            /* extras */ Bundle(),
+            /* targetedSims */ listOf(
+                VerifyPhoneNumberRequest.ImsiRequest(cachedImsi, ""),
+                VerifyPhoneNumberRequest.ImsiRequest("", "")
+            ),
+            /* includeUnverified */ false,
+            /* apiVersion */ 3,
+            /* verificationMethodsValues */ emptyList()
+        )
+        val remote = CountingRemoteRead()
+        val callbacks = RecordingCallbacks()
+
+        runLocalRead(request, remote, callbacks)
+
+        assertEquals(
+            "an incomplete targeted SIM descriptor must force the authoritative RPC",
+            1,
+            remote.calls
+        )
+        assertEquals("the caller is answered exactly once", 1, callbacks.deliveries)
+        assertEquals(
+            "the partial cached subset must not be returned",
+            "+15555559999",
+            callbacks.lastResponse?.verifications?.get(0)?.phoneNumber
+        )
+    }
+
+    @Test
     fun emptyLocalState_fallsBackToRpc() {
         val remote = CountingRemoteRead()
         val callbacks = RecordingCallbacks()
