@@ -260,6 +260,10 @@ class CastDeviceSession(
     }
 
     fun setVolume(level: Double) = post {
+        if (!level.isFinite()) {
+            Log.warning("Ignoring non-finite Cast volume request")
+            return@post
+        }
         requestReceiver(JSONObject().put("type", "SET_VOLUME").put("volume", JSONObject().put("level", level.coerceIn(0.0, 1.0)))) { }
     }
 
@@ -491,14 +495,18 @@ class CastDeviceSession(
                     )
                 )
             }
+            val rawLevel = volume?.optDouble("level", Double.NaN) ?: Double.NaN
+            val hasValidLevel = rawLevel.isFinite() && rawLevel in 0.0..1.0
+            val rawStepInterval = volume?.optDouble("stepInterval", 0.05) ?: 0.05
+            val validStepInterval = rawStepInterval.takeIf { it.isFinite() && it > 0.0 && it <= 1.0 } ?: 0.05
             return ReceiverStatus(
-                volumeLevel = volume?.optDouble("level", 0.0) ?: 0.0,
+                volumeLevel = if (hasValidLevel) rawLevel else 0.0,
                 muted = volume?.optBoolean("muted", false) ?: false,
-                stepInterval = volume?.optDouble("stepInterval", 0.05) ?: 0.05,
+                stepInterval = validStepInterval,
                 activeInput = if (status.has("isActiveInput")) (if (status.optBoolean("isActiveInput")) 1 else 0) else -1,
                 standby = if (status.has("isStandBy")) (if (status.optBoolean("isStandBy")) 1 else 0) else -1,
                 applications = applications,
-                hasVolumeLevel = volume?.has("level") == true,
+                hasVolumeLevel = hasValidLevel,
             )
         }
     }
