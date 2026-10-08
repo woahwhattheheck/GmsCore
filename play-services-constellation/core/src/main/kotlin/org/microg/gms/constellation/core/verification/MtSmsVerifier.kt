@@ -168,7 +168,7 @@ internal fun joinParts(parts: List<Pair<String?, String?>>): ReceivedSms? {
     // missing body, and fragments from different senders cannot form a
     // challenge belonging to either sender.
     if (parts.isEmpty() || parts.any { it.second == null }) return null
-    val senders = parts.mapNotNull { it.first?.takeIf(String::isNotBlank) }.distinct()
+    val senders = parts.mapNotNull { it.first?.takeIf { sender -> sender.isNotBlank() } }.distinct()
     if (senders.size > 1) return null
     return ReceivedSms(
         body = parts.joinToString(separator = "") { it.second.orEmpty() },
