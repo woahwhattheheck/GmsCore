@@ -163,6 +163,8 @@ class CastDeviceControllerImpl(
             reconnecting = false
             rejoining = false
             connectRequested = false
+            attachedApplicationId = null
+            attachedSessionId = null
             val pendingInit = initCallback
             initCallback = null
             session to pendingInit
