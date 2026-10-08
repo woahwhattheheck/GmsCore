@@ -200,3 +200,21 @@ class CastDeviceSessionStopReplyTest {
         }
     }
 }
+
+class CastReceiverVolumeValidationTest {
+    @Test fun invalidDeviceVolumeIsRejected() {
+        val status = JSONObject().put("volume", JSONObject().put("level", 1.5).put("stepInterval", 0.0))
+        val result = CastDeviceSession.parseReceiverStatus(status)
+        assertEquals(false, result.hasVolumeLevel)
+        assertEquals(0.0, result.volumeLevel, 0.0)
+        assertEquals(0.05, result.stepInterval, 0.0)
+    }
+
+    @Test fun validDeviceVolumeIsPreserved() {
+        val status = JSONObject().put("volume", JSONObject().put("level", 0.75).put("stepInterval", 0.1))
+        val result = CastDeviceSession.parseReceiverStatus(status)
+        assertEquals(true, result.hasVolumeLevel)
+        assertEquals(0.75, result.volumeLevel, 0.0)
+        assertEquals(0.1, result.stepInterval, 0.0)
+    }
+}
