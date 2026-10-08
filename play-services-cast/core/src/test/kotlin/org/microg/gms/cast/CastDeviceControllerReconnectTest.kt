@@ -195,6 +195,19 @@ class CastDeviceControllerReconnectTest {
     }
 
     @Test
+    fun lateApplicationFailureAfterDisconnectIsIgnored() {
+        val listener = RecordingListener()
+        val controller = controller(listener)
+        val callbacks = callbacks(session(controller))
+
+        controller.disconnect()
+        callbacks.onApplicationConnectionFailed(CastDeviceSession.STATUS_APPLICATION_NOT_RUNNING)
+
+        assertEquals(listOf("release"), events)
+        assertFalse(listener.events.contains("onApplicationConnectionFailure"))
+    }
+
+    @Test
     fun userDisconnectClearsAttachedApplicationAndEndsWithoutReconnect() {
         val listener = RecordingListener()
         val controller = controller(listener)
