@@ -111,29 +111,29 @@ fun RegisteredSmsChallenge.verify(context: Context, subId: Int): ChallengeRespon
 @Suppress("DEPRECATION")
 private fun getLocalNumbers(context: Context, targetSubId: Int): List<String> {
     val numbers = linkedSetOf<String>()
-    val subscriptionManager =
-        context.getSystemService<SubscriptionManager>()
-    val telephonyManager = context.getSystemService<TelephonyManager>()
-
-    val hasState = ContextCompat.checkSelfPermission(
-        context,
-        Manifest.permission.READ_PHONE_STATE
-    ) == PackageManager.PERMISSION_GRANTED
-    val hasNumbers = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.READ_PHONE_NUMBERS
-        ) == PackageManager.PERMISSION_GRANTED
-    } else {
-        hasState
-    }
-
-    if (telephonyManager?.hasCarrierPrivileges() != true && (!hasState || !hasNumbers)) {
-        Log.e(TAG, "Permission not granted")
-        return emptyList()
-    }
-
     try {
+        val subscriptionManager =
+            context.getSystemService<SubscriptionManager>()
+        val telephonyManager = context.getSystemService<TelephonyManager>()
+
+        val hasState = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_PHONE_STATE
+        ) == PackageManager.PERMISSION_GRANTED
+        val hasNumbers = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_PHONE_NUMBERS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            hasState
+        }
+
+        if (telephonyManager?.hasCarrierPrivileges() != true && (!hasState || !hasNumbers)) {
+            Log.e(TAG, "Permission not granted")
+            return emptyList()
+        }
+
         subscriptionManager?.activeSubscriptionInfoList.orEmpty().forEach { info ->
             if (targetSubId != -1 && info.subscriptionId != targetSubId) return@forEach
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && subscriptionManager != null) {
