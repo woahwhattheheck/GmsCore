@@ -52,14 +52,14 @@ class RegisteredSmsLookupReuseTest {
     }
 
     @Test
-    fun emptySecondaryLookupReusesTheExistingFallback() {
+    fun emptySecondaryLookupDoesNotReuseRequestedSimNumber() {
         Fixture().use { fixture ->
             fixture.setNumbers(PRIMARY_NUMBER, null)
             val cursor = fixture.inbox(List(32) { 2 })
 
             val response = challenge(PRIMARY_PAYLOAD).verify(fixture.context, 1)
 
-            assertArrayEquals(expected(PRIMARY_PAYLOAD), response.encode())
+            assertArrayEquals(expected(), response.encode())
             verify(cursor).close()
             assertEquals(2, fixture.subscriptionReads)
             assertEquals(1, fixture.lineNumberReads)
