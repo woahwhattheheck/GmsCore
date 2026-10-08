@@ -177,11 +177,19 @@ public class ChannelManager {
             handler.removeCallbacks(processingLoop);
 
             for (ChannelStateMachine channel : channelTable.values()) {
-                try {
-                    if (channel.openResultDispatcher != null) {
-                        channel.openResultDispatcher.onResult(
+                OpenChannelCallback openCallback = channel.openResultDispatcher;
+                // Detach before invoking client code: forceClose must not complete
+                // the same open request again, even if the callback throws.
+                channel.openResultDispatcher = null;
+                if (openCallback != null) {
+                    try {
+                        openCallback.onResult(
                                 ChannelStatusCodes.INTERNAL_ERROR, null, channel.channelPath);
+                    } catch (Exception e) {
+                        Log.w(TAG, "Error completing channel open on stop", e);
                     }
+                }
+                try {
                     channel.forceClose();
                 } catch (Exception e) {
                     Log.w(TAG, "Error closing channel on stop", e);
@@ -737,3 +745,4 @@ public class ChannelManager {
         return handler;
     }
 }
+

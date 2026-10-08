@@ -26,6 +26,7 @@ import org.microg.gms.wearable.proto.ChannelRequest;
 import org.microg.gms.wearable.proto.Request;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.LooperMode;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -57,6 +58,67 @@ public class ChannelBehaviorTest {
 
     @Rule
     public final TemporaryFolder temporaryFolder = new TemporaryFolder();
+
+    @Test
+    @LooperMode(LooperMode.Mode.PAUSED)
+    public void stopCompletesPendingOpenOnceAndClosesResources() throws Exception {
+        assertStopCompletesPendingOpenAndClosesResources(false);
+    }
+
+    @Test
+    @LooperMode(LooperMode.Mode.PAUSED)
+    public void stopClosesResourcesWhenPendingOpenCallbackThrows() throws Exception {
+        assertStopCompletesPendingOpenAndClosesResources(true);
+    }
+
+    private void assertStopCompletesPendingOpenAndClosesResources(boolean throwFromCallback)
+            throws Exception {
+        Handler handler = new Handler(Looper.getMainLooper());
+        RecordingManager manager = new RecordingManager(handler);
+        ChannelStateMachine channel = new ChannelStateMachine(token(true), manager,
+                new RecordingTransport(), null, ChannelAssetApiEnum.ORIGIN_CHANNEL_API,
+                false, true, null, handler);
+        channel.connectionState = ChannelStateMachine.CONNECTION_STATE_OPEN_SENT;
+        channel.channelPath = "/pending-open";
+        List<Integer> statuses = new ArrayList<>();
+        channel.openResultDispatcher = (status, openedToken, path) -> {
+            statuses.add(status);
+            if (throwFromCallback) throw new IllegalStateException("client callback failed");
+        };
+        ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();
+        try {
+            channel.setInputStream(pipe[1], null);
+            channel.setOutputStream(pipe[0], null, 0, -1);
+            PendingOperation openTimeout = new PendingOperation(handler,
+                    () -> fail("cancelled open timeout ran"), 15000, "pending open");
+            PendingOperation sendTimeout = new PendingOperation(handler,
+                    () -> fail("cancelled send timeout ran"), 2000, "pending send");
+            channel.openTimeoutOp = openTimeout;
+            channel.sendPendingOp = sendTimeout;
+            manager.channelTable.put(channel.token, channel);
+            manager.start();
+
+            manager.stop();
+            manager.stop();
+
+            assertEquals(Collections.singletonList(ChannelStatusCodes.INTERNAL_ERROR), statuses);
+            assertEquals(null, channel.openResultDispatcher);
+            assertEquals(ChannelStateMachine.CONNECTION_STATE_CLOSED, channel.connectionState);
+            assertFalse(channel.hasInputStream());
+            assertFalse(channel.hasOutputStream());
+            assertTrue(openTimeout.isCancelled());
+            assertTrue(sendTimeout.isCancelled());
+            assertEquals(null, channel.openTimeoutOp);
+            assertEquals(null, channel.sendPendingOp);
+            assertEquals(0, manager.channelTable.size());
+            assertFalse(manager.isRunning());
+        } finally {
+            manager.stop();
+            channel.forceClose(false);
+            pipe[0].close();
+            pipe[1].close();
+        }
+    }
 
     @Test
     public void omittedDataScalarsUseProtoDefaultsAndAckKeepsZeroIdentity() throws Exception {
@@ -554,7 +616,11 @@ public class ChannelBehaviorTest {
         boolean failNextClose;
 
         RecordingManager() {
-            super(null, null, "local-node", null);
+            this(null);
+        }
+
+        RecordingManager(Handler handler) {
+            super(handler, null, "local-node", null);
         }
 
         @Override
@@ -658,3 +724,4 @@ public class ChannelBehaviorTest {
         }
     }
 }
+
