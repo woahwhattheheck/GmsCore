@@ -373,12 +373,21 @@ class CastDeviceControllerImpl(
     private fun applicationConnectionFailed(statusCode: Int) {
         if (rejoining) {
             rejoining = false
-            // Only a missing application is reported as a successful connection with Cast.EXTRA_APP_NO_LONGER_RUNNING;
-            // a timeout or a dropped channel means the reconnect itself failed.
-            finishInit(
-                if (statusCode == CastDeviceSession.STATUS_APPLICATION_NOT_RUNNING) STATUS_APP_NO_LONGER_RUNNING
-                else CastDeviceSession.STATUS_NETWORK_ERROR
-            )
+            if (initCallback != null) {
+                // Legacy initialization reports a missing previous application through the
+                // service-init status rather than a listener callback.
+                finishInit(
+                    if (statusCode == CastDeviceSession.STATUS_APPLICATION_NOT_RUNNING) STATUS_APP_NO_LONGER_RUNNING
+                    else CastDeviceSession.STATUS_NETWORK_ERROR
+                )
+            } else {
+                // Connectionless reconnect already reported the device connection. A failed
+                // automatic rejoin is an application failure, not a second init result. Drop
+                // the stale target so another channel reconnect does not keep retrying it.
+                attachedApplicationId = null
+                attachedSessionId = null
+                notify { onApplicationConnectionFailure(statusCode) }
+            }
             return
         }
         notify { onApplicationConnectionFailure(statusCode) }

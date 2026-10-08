@@ -84,6 +84,35 @@ class CastDeviceControllerReconnectTest {
     }
 
     @Test
+    fun failedAutomaticRejoinNotifiesConnectionlessClientAndDropsStaleTarget() {
+        val listener = RecordingListener()
+        val controller = controller(listener)
+        val session = session(controller)
+        val callbacks = callbacks(session)
+        callbacks.onApplicationConnected(org.microg.gms.cast.channel.ReceiverApplication(
+            "CC1AD845", "Default Media Receiver", "app-session", "transport", "Ready", null, emptyList()
+        ), true)
+
+        callbacks.onDisconnected(CastDeviceSession.STATUS_NETWORK_ERROR)
+        executors.single().pending.clear()
+        callbacks.onConnected()
+
+        assertTrue(listener.events.contains("onConnectedWithResult:0"))
+        assertEquals(1, executors.single().pending.size)
+        // Do not run the real join. Deliver the receiver's "application gone" result directly.
+        executors.single().pending.clear()
+        callbacks.onApplicationConnectionFailed(CastDeviceSession.STATUS_APPLICATION_NOT_RUNNING)
+
+        assertTrue(listener.events.contains("onApplicationConnectionFailure"))
+        assertNull(attached(controller, "attachedApplicationId"))
+        assertNull(attached(controller, "attachedSessionId"))
+
+        callbacks.onDisconnected(CastDeviceSession.STATUS_NETWORK_ERROR)
+        executors.single().pending.clear()
+        callbacks.onConnected()
+        assertEquals("A cleared failed rejoin target must not be retried", 0, executors.single().pending.size)
+    }
+    @Test
     fun successfulLeaveDoesNotRejoinAfterConnectionLoss() {
         val listener = RecordingListener()
         val controller = controller(listener)
