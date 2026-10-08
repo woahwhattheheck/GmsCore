@@ -24,6 +24,16 @@ import kotlin.coroutines.coroutineContext
 private const val TAG = "MtSmsVerifier"
 private const val MAX_BUFFERED_SMS_PER_REQUEST = 64
 
+/**
+ * Inbox ids needed by a full verification request. Challenge association is
+ * server-provided and may be absent or not map to a currently active IMSI;
+ * ChallengeProcessor deliberately represents that case as subId=-1, whose
+ * inbox listens across subscriptions. Keep that catch-all available even when
+ * active per-subscription inboxes were prepared successfully.
+ */
+internal fun mtSmsInboxSubscriptionIds(activeSubIds: Iterable<Int>): List<Int> =
+    (activeSubIds.toList() + -1).distinct()
+
 suspend fun MTChallenge.verify(
     subId: Int,
     timeoutMillis: Long? = null

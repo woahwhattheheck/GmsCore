@@ -45,6 +45,7 @@ import org.microg.gms.constellation.core.proto.builder.getList
 import org.microg.gms.constellation.core.proto.builder.invoke
 import org.microg.gms.constellation.core.verification.ChallengeProcessor
 import org.microg.gms.constellation.core.verification.MtSmsInboxRegistry
+import org.microg.gms.constellation.core.verification.mtSmsInboxSubscriptionIds
 import java.util.UUID
 import kotlin.coroutines.coroutineContext
 
@@ -410,7 +411,8 @@ private suspend fun runVerificationFlow(
 
     MtSmsInboxRegistry.prepare(
         context.applicationContext,
-        imsiToInfoMap.values.map { it.subscriptionId })
+        mtSmsInboxSubscriptionIds(imsiToInfoMap.values.map { it.subscriptionId })
+    )
 
     val verifications = try {
         executeSyncFlow(

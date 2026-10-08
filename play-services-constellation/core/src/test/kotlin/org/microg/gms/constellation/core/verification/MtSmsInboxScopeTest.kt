@@ -49,6 +49,18 @@ class MtSmsInboxScopeTest {
     }
 
     @Test
+    fun productionIds_keepCatchAllInboxAlongsideActiveSubscriptions() {
+        val (scope, created) = recordingScope()
+        scope.prepare(context, mtSmsInboxSubscriptionIds(listOf(1, 2, 1)))
+
+        assertEquals(3, created.size)
+        assertSame(created.first { it.subId == 1 }, scope.get(1))
+        assertSame(created.first { it.subId == 2 }, scope.get(2))
+        assertSame(created.first { it.subId == -1 }, scope.get(-1))
+        assertEquals(listOf(-1), mtSmsInboxSubscriptionIds(emptyList()))
+    }
+
+    @Test
     fun prepare_withNoSubIds_fallsBackToDefaultSubId() {
         val (scope, _) = recordingScope()
         scope.prepare(context, emptyList())
