@@ -128,6 +128,38 @@ class MtSmsInboxReplayTest {
     }
 
     @Test
+    fun sharedCatchAllInboxFiltersBySubscriptionAndConsumesEachSmsOnce() = runTest {
+        val inbox = MtSmsInbox(
+            ApplicationProvider.getApplicationContext<Context>(),
+            subId = -1
+        )
+        try {
+            val simTwo = ReceivedSms(
+                body = "verification challenge-123 complete",
+                sender = "+200",
+                subscriptionId = 2
+            )
+            val simOne = ReceivedSms(
+                body = "verification challenge-123 complete",
+                sender = "+100",
+                subscriptionId = 1
+            )
+            inbox.onReceivedMessages(listOf(simTwo, simOne))
+
+            assertEquals(simOne, inbox.awaitMatch("challenge-123", requiredSubId = 1))
+            assertEquals(simTwo, inbox.awaitMatch("challenge-123", requiredSubId = -1))
+            assertNull(
+                "consumed SMS evidence must not be reusable through the catch-all path",
+                withTimeoutOrNull(1L) {
+                    inbox.awaitMatch("challenge-123", requiredSubId = -1)
+                }
+            )
+        } finally {
+            inbox.dispose()
+        }
+    }
+
+    @Test
     fun disposingRealInboxCancelsSuspendedWaiterAndRejectsLaterWaiters() = runTest {
         val inbox = newInbox()
         try {
