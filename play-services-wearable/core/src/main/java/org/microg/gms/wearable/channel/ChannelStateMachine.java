@@ -64,6 +64,7 @@ public class ChannelStateMachine {
 
     public ParcelFileDescriptor outputFd;
     public IChannelStreamCallbacks outputCallbacks;
+    private boolean outputCloseNotified;
     public ByteBuffer sendBuffer;
     private long sendOffset;
     long sendMaxLength;
@@ -588,13 +589,8 @@ public class ChannelStateMachine {
             }
         }
 
-        if (outputCallbacks != null) {
-            try {
-                outputCallbacks.onChannelClosed(ChannelStatusCodes.CLOSE_REASON_REMOTE_CLOSE, errorCode);
-            } catch (RemoteException e) {
-                Log.w(TAG, "Failed to notify output callbacks", e);
-            }
-        }
+        // Notify now so the app can finish its writer while this channel drains.
+        notifyOutputStreamClosed(ChannelStatusCodes.CLOSE_REASON_REMOTE_CLOSE, errorCode);
 
         onChannelInputClosed(ChannelStatusCodes.CLOSE_REASON_REMOTE_CLOSE, errorCode);
 
@@ -784,15 +780,15 @@ public class ChannelStateMachine {
     }
 
     public void onChannelOutputClosed(int closeReason, int errorCode) throws IOException {
+        if (sendPendingOp != null) {
+            sendPendingOp.cancel();
+            sendPendingOp = null;
+        }
         if (outputFd == null) return;
 
         if (outputCallbacks != null) {
             unlinkToDeath(outputCallbacks.asBinder());
-            try {
-                outputCallbacks.onChannelClosed(closeReason, errorCode);
-            } catch (RemoteException e) {
-                Log.w(TAG, "Failed to notify OutputStream of close", e);
-            }
+            notifyOutputStreamClosed(closeReason, errorCode);
         }
 
         transport.unregister(outputFd);
@@ -808,9 +804,31 @@ public class ChannelStateMachine {
         sendBuffer = null;
         setSendingState(SENDING_STATE_CLOSED);
 
-        ChannelCallbacks cb = resolveCallbacks();
-        if (cb != null) {
-            cb.onChannelOutputClosed(token, channelPath, closeReason, errorCode);
+        try {
+            ChannelCallbacks cb = resolveCallbacks();
+            if (cb != null) {
+                cb.onChannelOutputClosed(token, channelPath, closeReason, errorCode);
+            }
+        } finally {
+            if (connectionState == CONNECTION_STATE_CLOSING) {
+                try {
+                    sendCloseRequest(this.closeReason);
+                } finally {
+                    setConnectionState(CONNECTION_STATE_CLOSED);
+                    channelManager.removeChannel(token);
+                }
+            }
+        }
+    }
+
+    private void notifyOutputStreamClosed(int closeReason, int errorCode) {
+        if (outputCallbacks == null || outputCloseNotified) return;
+        // Retain the callback until FD cleanup so its death link is still removed.
+        outputCloseNotified = true;
+        try {
+            outputCallbacks.onChannelClosed(closeReason, errorCode);
+        } catch (RemoteException e) {
+            Log.w(TAG, "Failed to notify OutputStream of close", e);
         }
     }
 

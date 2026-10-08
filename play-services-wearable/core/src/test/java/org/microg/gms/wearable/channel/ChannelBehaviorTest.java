@@ -407,6 +407,58 @@ public class ChannelBehaviorTest {
     }
 
     @Test
+    public void remoteCloseKeepsPendingSenderReachableUntilFinalAckClosesOutput() throws Exception {
+        RecordingManager manager = new RecordingManager();
+        RecordingTransport transport = new RecordingTransport();
+        ChannelStateMachine channel = new ChannelStateMachine(token(true), manager, transport, null,
+                ChannelAssetApiEnum.ORIGIN_CHANNEL_API, false, true, null,
+                new Handler(Looper.getMainLooper()));
+        channel.connectionState = ChannelStateMachine.CONNECTION_STATE_ESTABLISHED;
+        manager.channelTable.put(channel.token, channel);
+        RecordingStreamCallbacks streamCallbacks = new RecordingStreamCallbacks();
+        ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();
+        try {
+            channel.setOutputStream(pipe[0], streamCallbacks, 0, 0);
+            channel.processOutgoingData();
+            PendingOperation pendingAck = channel.sendPendingOp;
+            ChannelControlRequest close = new ChannelControlRequest.Builder()
+                    .type(ChannelManager.CHANNEL_CONTROL_TYPE_CLOSE)
+                    .channelId(CHANNEL_ID).closeErrorCode(7).build();
+            Request request = new Request.Builder()
+                    .request(new ChannelRequest.Builder().channelControlRequest(close).build()).build();
+
+            new OnChannelControlTask(manager, PEER, null, request).execute();
+
+            assertEquals(ChannelStateMachine.CONNECTION_STATE_CLOSING, channel.connectionState);
+            assertEquals(channel, manager.channelTable.get(PEER, CHANNEL_ID, true));
+            assertTrue(channel.hasOutputStream());
+            assertFalse(pendingAck.isCancelled());
+            assertTrue(manager.closeCodes.isEmpty());
+            assertEquals(Collections.singletonList(ChannelStatusCodes.CLOSE_REASON_REMOTE_CLOSE),
+                    streamCallbacks.closeReasons);
+            assertEquals(Collections.singletonList(7), streamCallbacks.errorCodes);
+
+            ChannelDataAckRequest ack = new ChannelDataAckRequest.Builder()
+                    .header(new ChannelDataHeader.Builder().channelId(CHANNEL_ID).requestId(0L).build())
+                    .finalMessage(true).build();
+            new OnChannelDataAckTask(manager, PEER, ack).execute();
+
+            assertEquals(ChannelStateMachine.CONNECTION_STATE_CLOSED, channel.connectionState);
+            assertEquals(ChannelStateMachine.SENDING_STATE_CLOSED, channel.sendingState);
+            assertEquals(0, manager.channelTable.size());
+            assertFalse(channel.hasOutputStream());
+            assertTrue(pendingAck.isCancelled());
+            assertEquals(null, channel.sendPendingOp);
+            assertEquals(Collections.singletonList(7), manager.closeCodes);
+            assertEquals("drain completion must not notify the app twice", 1, streamCallbacks.closeReasons.size());
+        } finally {
+            if (channel.hasOutputStream()) channel.forceClose(false);
+            pipe[0].close();
+            pipe[1].close();
+        }
+    }
+
+    @Test
     public void finalIncomingFrameClosesInputAndNotifiesStreamCallback() throws Exception {
         RecordingManager manager = new RecordingManager();
         RecordingTransport transport = new RecordingTransport();
@@ -587,10 +639,12 @@ public class ChannelBehaviorTest {
 
     private static final class RecordingStreamCallbacks extends IChannelStreamCallbacks.Stub {
         final List<Integer> closeReasons = new ArrayList<>();
+        final List<Integer> errorCodes = new ArrayList<>();
 
         @Override
         public void onChannelClosed(int closeReason, int appSpecificErrorCode) throws RemoteException {
             closeReasons.add(closeReason);
+            errorCodes.add(appSpecificErrorCode);
         }
     }
 

@@ -386,7 +386,11 @@ public class OnChannelControlTask extends ChannelTask {
         int errorCode = ChannelProtocolDefaults.closeErrorCode(control.closeErrorCode);
         channel.onRemoteCloseReceived(errorCode);
         Log.d(TAG, "Channel closed by remote: " + channel.token);
-        channelManager.channelTable.remove(channel.token);
+        // A sender may still be draining. Keep it available to the shared pump
+        // and ACK dispatcher until its output-close path completes the close.
+        if (channel.connectionState != ChannelStateMachine.CONNECTION_STATE_CLOSING) {
+            channelManager.channelTable.remove(channel.token);
+        }
     }
 
     private ChannelAssetApiEnum inferOrigin(ChannelControlRequest ctrl) {
