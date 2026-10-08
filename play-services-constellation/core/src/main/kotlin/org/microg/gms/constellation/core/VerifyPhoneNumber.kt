@@ -307,7 +307,7 @@ private fun loadLocalVerifications(
     if (stored.isEmpty()) return null
 
     val requestedImsis = request.targetedSims
-        .mapNotNull { it.imsi?.takeIf(String::isNotEmpty) }
+        .map { it.imsi?.takeIf(String::isNotEmpty) ?: return null }
         .toSet()
     if (requestedImsis.isEmpty()) {
         return stored.map { it.toPhoneNumberVerification() }.toTypedArray()
