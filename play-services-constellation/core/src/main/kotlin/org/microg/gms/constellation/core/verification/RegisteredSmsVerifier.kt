@@ -80,7 +80,11 @@ fun RegisteredSmsChallenge.verify(context: Context, subId: Int): ChallengeRespon
                     localNumbers
                 } else {
                     localNumbersBySubscription.getOrPut(messageSubId) {
-                        getLocalNumbers(context, messageSubId).ifEmpty { localNumbers }
+                        // A known foreign subscription must only be matched with
+                        // numbers belonging to that subscription. Falling back
+                        // to the challenge SIM here can turn another SIM's SMS
+                        // into false verification evidence for the requested SIM.
+                        getLocalNumbers(context, messageSubId)
                     }
                 }
 
