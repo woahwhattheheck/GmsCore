@@ -45,7 +45,7 @@ suspend fun MTChallenge.verify(
     Log.d(TAG, "Waiting for MT SMS containing challenge string")
 
     val match = withTimeoutOrNull(effectiveTimeoutMillis) {
-        inbox.awaitMatch(expectedBody)
+        inbox.awaitMatch(expectedBody, subId)
     }
 
     if (match == null) {
@@ -66,7 +66,7 @@ suspend fun MTChallenge.verify(
  * [MtSmsInboxScope] can be unit tested without registering a real [BroadcastReceiver].
  */
 internal interface MtSmsInboxHandle {
-    suspend fun awaitMatch(expectedBody: String): ReceivedSms?
+    suspend fun awaitMatch(expectedBody: String, requiredSubId: Int = -1): ReceivedSms?
     fun dispose()
 }
 
@@ -122,27 +122,19 @@ internal class MtSmsInboxScope(
         val replaced: List<MtSmsInboxHandle>
         synchronized(lock) {
             check(!disposed) { "MtSmsInboxScope already disposed" }
-            val replacements = HashMap<Int, MtSmsInboxHandle>()
-            try {
-                for (subId in effectiveSubIds) {
-                    replacements[subId] = inboxFactory(context, subId)
-                }
-            } catch (failure: Throwable) {
-                for (inbox in replacements.values) {
-                    try {
-                        inbox.dispose()
-                    } catch (cleanupFailure: Throwable) {
-                        if (cleanupFailure !== failure) failure.addSuppressed(cleanupFailure)
-                    }
-                }
-                throw failure
-            }
-            // Only ever touches THIS request's own inboxes.
-            replaced = inboxes.values.toList()
+
+            // One physical receiver owns the request's SMS stream. Every logical subscription key
+            // resolves to this same inbox, and awaitMatch applies the required-subscription filter.
+            // This prevents one broadcast from being buffered independently by a per-SIM receiver
+            // and the catch-all receiver, which would make the same SMS reusable across rounds.
+            val sharedInbox = inboxFactory(context, -1)
+            replaced = inboxes.values.distinct()
             inboxes.clear()
-            inboxes.putAll(replacements)
+            for (subId in effectiveSubIds) {
+                inboxes[subId] = sharedInbox
+            }
         }
-        replaced.forEach { it.dispose() }
+        replaced.distinct().forEach { it.dispose() }
     }
 
     fun get(subId: Int): MtSmsInboxHandle = synchronized(lock) {
@@ -163,7 +155,8 @@ internal class MtSmsInboxScope(
 
 internal data class ReceivedSms(
     val body: String,
-    val sender: String
+    val sender: String,
+    val subscriptionId: Int? = null
 )
 
 /**
@@ -188,8 +181,13 @@ internal fun joinParts(parts: List<Pair<String?, String?>>): ReceivedSms? {
 
 private data class PendingMatch(
     val expectedBody: String,
+    val requiredSubId: Int,
     val continuation: CancellableContinuation<ReceivedSms?>
 )
+
+private fun ReceivedSms.matches(expectedBody: String, requiredSubId: Int): Boolean =
+    body.contains(expectedBody) &&
+            (requiredSubId == -1 || subscriptionId == null || subscriptionId == requiredSubId)
 
 @OptIn(InternalCoroutinesApi::class)
 internal class MtSmsInbox(
@@ -212,7 +210,10 @@ internal class MtSmsInbox(
             )
             if (subId != -1 && receivedSubId != subId) return
 
-            onMessagesReceived(Telephony.Sms.Intents.getMessagesFromIntent(intent))
+            onMessagesReceived(
+                Telephony.Sms.Intents.getMessagesFromIntent(intent),
+                receivedSubId
+            )
         }
     }
 
@@ -228,7 +229,10 @@ internal class MtSmsInbox(
         )
     }
 
-    override suspend fun awaitMatch(expectedBody: String): ReceivedSms? {
+    override suspend fun awaitMatch(
+        expectedBody: String,
+        requiredSubId: Int
+    ): ReceivedSms? {
         return suspendCancellableCoroutine { continuation ->
             synchronized(lock) {
                 if (disposed) {
@@ -236,7 +240,9 @@ internal class MtSmsInbox(
                     return@suspendCancellableCoroutine
                 }
 
-                val bufferedIndex = bufferedMessages.indexOfFirst { it.body.contains(expectedBody) }
+                val bufferedIndex = bufferedMessages.indexOfFirst {
+                    it.matches(expectedBody, requiredSubId)
+                }
                 if (bufferedIndex >= 0) {
                     val match = bufferedMessages[bufferedIndex]
                     // tryResume is the atomic acceptance point. Keep the buffered SMS if
@@ -252,7 +258,7 @@ internal class MtSmsInbox(
                     return@suspendCancellableCoroutine
                 }
 
-                val pendingMatch = PendingMatch(expectedBody, continuation)
+                val pendingMatch = PendingMatch(expectedBody, requiredSubId, continuation)
                 pendingMatches += pendingMatch
                 continuation.invokeOnCancellation {
                     synchronized(lock) {
@@ -263,9 +269,12 @@ internal class MtSmsInbox(
         }
     }
 
-    private fun onMessagesReceived(messages: Array<SmsMessage>) {
+    private fun onMessagesReceived(messages: Array<SmsMessage>, receivedSubId: Int) {
         onReceivedMessages(
-            listOfNotNull(joinParts(messages.map { it.originatingAddress to it.messageBody }))
+            listOfNotNull(
+                joinParts(messages.map { it.originatingAddress to it.messageBody })
+                    ?.copy(subscriptionId = receivedSubId)
+            )
         )
     }
 
@@ -285,7 +294,11 @@ internal class MtSmsInbox(
                 var delivered = false
                 while (iterator.hasNext()) {
                     val pendingMatch = iterator.next()
-                    if (!receivedMessage.body.contains(pendingMatch.expectedBody)) continue
+                    if (!receivedMessage.matches(
+                            pendingMatch.expectedBody,
+                            pendingMatch.requiredSubId
+                        )
+                    ) continue
 
                     // Do not consume an SMS for a continuation that cancellation already won.
                     val token = pendingMatch.continuation.tryResume(receivedMessage, null) { _, _, _ ->
