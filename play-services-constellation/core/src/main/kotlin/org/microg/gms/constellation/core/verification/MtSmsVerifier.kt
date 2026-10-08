@@ -22,6 +22,7 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
 
 private const val TAG = "MtSmsVerifier"
+private const val MAX_BUFFERED_SMS_PER_REQUEST = 64
 
 suspend fun MTChallenge.verify(
     subId: Int,
@@ -163,11 +164,15 @@ internal data class ReceivedSms(
  * [SmsMessage] so the joining can be tested without manufacturing Android PDU bytes.
  */
 internal fun joinParts(parts: List<Pair<String?, String?>>): ReceivedSms? {
-    val bodies = parts.mapNotNull { it.second }
-    if (bodies.isEmpty()) return null
+    // Incomplete multipart messages must not be silently stitched around a
+    // missing body, and fragments from different senders cannot form a
+    // challenge belonging to either sender.
+    if (parts.isEmpty() || parts.any { it.second == null }) return null
+    val senders = parts.mapNotNull { it.first?.takeIf(String::isNotBlank) }.distinct()
+    if (senders.size > 1) return null
     return ReceivedSms(
-        body = bodies.joinToString(separator = ""),
-        sender = parts.firstNotNullOfOrNull { it.first } ?: ""
+        body = parts.joinToString(separator = "") { it.second.orEmpty() },
+        sender = senders.firstOrNull() ?: ""
     )
 }
 
@@ -284,17 +289,29 @@ internal class MtSmsInbox(
                     delivered = true
                     break
                 }
-                if (!delivered && bufferedMessages.none { it === receivedMessage }) {
-                    bufferedMessages += receivedMessage
+                if (!delivered) {
+                    bufferForLateWaiter(receivedMessage)
                 }
             }
         }
     }
 
+    // Every inbox is scoped to one request, but a long MT-SMS wait can still
+    // receive many unrelated broadcasts. Keep recent unmatched messages
+    // without permitting unbounded memory growth from unsolicited SMS.
+    private fun bufferForLateWaiter(message: ReceivedSms) {
+        if (bufferedMessages.none { it === message }) {
+            if (bufferedMessages.size >= MAX_BUFFERED_SMS_PER_REQUEST) {
+                bufferedMessages.removeAt(0)
+            }
+            bufferedMessages += message
+        }
+    }
+
     private fun restoreUndelivered(message: ReceivedSms) {
         synchronized(lock) {
-            if (!disposed && bufferedMessages.none { it === message }) {
-                bufferedMessages += message
+            if (!disposed) {
+                bufferForLateWaiter(message)
             }
         }
     }
