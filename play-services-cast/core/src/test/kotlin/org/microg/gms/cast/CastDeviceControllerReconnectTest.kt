@@ -195,11 +195,18 @@ class CastDeviceControllerReconnectTest {
     }
 
     @Test
-    fun userDisconnectStillEndsWithoutReconnect() {
+    fun userDisconnectClearsAttachedApplicationAndEndsWithoutReconnect() {
         val listener = RecordingListener()
         val controller = controller(listener)
+        callbacks(session(controller)).onApplicationConnected(org.microg.gms.cast.channel.ReceiverApplication(
+            "CC1AD845", "Default Media Receiver", "app-session", "transport", "Ready", null, emptyList()
+        ), true)
+
         controller.disconnect()
         executors.single().runPending()
+
+        assertNull(attached(controller, "attachedApplicationId"))
+        assertNull(attached(controller, "attachedSessionId"))
         assertEquals(listOf("release"), events)
         assertFalse(listener.events.contains("onConnectionSuspended"))
     }
