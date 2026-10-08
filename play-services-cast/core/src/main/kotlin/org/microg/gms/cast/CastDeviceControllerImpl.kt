@@ -261,7 +261,7 @@ class CastDeviceControllerImpl(
         lateinit var owner: CastDeviceSession
 
         private inline fun ifCurrent(block: () -> Unit) {
-            if (owner === session) block()
+            if (owner === session && !released) block()
         }
 
         override fun onConnected() = onConnectResult(owner, CastDeviceSession.STATUS_SUCCESS)
