@@ -151,8 +151,9 @@ class CastChannel(
     @Throws(IOException::class)
     fun closeTransport(transportId: String) {
         synchronized(lock) {
-            if (!connectedTransports.remove(transportId)) return
+            if (!connectedTransports.contains(transportId)) return
             writeLocked(transportId, NAMESPACE_CONNECTION, CLOSE_PAYLOAD)
+            connectedTransports.remove(transportId)
         }
     }
 
