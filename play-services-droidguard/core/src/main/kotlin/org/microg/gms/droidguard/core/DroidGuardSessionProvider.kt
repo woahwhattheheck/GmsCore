@@ -129,7 +129,7 @@ class DroidGuardSessionProvider : ContentProvider() {
     private fun consumeInitReply(reply: com.google.android.gms.droidguard.internal.DroidGuardInitReply) {
         val pfd = reply.pfd ?: return
         try {
-            val bundle = reply.object as? Bundle
+            val bundle = reply.`object` as? Bundle
                 ?: throw DroidGuardSessionException(502, "Unsupported native DroidGuard init reply")
             val vmKey = bundle.getString("h")
                 ?: throw DroidGuardSessionException(502, "Native DroidGuard init reply is missing VM key")
