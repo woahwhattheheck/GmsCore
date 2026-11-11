@@ -13,6 +13,9 @@ import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
+internal class RemoteDroidGuardHttpException(val status: Int) :
+    IOException("Remote DroidGuard server returned HTTP $status")
+
 internal class RemoteDroidGuardHttpClient(
     private val baseUrl: String,
     private val timeoutMillis: Int,
@@ -37,7 +40,7 @@ internal class RemoteDroidGuardHttpClient(
                 connection.outputStream.use { it.write(body) }
             }
             val status = connection.responseCode
-            if (status !in 200..299) throw IOException("Remote DroidGuard server returned HTTP $status")
+            if (status !in 200..299) throw RemoteDroidGuardHttpException(status)
             return connection.inputStream.use { input ->
       val out = ByteArrayOutputStream()
       val buffer = ByteArray(8192)

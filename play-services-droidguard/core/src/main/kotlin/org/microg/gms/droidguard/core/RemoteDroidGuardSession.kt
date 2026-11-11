@@ -5,6 +5,19 @@
 
 package org.microg.gms.droidguard.core
 
+internal class RemoteDroidGuardSessionUnsupportedException :
+    IllegalStateException("Remote DroidGuard server did not return a session id")
+
+/**
+ * Only a server that does not implement session setup may be used in single-request mode.
+ * Authentication, capacity, native and transport failures are reported to the snapshot caller.
+ */
+internal fun Throwable.indicatesLegacyRemoteServer(): Boolean =
+    this is RemoteDroidGuardSessionUnsupportedException ||
+        (this is RemoteDroidGuardHttpException && status in LEGACY_SERVER_STATUSES)
+
+private val LEGACY_SERVER_STATUSES = setOf(400, 404, 405, 501)
+
 internal class RemoteDroidGuardSession(
     private val client: RemoteDroidGuardHttpClient,
     private val requestParameters: Map<String, String>
@@ -17,7 +30,7 @@ internal class RemoteDroidGuardSession(
         check(remoteSessionId == null) { "Remote DroidGuard session is already open" }
         val response = client.post(null, requestParameters + ("action" to "begin"), null)
         remoteSessionId = parseSessionId(response)
-            ?: throw IllegalStateException("Remote DroidGuard server did not return a session id")
+            ?: throw RemoteDroidGuardSessionUnsupportedException()
     }
 
     @Synchronized
