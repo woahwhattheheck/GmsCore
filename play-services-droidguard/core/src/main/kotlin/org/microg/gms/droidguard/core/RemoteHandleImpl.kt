@@ -11,6 +11,7 @@ import android.util.Log
 import com.google.android.gms.droidguard.internal.DroidGuardInitReply
 import com.google.android.gms.droidguard.internal.DroidGuardResultsRequest
 import com.google.android.gms.droidguard.internal.IDroidGuardHandle
+import java.io.IOException
 
 private const val TAG = "RemoteGuardImpl"
 private const val DEFAULT_TIMEOUT_MILLIS = 60000
@@ -53,7 +54,12 @@ class RemoteHandleImpl(private val context: Context, private val packageName: St
             check(initialization === state.first) { "Remote DroidGuard handle was reinitialized" }
             flow to request
         }
-        val response = session?.snapshot(map) ?: doSnapshot(parameters.first, parameters.second, map.orEmpty())
+        val response = try {
+            session?.snapshot(map) ?: doSnapshot(parameters.first, parameters.second, map.orEmpty())
+        } catch (e: IOException) {
+            // Binder only carries runtime exceptions to the caller; an IOException would arrive as a null result.
+            throw IllegalStateException(e.message, e)
+        }
         return Base64.decode(response.trim(), Base64.URL_SAFE + Base64.NO_WRAP + Base64.NO_PADDING)
     }
 
@@ -87,16 +93,22 @@ class RemoteHandleImpl(private val context: Context, private val packageName: St
     private fun startRemoteSession(initialization: RemoteDroidGuardInitialization, flow: String?, request: DroidGuardResultsRequest?) {
         val timeoutMillis = (request?.timeoutMillis ?: DEFAULT_TIMEOUT_MILLIS).coerceAtLeast(1)
         var session: RemoteDroidGuardSession? = null
+        var failure: Exception? = null
         try {
             session = RemoteDroidGuardSession(
                 RemoteDroidGuardHttpClient(url, timeoutMillis),
                 buildRequestParameters(flow, request)
             ).also { it.begin() }
         } catch (e: Exception) {
-            Log.w(TAG, "Remote server does not provide session setup; using single-request mode", e)
+            if (e.indicatesLegacyRemoteServer()) {
+                Log.w(TAG, "Remote server does not provide session setup; using single-request mode", e)
+            } else {
+                Log.w(TAG, "Remote DroidGuard session setup failed", e)
+                failure = e
+            }
         } finally {
             try {
-                initialization.complete(session)
+                if (failure != null) initialization.fail(failure) else initialization.complete(session)
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to close cancelled remote DroidGuard session", e)
             }

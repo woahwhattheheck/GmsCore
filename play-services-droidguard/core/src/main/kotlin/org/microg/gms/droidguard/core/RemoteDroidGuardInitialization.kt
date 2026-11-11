@@ -14,6 +14,7 @@ internal class RemoteDroidGuardInitialization {
     private var started = false
     private var closed = false
     private var session: RemoteDroidGuardSession? = null
+    private var failure: Exception? = null
 
     @Synchronized
     fun start(): Boolean {
@@ -22,10 +23,16 @@ internal class RemoteDroidGuardInitialization {
         return true
     }
 
-    fun complete(session: RemoteDroidGuardSession?) {
+    fun complete(session: RemoteDroidGuardSession?) = complete(session, null)
+
+    /** Session setup failed for a reason other than a legacy server; snapshots report it. */
+    fun fail(failure: Exception) = complete(null, failure)
+
+    private fun complete(session: RemoteDroidGuardSession?, failure: Exception?) {
         val accepted = synchronized(this) {
             if (closed) false else {
                 this.session = session
+                this.failure = failure
                 true
             }
         }
@@ -43,6 +50,7 @@ internal class RemoteDroidGuardInitialization {
         }
         return synchronized(this) {
             check(!closed) { "Remote DroidGuard handle is closed" }
+            failure?.let { throw IllegalStateException("Remote DroidGuard session setup failed: ${it.message}", it) }
             session
         }
     }

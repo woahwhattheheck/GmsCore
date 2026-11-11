@@ -19,12 +19,21 @@ their serials with `adb devices`.
 
 On the server device, enable DroidGuard in **Embedded** mode. A packaged setting
 that disables local DroidGuard must remain respected. Then explicitly enable the
-bridge for the intended Android user; these examples use user 0:
+bridge for the intended Android user; these examples use user 0. Android does not
+let the unprivileged ADB shell change the state of a single component of another
+package (`SecurityException: Shell cannot change component state`), so this step
+needs root. On a server rooted with Magisk or KernelSU:
 
 ```sh
-adb -s SERVER_SERIAL shell pm enable --user 0 \
-  com.google.android.gms/org.microg.gms.droidguard.core.DroidGuardSessionProvider
+adb -s SERVER_SERIAL shell "su -c 'pm enable --user 0 com.google.android.gms/org.microg.gms.droidguard.core.DroidGuardSessionProvider'"
 ```
+
+On a debuggable (userdebug/eng) build, run `adb -s SERVER_SERIAL root` first, then
+`adb -s SERVER_SERIAL shell pm enable --user 0 com.google.android.gms/org.microg.gms.droidguard.core.DroidGuardSessionProvider`,
+and `adb -s SERVER_SERIAL unroot` afterwards.
+
+Only enabling and disabling need root. The adapter's `content call` requests run as
+the ordinary ADB shell user.
 
 Create a private authentication-token file on the operator's computer:
 
@@ -60,9 +69,11 @@ percent-encode its query value. The current remote client preserves the base
 URL's query on every lifecycle request. Keep the URL private; it carries the
 credential. The adapter does not log URLs, request maps, or native results.
 
-`--host` and `--port` can change the listener. HTTP supplies no transport
-encryption, so use an authenticated private tunnel when connecting across a
-network. The loopback-plus-ADB setup above does not require a LAN listener.
+`--host` and `--port` can change the listener; choose a port that no other local
+server uses, because the client cannot tell another HTTP server from the adapter.
+microG permits cleartext HTTP only to `127.0.0.1` and `localhost`, which covers the
+loopback-plus-ADB setup above. Any server reached over a network needs HTTPS with a
+certificate the client device trusts, for example behind an authenticated tunnel.
 
 ## Stop and disable
 
@@ -71,8 +82,7 @@ provider when finished:
 
 ```sh
 adb -s CLIENT_SERIAL reverse --remove tcp:8080
-adb -s SERVER_SERIAL shell pm disable --user 0 \
-  com.google.android.gms/org.microg.gms.droidguard.core.DroidGuardSessionProvider
+adb -s SERVER_SERIAL shell "su -c 'pm disable --user 0 com.google.android.gms/org.microg.gms.droidguard.core.DroidGuardSessionProvider'"
 ```
 
 Explicit close makes a session ID unusable immediately and requests native
@@ -127,7 +137,10 @@ preempted: a hung operation keeps its capacity occupied until it exits, rather
 than permitting an unbounded number of replacement handles.
 
 A nonzero ADB exit, stderr, malformed response, unavailable provider, or explicit
-provider error status produces an HTTP error. Operations are not retried automatically because
+provider error status produces an HTTP error. The client uses single-request mode
+only when `begin` returns no session ID or HTTP 400, 404, 405 or 501; any other
+`begin` failure, such as 401, 503 or a connection error, is reported to the calling
+app as the snapshot error. Operations are not retried automatically because
 a lost response does not prove that initialization or a snapshot was not run.
 Valid Base64 alone does not establish successful attestation; the native runtime
 can also return error bytes.
