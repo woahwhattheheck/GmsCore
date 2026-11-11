@@ -10,4 +10,10 @@
         <domain includeSubdomains="true">cdwifi.cz</domain>
         <domain includeSubdomains="true">hsp.hotsplots.net</domain>
     </domain-config>
+    <!-- Remote DroidGuard: the documented adb-reverse setup reaches the operator's adapter on loopback.
+         Cleartext stays limited to this device; use HTTPS for any server reached over a network. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
 </network-security-config>
